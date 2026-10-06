@@ -1,0 +1,16 @@
+{
+  "name": "qbflex-skill-vanilla-tasks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 7618",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "vite": "8.3.2",
+    "typescript": "5.9.3"
+  }
+}

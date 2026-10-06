@@ -1,0 +1,12 @@
+node_modules
+**/dist
+.cache
+.data
+bun.lock
+**/generated
+**/routeTree.gen.ts
+apps/docs/content
+apps/docs/public
+apps/studio/public
+verification-artifacts
+qb-flex-development-spec.md

@@ -1,0 +1,56 @@
+export const frontmatter = {"title": "Vanilla JavaScript quickstart", "description": "Use the browser SDK with or without a framework.", "section": "Client SDK \u00b7 Vanilla JS", "slug": "sdk/vanilla/quickstart", "order": 45};
+
+# Vanilla JavaScript quickstart
+
+## Vite application
+
+The runnable example is in `examples/vanilla`. It uses ordinary DOM APIs and no React dependency.
+
+```sh
+bun run --cwd examples/vanilla dev
+```
+
+Set the API URL, project ID and publishable key in the example configuration form. Add `http://localhost:7618` to the project's exact origin allowlist.
+
+## Import and initialize
+
+```js
+import { createClient } from '@qb-flex/client';
+const qb = createClient({
+  url: 'http://localhost:7612',
+  projectId: 'YOUR_PROJECT_ID',
+  branch: 'primary',
+  publishableKey: 'YOUR_PUBLISHABLE_KEY',
+});
+```
+
+Install the locally packed client artifact when integrating into a separate Vite application.
+
+First run `bun run sdk:pack` in QB Flex. In your Vite application, install the resulting tarball using its actual absolute path:
+
+```sh
+npm install /path/to/QBFlex/dist/packages/qb-flex-client-0.1.0.tgz
+```
+
+Import the client in your application entry module. The repository example already supplies a complete Vite configuration and can be copied as a starting application; its Vite version is pinned to 8.3.2.
+
+## Direct browser modules
+
+The Docs build includes a standalone browser ESM bundle at `/sdk/client.js`. Copy it into your application's public directory and import it locally:
+
+```html
+<script type="module">
+  import { createClient } from '/sdk/client.js';
+  const qb = createClient({
+    url: 'http://localhost:7612',
+    projectId: 'YOUR_PROJECT_ID',
+    publishableKey: 'YOUR_PUBLISHABLE_KEY',
+  });
+</script>
+```
+
+Serve the page over HTTP; do not open it through a filesystem URL. The standalone client bundle has no React or Node runtime dependency.
+
+## Run the tutorial
+
+Prepare the [task table and policies](/docs/getting-started/first-project), then add [authentication and CRUD](/docs/sdk/vanilla/data) and [realtime/file workflows](/docs/sdk/vanilla/realtime-storage).

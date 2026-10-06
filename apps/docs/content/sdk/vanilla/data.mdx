@@ -1,0 +1,61 @@
+export const frontmatter = {"title": "JavaScript authentication and CRUD", "description": "Build an authenticated task list with ordinary DOM APIs.", "section": "Client SDK \u00b7 Vanilla JS", "slug": "sdk/vanilla/data", "order": 46};
+
+# JavaScript authentication and CRUD
+
+## Sign in and observe session state
+
+```js
+await qb.auth.signUp({ email, password, name });
+await qb.auth.signIn({ email, password });
+const stopAuth = qb.onAuthStateChange(session => {
+  accountLabel.textContent = session?.user.email ?? 'Signed out';
+});
+await qb.auth.refreshSession();
+```
+
+Always handle rejected promises and verification requirements. Sessions are shared by calls through the same client instance. SDK tokens are not automatically written to localStorage.
+
+## Load tasks
+
+```js
+const result = await qb.from('tasks')
+  .select(['id', 'title', 'completed'])
+  .eq('completed', 0)
+  .limit(50);
+
+list.replaceChildren(...result.data.map(task => {
+  const item = document.createElement('li');
+  item.textContent = task.title;
+  return item;
+}));
+```
+
+Use `textContent` for application values instead of inserting user-provided HTML.
+
+## Insert, update and delete
+
+```js
+const session = qb.getSession();
+if (!session) throw new Error('Sign in first');
+await qb.from('tasks').insert({
+  owner_id: session.user.id,
+  title: 'Ship the first application',
+}, { idempotencyKey: crypto.randomUUID() });
+await qb.from('tasks').update(taskId, { completed: 1 });
+await qb.from('tasks').delete(taskId);
+```
+
+Ownership is validated by the server. Refetch the list after mutations so sorting, filters and counts remain consistent.
+
+## Pagination and cancellation
+
+Follow `result.meta.cursor` with the exact same query configuration. Use `abortSignal(controller.signal)` for a pending read and call `controller.abort()` when it is no longer needed.
+
+## Error handling
+
+```js
+try { await qb.from('tasks').insert(row); }
+catch (error) { errorMessage.textContent = error instanceof Error ? error.message : 'Request failed'; }
+```
+
+Keep form input on failure. Resolve validation and policy errors before retrying. For a potentially committed mutation, reuse the original idempotency key rather than creating another action.

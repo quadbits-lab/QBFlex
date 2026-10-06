@@ -1,0 +1,19 @@
+{
+  "name": "@qb-flex/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts"
+  },
+  "dependencies": {
+    "@qb-flex/auth": "workspace:*",
+    "@qb-flex/contracts": "workspace:*",
+    "@qb-flex/database": "workspace:*",
+    "@qb-flex/observability": "workspace:*",
+    "@qb-flex/query-engine": "workspace:*",
+    "@qb-flex/realtime": "workspace:*",
+    "@qb-flex/storage": "workspace:*"
+  }
+}

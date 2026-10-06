@@ -1,0 +1,10 @@
+{
+  "name": "@qb-flex/ui",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.tsx",
+    "./src/theme.css": "./src/theme.css"
+  }
+}

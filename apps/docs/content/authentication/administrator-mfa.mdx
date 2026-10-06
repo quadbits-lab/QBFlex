@@ -1,0 +1,21 @@
+export const frontmatter = {"title": "Administrator MFA and recovery", "description": "Enroll an authenticator and manage platform credentials safely.", "section": "Authentication", "slug": "authentication/administrator-mfa", "order": 31};
+
+# Administrator MFA and recovery
+
+## Enroll the platform owner
+
+Open Studio Settings even before creating a project. Enter the current password and enable the authenticator. Import the shown TOTP URI into an authenticator application, save the one-time recovery codes in a password manager and verify a code. The seed is shown during enrollment and never logged.
+
+Production defaults to `QB_REQUIRE_ADMIN_MFA=true`. Owner and administrator writes require enrollment. Viewer access does not disclose secrets. Application user authentication is a separate branch realm.
+
+## Sign in with MFA
+
+After password verification, Studio shows the authenticator challenge. A password-only response does not contain an authenticated platform session. Enter a valid TOTP code to complete login. The Better Auth plugin applies attempt limits and locks repeated failed challenges.
+
+Enrollment verification rotates the active session. Management tokens are revoked when enrolling; issue new project-scoped tokens after completing MFA. Keep recovery codes outside the data volume.
+
+## Credential recovery
+
+Use Better Auth's authenticated backup-code verification endpoint `/platform/auth/two-factor/verify-backup-code` when your authenticator is lost. Treat a recovery code like a password. An operator should revoke compromised management tokens and application sessions, rotate project keys and provider secrets, then examine audit events.
+
+Never change the database's MFA columns to bypass a lost factor. Restore the protected control-plane backup only through an operator-reviewed recovery process.

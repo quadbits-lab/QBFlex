@@ -1,0 +1,53 @@
+export const frontmatter = {"title": "React queries, mutations and realtime", "description": "Build an authenticated task list with cache invalidation.", "section": "Client SDK \u00b7 React", "slug": "sdk/react/data", "order": 43};
+
+# React queries, mutations and realtime
+
+## Query ownership
+
+The query function receives the configured client and a cancellation signal. A query key must include every input that changes the data. The provider prefixes it with project, branch and identity scope.
+
+## Insert a task
+
+```tsx
+const auth = useQBAuth();
+const addTask = useQBMutation({
+  mutationFn: (_, title: string) => client.from('tasks').insert({
+    title,
+    owner_id: auth.user!.id,
+  }, { idempotencyKey: crypto.randomUUID() }),
+  invalidate: [['tasks']],
+});
+
+await addTask.mutateAsync('Write the first integration');
+```
+
+The hook exposes TanStack Query mutation state, including pending/error state. Generate the idempotency key once for each logical action; keep it when retrying that action manually.
+
+## Update or delete
+
+```tsx
+await client.from('tasks').update(task.id, { completed: 1 }, {
+  revision: Number(task.revision),
+});
+await client.from('tasks').delete(task.id);
+```
+
+Wrap these operations in `useQBMutation` and invalidate the task query after success. A stale revision returns a conflict; refetch and let the user reconcile rather than overwriting blindly.
+
+## Subscribe through a hook
+
+```tsx
+const realtime = useQBRealtime({
+  table: 'tasks',
+  enabled: Boolean(auth.user),
+  cursor: tasks.data?.meta.consistencyToken,
+  onEvent: () => {},
+  invalidate: [['tasks']],
+});
+```
+
+The hook creates and disposes the subscription with the component lifecycle. It invalidates the selected queries when events arrive and exposes connection status. React Strict Mode cleanup must not leave a duplicate connection.
+
+## Loading and failure states
+
+Show empty lists distinctly from policy denial or network errors. Disable duplicate mutation submissions while pending. Keep user drafts when a write fails. Use query refetch for recoverable failures; denied writes need a changed identity, policy or input.

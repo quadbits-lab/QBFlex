@@ -1,0 +1,12 @@
+.git
+node_modules
+**/dist
+**/node_modules
+.data
+.env
+.env.*
+!.env.example
+.cache
+.output
+*.tgz
+verification-artifacts

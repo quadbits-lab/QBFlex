@@ -1,0 +1,41 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "types": ["bun", "vite/client"],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "baseUrl": ".",
+    "paths": {
+      "@qb-flex/*": ["packages/*/src/index.ts"],
+      "@qb-flex/client": ["packages/sdk-js/src/index.ts"],
+      "@qb-flex/react": ["packages/sdk-react/src/index.tsx"],
+      "@qb-flex/ui": ["packages/ui/src/index.tsx"]
+    },
+    "resolveJsonModule": true
+  },
+  "include": [
+    "apps/**/*.ts",
+    "apps/**/*.tsx",
+    "packages/**/*.ts",
+    "packages/**/*.tsx",
+    "scripts/**/*.ts",
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
+    "examples/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/dist",
+    "**/routeTree.gen.ts",
+    "apps/docs/src",
+    "apps/studio/src",
+    "apps/docs/server.ts",
+    "apps/studio/server.ts"
+  ]
+}

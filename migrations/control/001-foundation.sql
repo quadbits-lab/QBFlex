@@ -1,0 +1,15 @@
+CREATE TABLE IF NOT EXISTS organizations(id TEXT PRIMARY KEY,name TEXT NOT NULL,created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS memberships(org_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,user_id TEXT NOT NULL REFERENCES _qb_auth_users(id),role TEXT NOT NULL CHECK(role IN('owner','admin','developer','viewer')),PRIMARY KEY(org_id,user_id));
+CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY,org_id TEXT NOT NULL REFERENCES organizations(id),name TEXT NOT NULL,slug TEXT NOT NULL,status TEXT NOT NULL,region TEXT NOT NULL DEFAULT 'local',config TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(org_id,slug));
+CREATE TABLE IF NOT EXISTS branches(id TEXT PRIMARY KEY,project_id TEXT NOT NULL REFERENCES projects(id),name TEXT NOT NULL,status TEXT NOT NULL,generation INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL,UNIQUE(project_id,name));
+CREATE TABLE IF NOT EXISTS operations(id TEXT PRIMARY KEY,project_id TEXT REFERENCES projects(id),type TEXT NOT NULL,status TEXT NOT NULL,progress INTEGER NOT NULL DEFAULT 0,error TEXT,created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS project_keys(id TEXT PRIMARY KEY,project_id TEXT NOT NULL REFERENCES projects(id),scope TEXT NOT NULL,hash TEXT UNIQUE NOT NULL,prefix TEXT NOT NULL,expires_at TEXT,revoked_at TEXT);
+CREATE TABLE IF NOT EXISTS management_tokens(id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES _qb_auth_users(id),hash TEXT UNIQUE NOT NULL,expires_at TEXT NOT NULL,revoked_at TEXT);
+CREATE TABLE IF NOT EXISTS audit_events(id TEXT PRIMARY KEY,actor TEXT NOT NULL,project_id TEXT,org_id TEXT,action TEXT NOT NULL,resource TEXT NOT NULL,result TEXT NOT NULL,request_id TEXT NOT NULL,time TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS backups(id TEXT PRIMARY KEY,project_id TEXT NOT NULL REFERENCES projects(id),branch_id TEXT NOT NULL REFERENCES branches(id),checksum TEXT NOT NULL,path TEXT NOT NULL,schema_version INTEGER NOT NULL,created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS control_migrations(id TEXT PRIMARY KEY,checksum TEXT NOT NULL,applied_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS management_idempotency(scope TEXT PRIMARY KEY,hash TEXT NOT NULL,response TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS project_org ON projects(org_id);
+CREATE INDEX IF NOT EXISTS operations_status ON operations(status,created_at);
+CREATE INDEX IF NOT EXISTS audit_project_time ON audit_events(project_id,time);
+CREATE INDEX IF NOT EXISTS keys_project ON project_keys(project_id,revoked_at);

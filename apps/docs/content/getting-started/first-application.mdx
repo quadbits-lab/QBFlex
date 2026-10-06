@@ -1,0 +1,35 @@
+export const frontmatter = {"title": "Build your first application", "description": "Complete the same authenticated task workflow in React or Vanilla JavaScript.", "section": "Getting started", "slug": "getting-started/first-application", "order": 4};
+
+# Build your first application
+
+## Prerequisites
+
+Complete [installation](/docs/getting-started/installation) and [first project](/docs/getting-started/first-project). Create the `tasks` table with its generated ID, owner, title, completion flag and revision. Expose the columns and add owner checks for SELECT, INSERT, UPDATE and DELETE. Create a publishable key.
+
+## Choose a client track
+
+Run `bun run --cwd examples/react dev` for the React application at port 7617, or `bun run --cwd examples/vanilla dev` for the DOM application at port 7618. Both implement the same workflow. Configure the API URL, project ID and publishable key in the form. Add that application's exact origin in Studio Authentication settings.
+
+Follow the [React provider tutorial](/docs/sdk/react/quickstart) or [Vanilla JS tutorial](/docs/sdk/vanilla/quickstart). React uses a context provider, shared auth state and query/mutation hooks. Vanilla uses a client instance, DOM handlers and explicit cleanup.
+
+## Register and create tasks
+
+Register an application user with an email and a password of at least 12 characters. This account is separate from your Studio account. Add a task, mark it complete and delete it. The client sends the current user ID, and the API validates ownership independently.
+
+Open a second browser profile with another application user. Each user should see only their own tasks. Attempting to update another user's ID returns a missing/invisible resource response.
+
+## Receive changes
+
+Both examples subscribe after loading a snapshot and its consistency token. Make a task change in another tab signed into the same user: the task list updates through committed, authorized events. Disconnect networking briefly, then restore it; the subscription resumes or requests a fresh snapshot when its retention window has expired.
+
+## Add file attachments
+
+Create a private bucket named `attachments` in Studio Storage. Enter its bucket ID in the example. Upload a file, download the exact bytes and delete it. Another user cannot list or download that private object. See [storage authorization](/docs/storage/files).
+
+## Generate types and recover
+
+Generate types in Studio API or with `qb types generate`. Create an encrypted backup, restore it into a separate branch and inspect the recovered task rows. Active sessions are excluded and object bytes need separate S3 backup. The primary branch changes only through an explicit cutover.
+
+## Verify the workflow
+
+The repository's browser checks run these workflows against the real API. Run `QB_INTEGRATION_STORAGE=1 bun test tests/integration` with the local MinIO dependency ready, then `bun run test:browser`. SDK packages are built and packed locally; no registry release is performed.

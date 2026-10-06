@@ -1,0 +1,49 @@
+export const frontmatter = {"title": "JavaScript realtime and files", "description": "Manage subscriptions and object transfers without React.", "section": "Client SDK \u00b7 Vanilla JS", "slug": "sdk/vanilla/realtime-storage", "order": 47};
+
+# JavaScript realtime and files
+
+## Subscribe after an authorized snapshot
+
+```js
+const snapshot = await qb.from('tasks');
+const channel = qb.channel({
+  table: 'tasks',
+  cursor: snapshot.meta.consistencyToken,
+  onEvent: () => refreshTasks(),
+  onStatus: status => { connectionLabel.textContent = status; },
+  onResync: () => refreshTasks(),
+}).subscribe();
+```
+
+A subscription is an explicit resource. Dispose it when replacing the screen or leaving the application. Realtime delivery uses the current session and exposed-table policies.
+
+## Upload a file
+
+```js
+const file = fileInput.files?.[0];
+if (file) {
+  const uploaded = await qb.storage.upload(bucketId, file.name, file);
+  const blob = await qb.storage.download(uploaded.data.id);
+  const url = URL.createObjectURL(blob);
+  downloadLink.href = url;
+  downloadLink.download = file.name;
+  // Release after the UI no longer uses the URL:
+  URL.revokeObjectURL(url);
+}
+```
+
+Use an authenticated application user and a configured S3 backend. Private files are restricted to their owner.
+
+## Lifecycle cleanup
+
+```js
+channel.unsubscribe();
+stopAuth();
+qb.dispose();
+```
+
+Call cleanup only when the instance is no longer used. `dispose` closes channels and removes session listeners. A disposed client rejects later requests.
+
+## Identity changes
+
+Refetch and clear protected DOM state after signout. Keep every application's state scoped to its client and user; do not mix results from another project. The SDK reauthorizes its channels after identity changes, while your application remains responsible for clearing previously rendered private content.

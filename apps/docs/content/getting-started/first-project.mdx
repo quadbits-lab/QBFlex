@@ -1,0 +1,52 @@
+export const frontmatter = {"title": "Create your first project", "description": "Go from an organization to a protected application table.", "section": "Getting started", "slug": "getting-started/first-project", "order": 3};
+
+# Create your first project
+
+## Create a project
+
+In Studio select your organization and create a project with a name and URL-safe slug. The initial region is `local`. Project creation returns an operation while the primary database is provisioned; Studio polls until the operation finishes.
+
+Select the ready project. Its primary branch is shown with a production badge. Changes affect the selected branch.
+
+## Create the task table
+
+Use Database → Migrations to apply a migration:
+
+```sql
+CREATE TABLE tasks (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  owner_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  completed INTEGER NOT NULL DEFAULT 0 CHECK (completed IN (0, 1)),
+  revision INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX tasks_owner_idx ON tasks(owner_id);
+```
+
+The schema is private at this point. In the exposure editor enable the table and allow its five columns, including the primary key.
+
+## Add ownership policies
+
+Create a policy for each of select, insert, update and delete, with the authenticated role and permissive mode. Both the read expression and write check use the same ownership condition:
+
+```json
+{"op":"eq","left":{"column":"owner_id"},"right":{"claim":"sub"}}
+```
+
+This permits users to read and modify only their own tasks. An attempted ownership reassignment fails the write check and rolls back.
+
+## Connect an application
+
+Create a publishable key in API → Keys. Copy it when shown; only its hash and prefix are stored. Use the real project ID and `primary` branch alias in your client configuration. Run either example application with those values.
+
+Sign up as an application user. This account is separate from your Studio owner. Insert a task with that user ID as `owner_id`, then open a second application account to confirm isolation.
+
+## Generate types
+
+The API workspace exposes generated types. The CLI writes the same declarations:
+
+```sh
+bun run qb types generate --project YOUR_PROJECT_ID --branch primary --output qb-flex.types.ts
+```
+
+Regenerate after schema changes. Runtime validation and authorization still apply to typed requests.

@@ -1,0 +1,33 @@
+export const frontmatter = {"title": "Authenticate application users", "description": "Separate application sessions from platform administration.", "section": "Services", "slug": "authentication/overview", "order": 30};
+
+# Authenticate application users
+
+## Separate realms
+
+Platform sessions authorize Studio and management operations. Application users belong to a branch's authentication realm. Tokens from another project or branch are rejected, even when the same email address exists in both.
+
+Better Auth provides password hashing, session creation, verification, reset and OAuth mechanisms. QB Flex provides routing, realm isolation and reserved metadata tables.
+
+## Email and password
+
+Use SDK `auth.signUp`, `auth.signIn` and `auth.signOut`. Passwords require at least 12 characters. Auth requests are rate limited. Revoking sessions in Studio takes effect on later requests and realtime authorization checks.
+
+## Verification and reset
+
+Enable email verification in project settings and configure SMTP. Unverified users cannot sign in when verification is required. SDK `sendVerification` requests a new message; `resetPassword` requests a reset link, and `updatePassword` completes it with the one-use token.
+
+Use an allowlisted callback URL. Local messages appear in Mailpit. SMTP failures are recoverable operation failures rather than silently delivered messages.
+
+## Google and GitHub
+
+Register an OAuth application with the selected provider. Configure its callback to the explicit branch auth endpoint, then store its client ID and secret in project settings. Add the browser application origin to the project allowlist.
+
+Call `auth.signInWithProvider` and navigate to the returned authorization URL. After the callback, refresh the application session. These adapters require provider credentials and live callback verification before certification.
+
+## Browser sessions
+
+The API uses HttpOnly cookies where supported, while SDK bearer tokens remain in memory. The client refreshes session state on initialization. Do not put service keys or management tokens in browser applications. Cross-origin cookies may be restricted by browser privacy settings; use a same-site deployment or explicitly manage an approved session adapter.
+
+## Platform MFA
+
+Platform owners can enable Better Auth two-factor authentication. Production readiness requires administrator enrollment and MFA enforcement; local availability alone is not a production certification.

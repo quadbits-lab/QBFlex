@@ -1,0 +1,17 @@
+{
+  "name": "@qb-flex/studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 7610",
+    "build": "vite build",
+    "start": "bun server.ts"
+  },
+  "dependencies": {
+    "@qb-flex/client": "workspace:*",
+    "@qb-flex/contracts": "workspace:*",
+    "@qb-flex/management-client": "workspace:*",
+    "@qb-flex/ui": "workspace:*"
+  }
+}

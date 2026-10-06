@@ -1,0 +1,42 @@
+export const frontmatter = {"title": "Upload and download files", "description": "Use S3-compatible storage through the authorization gateway.", "section": "Services", "slug": "storage/files", "order": 32};
+
+# Upload and download files
+
+## Configure the backend
+
+Set the S3 endpoint, region, physical bucket and operator credentials. These credentials remain server-side. Start local MinIO and initialize its physical bucket through the Compose setup service.
+
+Create logical buckets in Studio with a name, public/private visibility, size limit and optional MIME allowlist.
+
+## Upload lifecycle
+
+```js
+const result = await qb.storage.upload(bucketId, 'notes/report.txt', file);
+console.log(result.data.id);
+```
+
+The SDK creates an upload intent, then sends the bytes to the authenticated gateway. The object is visible only after S3 persistence and expected-size verification succeed. Failed objects remain unavailable and can be retried.
+
+The initial gateway caps uploads at 100 MiB and buffers each bounded upload. Streaming and resumable uploads are later enhancements. Choose smaller bucket limits for constrained hosts.
+
+## Ownership policies
+
+Only authenticated users can upload. Private objects are read and modified by their owners. Public buckets allow reads of ready objects; writes remain owner-restricted. The metadata owner check and current session are enforced on each request.
+
+Object bytes stay in S3 while searchable metadata stays in the branch database. Keys are normalized, and project/branch object prefixes are independent.
+
+## Download and delete
+
+```js
+const blob = await qb.storage.download(objectId);
+const url = URL.createObjectURL(blob);
+// Use the URL in your UI, then release it:
+URL.revokeObjectURL(url);
+await qb.storage.remove(objectId);
+```
+
+Delete marks the object as deleting before removing its backend bytes. Metadata is finalized only after cleanup succeeds. Private responses use `no-store` caching.
+
+## Recovery boundaries
+
+A database backup includes metadata, not object bytes. Enable object-backend backups separately. Restored branch metadata cannot assume a new branch prefix contains the source bytes; perform an explicit object restore before expecting restored files to be available.

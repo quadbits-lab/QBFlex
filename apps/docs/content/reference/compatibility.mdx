@@ -1,0 +1,33 @@
+export const frontmatter = {"title": "Compatibility and implementation status", "description": "Measured checks and remaining deployment certifications.", "section": "Reference", "slug": "reference/compatibility", "order": 92};
+
+# Compatibility and implementation status
+
+## Verified locally
+
+Bun 1.4.2, Elysia, worker-owned SQLite, Better Auth realm isolation, MFA enrollment/challenges, generated TypeScript, React Strict Mode lifecycle tests, realtime reconnect, MinIO storage and encrypted restore have executable tests in this repository. Consult `VERIFICATION.md` for the actual build/browser/Linux results and environment.
+
+## Deployment certification
+
+Google and GitHub adapters require your registered credentials and live callback testing. Production TLS, SMTP delivery outside Mailpit, encrypted disks, external S3 backends and sustained performance/recovery objectives require checks in your deployment. No scale, RPO or RTO targets are advertised as measured achievements.
+
+## Measured baseline
+
+On 6 October 2026, a Linux ARM64 container on an Apple M5 Pro host ran a one-million-row ownership-policy workload with WAL/FULL durability. With four CPU equivalents and an 8 GiB container memory limit, 1,000 indexed reads at 100 requests/second measured p95 4.29 ms; 100 writes at 25 writes/second measured p95 8.97 ms. All requests and authorized row events succeeded. Event delivery measured p95 250.18 ms from request start, including commit time. Snapshot and validated isolated restore took 1.393 and 1.820 seconds.
+
+The temporary filesystem was Docker OverlayFS on the local VM disk. The shared VM reported 8,317,267,968 bytes of physical memory; the container's 8 GiB setting was a configured ceiling. These short virtualized runs do not certify sustained scale, multi-tenant fairness, power-loss recovery or production disks. [Download the raw result and environment metadata](/benchmark.json). The reproducible source is `scripts/benchmark.ts` in the repository.
+
+## Native extensions
+
+The macOS system SQLite rejects the tested dynamic vector extension. The bounded spike reports the result separately on each OS. Vector product features remain planned even when the Linux extension loads successfully.
+
+## Current boundaries
+
+Public APIs support ordinary tables, scalar filters, keyset pagination, atomic batches, upsert, registered foreign-key relationships, relationship existence policies and reviewed structured RPC. Relationship expansion is one level deep and capped at three relationships, 100 parent rows and 50 child rows. Policies reject recursive relationship cycles.
+
+Storage has owner/private and public-read rules with bounded gateway uploads. Custom storage-policy expressions, resumable transfers and image processing are planned. Management tokens grant selected projects; server service keys require explicit branch/table/method scopes. SQL developer privileges are trusted schema administration.
+
+The deployment owns all writable databases from one API process. It does not provide distributed owners, automatic failover, SQLCipher, point-in-time recovery or external OAuth certification. Metrics cover HTTP traffic, active owners and disk capacity; complete distributed tracing and advanced feature metrics are future work.
+
+## Supported clients
+
+The initial supported application tracks are React 19 and Vanilla JavaScript browser ESM. SSR must create a client and QueryClient per request; browser effects start after hydration. Other framework adapters and React Native remain deferred.

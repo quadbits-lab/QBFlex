@@ -1,0 +1,37 @@
+export const frontmatter = {"title": "Query the REST API", "description": "Read, filter, paginate and mutate authorized data.", "section": "Database & APIs", "slug": "database/rest", "order": 22};
+
+# Query the REST API
+
+## Endpoints
+
+The branch base URL is:
+
+```text
+/v1/projects/{projectId}/branches/{branchId}
+```
+
+Use the `primary` alias or an explicit branch ID. Include `X-QB-Key` with a publishable key. Include an application bearer token when authenticated.
+
+## Structured reads
+
+```json
+{"columns":["id","title"],"filters":[{"column":"completed","op":"eq","value":0}],"order":[{"column":"id","direction":"asc"}],"limit":50,"count":true}
+```
+
+POST this body to `/data/tasks/query`. The default page is 50 rows; maximum is 500. Filters never accept raw SQL. Counts include only authorized rows.
+
+## Pagination
+
+Follow the response's `meta.cursor` with the same projection, filters, ordering, identity and schema version. Cursors are signed and bind that query scope. Changing scope rejects the cursor. Pagination does not provide a database snapshot spanning multiple requests.
+
+## Writes
+
+POST inserts one row or an atomic batch of up to 100 rows. PATCH updates a row by key; DELETE removes it. Supply `Idempotency-Key` to safely reconcile a retried mutation. Reusing the same key with different content returns a conflict.
+
+Tables with a `revision` column support conditional updates through `If-Match`. The server increments revisions and rejects mismatched values.
+
+## Results and errors
+
+Success returns `data` and `meta`, including a request ID and relevant schema metadata. Errors provide a stable code, human-readable message and retryability. SDK methods throw `QBError` on failed responses.
+
+An invisible row is returned as unavailable without revealing whether it exists. Public responses do not contain SQL, filesystem paths or credentials.

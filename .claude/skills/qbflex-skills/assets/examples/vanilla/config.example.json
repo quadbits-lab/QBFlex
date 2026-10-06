@@ -1,0 +1,7 @@
+{
+  "url": "http://localhost:7612",
+  "projectId": "PROJECT_ID",
+  "branch": "BRANCH_ID_OR_PRIMARY",
+  "publishableKey": "PUBLISHABLE_KEY",
+  "bucketId": "PRIVATE_BUCKET_ID"
+}

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>QB Flex · JavaScript tasks</title>
+  </head>
+  <body>
+    <main class="example">
+      <p class="eyebrow">QB FLEX / VANILLA JAVASCRIPT EXAMPLE</p>
+      <h1>A little room to get things done.</h1>
+      <p class="muted">The same task workflow, built with ordinary JavaScript and DOM APIs.</p>
+      <section id="configuration" class="panel example-form">
+        <form id="connect">
+          <label>API URL<input name="url" value="http://localhost:7612" required /></label
+          ><label>Project ID<input name="project" required /></label
+          ><label>Publishable key<input name="key" required /></label
+          ><button class="button button-primary">Connect project</button>
+        </form>
+      </section>
+      <section id="authentication" class="panel example-form" hidden>
+        <h2>Application account</h2>
+        <form id="sign-in">
+          <label>Name (registration)<input name="name" /></label
+          ><label>Email<input type="email" name="email" required /></label
+          ><label>Password<input type="password" name="password" minlength="12" required /></label>
+          <div class="flex">
+            <button class="button button-primary" name="action" value="signin">Sign in</button
+            ><button class="button button-secondary" name="action" value="signup">Register</button>
+          </div>
+        </form>
+      </section>
+      <section id="workspace" hidden>
+        <div class="example-account">
+          <div>
+            <strong id="account-label"></strong><small id="connection-label">Disconnected</small>
+          </div>
+          <button id="sign-out" class="button button-secondary">Sign out</button>
+        </div>
+        <section class="panel example-form">
+          <h2>Your tasks</h2>
+          <form id="add-task" class="task-input">
+            <input
+              name="title"
+              aria-label="New task"
+              placeholder="What needs doing?"
+              required
+            /><button class="button button-primary">Add task</button>
+          </form>
+          <ul id="tasks" class="task-list"></ul>
+        </section>
+        <section class="panel example-form">
+          <h2>Attachments</h2>
+          <label>Bucket ID<input id="bucket" placeholder="Create a bucket in Studio" /></label
+          ><label>File<input type="file" id="file" /></label
+          ><button id="download" class="button button-secondary" disabled>
+            Download attachment</button
+          ><button id="remove-file" class="button button-ghost" disabled>Delete attachment</button>
+        </section>
+      </section>
+      <p id="error" role="alert" class="notice notice-error" hidden></p>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

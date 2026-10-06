@@ -1,0 +1,23 @@
+export const frontmatter = {"title": "Relationships, upsert and reviewed RPC", "description": "Use approved related data and named operations with the same authorization engine.", "section": "Database & APIs", "slug": "database/relationships-rpc", "order": 24};
+
+# Relationships, upsert and reviewed RPC
+
+## Register a relationship
+
+Create a foreign key with a migration, expose both tables and the linking columns, then PUT a declaration to the branch Management API `/relationships`. Specify `name`, `source`, `target`, `localColumn`, `foreignColumn` and `cardinality` (`one` or `many`). A `one` relationship must follow a source foreign key. Reverse foreign-key links can use `many`.
+
+A related query must select its linking column. Use `.include([{ name: 'project' }])` after registering that relationship. Child rows pass their own SELECT policies; an invisible parent becomes `null`, and an invisible child collection becomes empty. Counts still describe authorized parent rows. Nested expansion is unavailable.
+
+## Existence policies
+
+A policy can use an expression with `op: 'exists'`, a registered `relationship` name and a `where` expression evaluated against the target table. The target's SELECT policies are also enforced. This cannot turn a hidden table into a public join. Cycles and relationship paths deeper than four levels are rejected.
+
+## Upsert
+
+`.upsert(row, { idempotencyKey })` requires every primary-key field. An absent row follows INSERT/WITH CHECK; a conflict follows old-row UPDATE/USING and new-row WITH CHECK. The entire batch rolls back if one row fails. It does not grant access to invisible conflicts. Returned rows must pass SELECT policies.
+
+## Reviewed named operations
+
+Developers register a declaration by PUT to `/rpc` in the branch Management API. A declaration contains `name`, `table`, `kind`, typed `args`, optional query settings, and value mappings. Mutation kinds are `insert`, `update` or `delete`; update/delete require `keyArg`. A value mapping can use `{ arg: 'title' }` or `{ claim: 'sub' }`. Claims come from the server identity.
+
+The browser calls `qb.rpc('operation_name', args, options)`. This API exposes structured operations over the same read/mutation engine. SQL text, arbitrary functions and unrestricted transactions are unavailable. Generated `RPC` declarations describe argument and return types. Pass both generated interfaces to `createClient<Database, RPC>(options)` to check operation names, arguments and results.

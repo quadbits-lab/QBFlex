@@ -1,0 +1,49 @@
+export const frontmatter = {"title": "Use the qb CLI", "description": "Authenticate and automate local project workflows.", "section": "Operations", "slug": "cli/commands", "order": 60};
+
+# Use the qb CLI
+
+## Login and linking
+
+```sh
+bun run qb login --url http://localhost:7612 --email owner@example.com
+bun run qb projects list
+bun run qb link --project YOUR_PROJECT_ID --branch primary
+```
+
+On macOS, login reads the password from a hidden interactive prompt and stores a 30-day management token in the OS keychain. Add `--organization ORGANIZATION_ID` only when the CLI must provision projects. Linux and CI use `QB_MANAGEMENT_TOKEN`: create the scoped token in Studio Settings after completing administrator MFA and inject it through your protected environment store. The CLI does not print or write credentials to a plaintext configuration file.
+
+## Schema workflows
+
+```sh
+bun run qb db migrate --file migrations/001_tasks.sql --id 001_tasks
+bun run qb db export --table tasks --output tasks.json
+bun run qb db import --table tasks --file tasks.json
+bun run qb types generate --output qb-flex.types.ts
+```
+
+Migrations and table writes require developer permissions. Import uses bounded batches; an import spanning batches is not a single all-or-nothing transaction.
+
+## Recovery
+
+```sh
+bun run qb backup create
+bun run qb backup restore --backup YOUR_BACKUP_ID
+```
+
+Restore creates a new isolated branch. It does not switch primary traffic automatically. Perform cutover deliberately through management operations after validating the restored branch.
+
+## Development
+
+`qb init` writes a local configuration file without credentials. `qb dev` starts the workspace processes. Commands accept explicit project/branch flags, with linked defaults for convenience.
+
+General branch creation, functions, hosted MCP and remote reset are not enabled in P0. Unsupported commands return an actionable error rather than simulating success.
+
+## Local reset and secrets
+
+`qb db reset --data-dir .data --confirm-local-reset` requires a stopped API and a disposable local directory with a generated master key. It removes the local databases and generated local keys. It never selects a remote branch by default.
+
+`qb secrets set --name SERVICE_SECRET --env MY_SECRET` reads a secret from the named environment variable, stores an encrypted version and returns only its identifier. Viewer access cannot recover secret values.
+
+`qb storage sync --bucket BUCKET_ID --directory ./attachments` adds missing objects from a local directory. Existing and remote-only objects are preserved. Hidden files and symlinks are skipped. Use the explicit object APIs for deletion.
+
+`qb db diff --file expected-schema.json` compares the current introspected schema with your checked-in schema manifest. It reports column differences; it does not invent a migration.

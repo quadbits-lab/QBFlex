@@ -1,0 +1,50 @@
+export const frontmatter = {"title": "Install and run locally", "description": "Start Studio, Docs and the API on your computer.", "section": "Getting started", "slug": "getting-started/installation", "order": 2};
+
+# Install and run locally
+
+## Requirements
+
+Use Bun 1.4.2 and a running Docker-compatible engine for MinIO, Mailpit and container verification. Install the dependencies from the committed lockfile:
+
+```sh
+bun install --frozen-lockfile
+cp .env.example .env
+bun run dev
+```
+
+The development command starts Studio on port 7610, Docs on 7611 and API on 7612. All three applications have independent workspace commands. Database files and local secrets live under `.data`, which is ignored by Git.
+
+The launcher checks for occupied ports before starting services and waits for the API to create and accept its worker credential. If the full Docker local profile already owns these ports, use its running applications or switch to native hot reload:
+
+```sh
+docker compose --profile local stop studio docs api worker
+bun run dev
+```
+
+This preserves database and object volumes and leaves MinIO and Mailpit running. The native `.data` directory and the Docker database volume are separate installations. An independent worker must use the same `QB_DATA_DIR` as its API, or the same server-only `QB_WORKER_TOKEN`. The API owns credential creation; do not create or copy `worker.token` to bypass a startup error.
+
+## Storage and email
+
+Start the infrastructure services in another terminal:
+
+```sh
+docker compose --profile dependencies up -d --build
+```
+
+MinIO provides the S3 backend. Mailpit captures verification and password reset messages at port 7616. Configure the S3 environment settings in `.env` before starting the API. Local infrastructure credentials are development-only defaults.
+
+## First owner
+
+Open Studio. On a clean installation the setup screen asks for the bootstrap token, name, email, password and organization. The token is in `.data/bootstrap.token`; do not commit it. After successful setup the file is removed and the setup endpoint cannot create another owner.
+
+Passwords must contain at least 12 characters. Sign in with the account you created. Production setup requires operator-supplied master and bootstrap keys.
+
+## Verify your installation
+
+```sh
+bun run spike
+bun run check
+bun run build
+```
+
+The compatibility spike checks auth realm isolation and GraphQL interoperability. Native vector loading is reported separately. Passing local checks does not certify Linux deployment or remote OAuth providers.

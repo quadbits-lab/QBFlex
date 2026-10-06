@@ -1,0 +1,53 @@
+export const frontmatter = {"title": "React authentication", "description": "Use shared session state and protect application screens.", "section": "Client SDK \u00b7 React", "slug": "sdk/react/authentication", "order": 42};
+
+# React authentication
+
+## Read the shared session
+
+```tsx
+import { useQBAuth } from '@qb-flex/react';
+
+function Account() {
+  const auth = useQBAuth();
+  if (auth.isLoading) return <p>Checking your session…</p>;
+  if (!auth.user) return <SignIn />;
+  return <section>
+    <p>Signed in as {auth.user.email}</p>
+    <button onClick={() => auth.signOut().catch(console.error)}>Sign out</button>
+  </section>;
+}
+```
+
+All components under the provider observe the same session. The hook exposes session, user, loading/error state and signIn/signUp/signOut/refresh actions.
+
+## Sign in or register
+
+```tsx
+await auth.signIn({ email, password });
+await auth.signUp({ email, password, name });
+```
+
+Catch failures and present `auth.error.message` in the form. Registration may require verification before a session is available. Never assume signup always authenticates the user.
+
+## Enable protected queries
+
+```tsx
+const auth = useQBAuth();
+const tasks = useQBQuery({
+  queryKey: ['tasks'],
+  enabled: Boolean(auth.user),
+  queryFn: (_, signal) => client.from('tasks').abortSignal(signal).execute(),
+});
+```
+
+Conditional rendering improves the interface; server policies are still the authorization boundary.
+
+## Identity changes
+
+Query keys include the project, branch and identity generation. The provider cancels in-flight queries and removes affected cached results when the user changes. Realtime subscriptions reauthorize under the new session.
+
+Do not keep copies of protected query data in unrelated global state. Clear application-specific derived state on signout as well.
+
+## Server rendering
+
+Create clients and QueryClient instances per request. Do not reuse a module-global authenticated client on a server. Hooks do not read browser APIs during server rendering; session loading occurs after initialization. Advanced request-session hydration requires an explicit integration rather than assuming browser cookies exist on the server.

@@ -1,0 +1,77 @@
+.example {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 70px 24px;
+}
+.example > .eyebrow {
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  color: var(--secondary);
+}
+.example h1 {
+  font-size: 2.5rem;
+  max-width: 550px;
+}
+.example > p.muted {
+  margin-bottom: 35px;
+}
+.example-form {
+  padding: 26px;
+  margin: 20px 0;
+}
+.example-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 24px 0;
+}
+.example-account small {
+  display: block;
+  margin-top: 5px;
+}
+.task-input {
+  display: flex;
+  gap: 10px;
+}
+.task-list {
+  list-style: none;
+  padding: 0;
+  margin: 24px 0 0;
+}
+.task-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.task-list label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+.task-list input {
+  width: 16px;
+  min-height: 16px;
+  accent-color: #eee;
+}
+.task-list .completed {
+  text-decoration: line-through;
+  color: var(--secondary);
+}
+[hidden] {
+  display: none !important;
+}
+@media (max-width: 600px) {
+  .example {
+    padding-top: 35px;
+  }
+  .example h1 {
+    font-size: 2rem;
+  }
+  .example-form {
+    padding: 20px;
+  }
+}

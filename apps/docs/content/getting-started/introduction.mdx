@@ -1,0 +1,27 @@
+export const frontmatter = {"title": "Build your backend. Keep control.", "description": "A practical introduction to QB Flex and its architecture.", "section": "Getting started", "slug": "getting-started/introduction", "order": 1};
+
+# Build your backend. Keep control.
+
+QB Flex gives your application a SQLite database, an authorized REST API, authentication, realtime events and object storage. Studio manages these services; your application connects through a publishable key and its own user sessions.
+
+## Start here
+
+1. Follow [installation](/docs/getting-started/installation).
+2. Create your first project and an ownership policy.
+3. Choose the [React tutorial](/docs/sdk/react/quickstart) or [Vanilla JavaScript tutorial](/docs/sdk/vanilla/quickstart).
+
+## Three applications, one platform
+
+**Studio** is the authenticated workspace for project developers. **API** owns management and application endpoints. **Docs** is this independently deployable documentation site. A background worker requests scheduled maintenance through an authenticated internal endpoint.
+
+An organization owns projects. Each project owns an isolated primary branch. A branch has a separate SQLite file and authentication realm. Organization roles and application user identities are different permissions.
+
+## What is available
+
+The initial implementation covers ordinary-table REST CRUD, application policies, email/password authentication, database row subscriptions, basic S3 storage and backup/restore. Read the [compatibility reference](/docs/reference/compatibility) before deployment.
+
+GraphQL, vector search, functions, hosted MCP, general branching and replicas are roadmap capabilities. They are not required to use the core backend.
+
+## Secure by default
+
+A publishable key identifies a project. It does not grant access to rows. Tables remain private until exposed, and exposed tables still need applicable permissive policies. Platform credentials never become application user sessions.

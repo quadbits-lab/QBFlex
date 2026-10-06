@@ -1,0 +1,13 @@
+{
+  "name": "@qb-flex/example-react",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 7617",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@qb-flex/client": "workspace:*",
+    "@qb-flex/react": "workspace:*"
+  }
+}

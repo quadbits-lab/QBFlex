@@ -1,0 +1,36 @@
+export const frontmatter = {"title": "React file handling", "description": "Upload and download files with a custom storage hook.", "section": "Client SDK \u00b7 React", "slug": "sdk/react/storage", "order": 44};
+
+# React file handling
+
+## Use the storage hook
+
+```tsx
+import { useQBStorage } from '@qb-flex/react';
+
+function Upload({ bucketId }: { bucketId: string }) {
+  const storage = useQBStorage();
+  return <label>Attach a file
+    <input type="file" disabled={storage.isPending} onChange={async event => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      try { await storage.upload(bucketId, file.name, file); }
+      catch { /* Render storage.error in the form. */ }
+    }} />
+    {storage.error && <span role="alert">{storage.error.message}</span>}
+  </label>;
+}
+```
+
+`isPending` describes transfer activity, not byte progress. Initial uploads are bounded, non-resumable transfers. Keep filename and size visible while the transfer runs.
+
+## Download safely
+
+Call `storage.download(objectId)` to receive a Blob. Create an object URL for the browser and revoke it after use. Do not expose an S3 backend URL or credentials.
+
+## Delete and refresh
+
+Call `storage.remove(objectId)` and invalidate the file-list query after success. Listing uses the same client identity. An object from another private owner is unavailable.
+
+## Cancellation
+
+Upload/download methods accept a request option containing an AbortSignal. Cancel operations when the user deliberately leaves the transfer flow. Cancellation does not guarantee that remote work did not commit; refresh object state before retrying.

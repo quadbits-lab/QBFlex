@@ -1,0 +1,37 @@
+export const frontmatter = {"title": "Monitoring and troubleshooting", "description": "Diagnose owner saturation, unavailable services and failed operations.", "section": "Operations", "slug": "self-hosting/monitoring", "order": 63};
+
+# Monitoring and troubleshooting
+
+## Health checks
+
+`/health` indicates process liveness. `/ready` checks control-database access and reports active owner count. Readiness is not a claim that every external provider is healthy.
+
+## Logs and audit records
+
+Structured API errors include request ID, path, status and a stable code. Audit records include actor, organization/project, action and resource. Credential values, passwords and raw row payloads are not logged by default.
+
+## Branch unavailable
+
+Inspect provisioning status and confirm the persistent disk is mounted and writable. An unavailable or deadline-terminated owner returns a retriable failure. Restarting the API recovers branch handles; reconcile any uncertain mutation with its idempotency key.
+
+## Busy writers and disk pressure
+
+Requests are bounded by branch queue size and execution deadlines. Monitor database/WAL sizes and available disk. Stop introducing writes before the disk fills, drain work and follow the backup/restore runbook. Do not delete WAL files to reclaim space from a running database.
+
+## Authentication failures
+
+Verify project key, branch, exact browser origin and application session. A platform session cannot be used as an application identity. Check SMTP configuration for reset/verification delivery. Provider configuration alone does not prove a social callback works.
+
+## Storage failures
+
+Check S3 endpoint, credentials, physical bucket and bucket MIME/size constraints. Failed upload metadata is not publicly readable. Reconcile pending/deleting objects before retrying remote effects.
+
+## Operational limits
+
+This is a single-node implementation. Do not horizontally scale writable owners without fencing and routing certification. Advanced telemetry, distributed abuse controls and tenant fairness require the release tests listed in the development specification.
+
+## Maintenance and metrics
+
+`apps/worker` invokes the API's authenticated `/internal/maintenance` endpoint every minute. It removes expired sessions/idempotency entries, checkpoints WALs, retains the outbox for 24 hours, reconciles abandoned upload/deletion records and creates daily primary-branch snapshots. `QB_BACKUP_RETENTION_DAYS` defaults to seven. Local workers read `.data/worker.token`; production injects `QB_WORKER_TOKEN`.
+
+Scrape `/internal/metrics` with the worker bearer token from the private network. The gateway returns 404 for internal routes. Prometheus output covers request/error counts, cumulative/max duration, active owners and available disk bytes. Do not interpret these as a complete tracing or performance certification.

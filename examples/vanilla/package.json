@@ -1,0 +1,12 @@
+{
+  "name": "@qb-flex/example-vanilla",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 7618",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@qb-flex/client": "workspace:*"
+  }
+}

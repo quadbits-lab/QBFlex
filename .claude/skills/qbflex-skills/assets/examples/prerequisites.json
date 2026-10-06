@@ -1,0 +1,147 @@
+{
+  "migrationId": "skill-tasks-001",
+  "exposure": {
+    "enabled": true,
+    "columns": [
+      "id",
+      "owner_id",
+      "title",
+      "completed",
+      "revision"
+    ]
+  },
+  "policies": [
+    {
+      "resource": "tasks",
+      "operation": "select",
+      "roles": [
+        "authenticated"
+      ],
+      "mode": "permissive",
+      "using": {
+        "op": "eq",
+        "left": {
+          "column": "owner_id"
+        },
+        "right": {
+          "claim": "sub"
+        }
+      },
+      "check": {
+        "op": "eq",
+        "left": {
+          "column": "owner_id"
+        },
+        "right": {
+          "claim": "sub"
+        }
+      },
+      "enabled": true
+    },
+    {
+      "resource": "tasks",
+      "operation": "insert",
+      "roles": [
+        "authenticated"
+      ],
+      "mode": "permissive",
+      "using": {
+        "op": "eq",
+        "left": {
+          "column": "owner_id"
+        },
+        "right": {
+          "claim": "sub"
+        }
+      },
+      "check": {
+        "op": "eq",
+        "left": {
+          "column": "owner_id"
+        },
+        "right": {
+          "claim": "sub"
+        }
+      },
+      "enabled": true
+    },
+    {
+      "resource": "tasks",
+      "operation": "update",
+      "roles": [
+        "authenticated"
+      ],
+      "mode": "permissive",
+      "using": {
+        "op": "eq",
+        "left": {
+          "column": "owner_id"
+        },
+        "right": {
+          "claim": "sub"
+        }
+      },
+      "check": {
+        "op": "eq",
+        "left": {
+          "column": "owner_id"
+        },
+        "right": {
+          "claim": "sub"
+        }
+      },
+      "enabled": true
+    },
+    {
+      "resource": "tasks",
+      "operation": "delete",
+      "roles": [
+        "authenticated"
+      ],
+      "mode": "permissive",
+      "using": {
+        "op": "eq",
+        "left": {
+          "column": "owner_id"
+        },
+        "right": {
+          "claim": "sub"
+        }
+      },
+      "check": {
+        "op": "eq",
+        "left": {
+          "column": "owner_id"
+        },
+        "right": {
+          "claim": "sub"
+        }
+      },
+      "enabled": true
+    }
+  ],
+  "rpc": {
+    "name": "create_task",
+    "table": "tasks",
+    "kind": "insert",
+    "args": {
+      "title": "string"
+    },
+    "values": {
+      "title": {
+        "arg": "title"
+      },
+      "owner_id": {
+        "claim": "sub"
+      }
+    }
+  },
+  "bucket": {
+    "name": "attachments",
+    "visibility": "private",
+    "maxSize": 1048576,
+    "mimeRules": [
+      "text/plain"
+    ]
+  }
+}

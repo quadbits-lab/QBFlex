@@ -1,0 +1,226 @@
+import { test, expect } from 'bun:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createService } from '../../apps/api/src/service';
+import { createClient } from '@qb-flex/client';
+import { schema, initializeBranch, expose, savePolicy } from '@qb-flex/schema';
+import { openDatabase } from '@qb-flex/database';
+import { BranchEngine } from '../../packages/database/src/engine';
+const ownership = { op: 'eq', left: { column: 'owner_id' }, right: { claim: 'sub' } } as const;
+test('default deny, owner checks, atomic batches, cursor scopes, migration checksums and outbox', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'qb-engine-'));
+  const db = openDatabase(join(dir, 'main.sqlite'));
+  try {
+    initializeBranch(db);
+    const engine = new BranchEngine(db, 'cursor-test-secret');
+    engine.migration(
+      '001',
+      'CREATE TABLE tasks(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,title TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1);',
+      'test',
+    );
+    expose(db, 'tasks', true, ['id', 'owner_id', 'title', 'revision']);
+    const alice = { sub: 'alice', role: 'authenticated' } as const;
+    const bob = { sub: 'bob', role: 'authenticated' } as const;
+    expect(engine.read('tasks', {}, alice).data).toEqual([]);
+    expect(() =>
+      engine.mutate('tasks', 'insert', { id: '1', owner_id: 'alice', title: 'Hidden' }, alice),
+    ).toThrow();
+    for (const operation of ['select', 'insert', 'update', 'delete'] as const)
+      savePolicy(db, {
+        resource: 'tasks',
+        operation,
+        roles: ['authenticated'],
+        mode: 'permissive',
+        enabled: true,
+        using: ownership,
+        check: ownership,
+      });
+    engine.mutate(
+      'tasks',
+      'insert',
+      [
+        { id: '1', owner_id: 'alice', title: 'A' },
+        { id: '2', owner_id: 'alice', title: 'B' },
+      ],
+      alice,
+      undefined,
+      'request-1',
+    );
+    expect(engine.read('tasks', {}, alice).data.length).toBe(2);
+    expect(engine.read('tasks', { count: true }, bob).meta.count).toBe(0);
+    expect(() => engine.mutate('tasks', 'update', { owner_id: 'bob' }, alice, '1')).toThrow();
+    expect(engine.read('tasks', {}, alice).data[0].owner_id).toBe('alice');
+    const page = engine.read('tasks', { limit: 1 }, alice);
+    expect(engine.read('tasks', { limit: 1, cursor: page.meta.cursor }, alice).data[0].id).toBe(
+      '2',
+    );
+    expect(() => engine.read('tasks', { limit: 1, cursor: page.meta.cursor }, bob)).toThrow();
+    expect(() =>
+      engine.mutate(
+        'tasks',
+        'insert',
+        [
+          { id: '3', owner_id: 'alice', title: 'C' },
+          { id: '4', owner_id: 'bob', title: 'D' },
+        ],
+        alice,
+      ),
+    ).toThrow();
+    expect(engine.read('tasks', {}, alice).data.length).toBe(2);
+    expect(engine.events(0, bob).events).toEqual([]);
+    expect(engine.events(0, alice).events.length).toBe(2);
+    engine.mutate(
+      'tasks',
+      'insert',
+      [
+        { id: '1', owner_id: 'alice', title: 'A' },
+        { id: '2', owner_id: 'alice', title: 'B' },
+      ],
+      alice,
+      undefined,
+      'request-1',
+    );
+    expect(engine.read('tasks', {}, alice).data.length).toBe(2);
+    expect(() =>
+      engine.mutate(
+        'tasks',
+        'insert',
+        { id: '9', owner_id: 'alice', title: 'Different' },
+        alice,
+        undefined,
+        'request-1',
+      ),
+    ).toThrow();
+    expect(() =>
+      engine.migration('001', 'CREATE TABLE different(id INTEGER PRIMARY KEY);', 'test'),
+    ).toThrow();
+    expect(() =>
+      engine.migration('002', 'CREATE TABLE broken(id TEXT); invalid SQL', 'test'),
+    ).toThrow();
+    expect(schema(db).some((t) => t.name === 'broken')).toBe(false);
+  } finally {
+    db.close(true);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+test('real API: first owner, provisioning, realm isolation, SDK CRUD, backup and isolated restore', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'qb-api-'));
+  process.env.QB_BOOTSTRAP_TOKEN = 'integration-bootstrap-token';
+  const service = await createService({
+    dataDir: dir,
+    publicURL: 'http://localhost:7612',
+    master: 'integration-master-key-at-least-thirty-two-characters',
+  });
+  const fetcher = (async (input: any, init?: RequestInit) =>
+    service.app.handle(new Request(input, init))) as typeof fetch;
+  async function call(path: string, method = 'GET', body?: unknown, token?: string) {
+    const response = await fetcher('http://localhost:7612' + path, {
+      method,
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const value = await response.json();
+    if (!response.ok) throw new Error(JSON.stringify(value));
+    return value;
+  }
+  try {
+    await call('/setup', 'POST', {
+      bootstrapToken: process.env.QB_BOOTSTRAP_TOKEN,
+      email: 'owner@example.com',
+      password: 'owner-password-12345',
+      name: 'Owner',
+    });
+    const auth = await call('/platform/auth/sign-in/email', 'POST', {
+      email: 'owner@example.com',
+      password: 'owner-password-12345',
+    });
+    const token = auth.token;
+    const organizations = await call('/management/v1/organizations', 'GET', undefined, token);
+    const project = await call(
+      '/management/v1/projects',
+      'POST',
+      { organizationId: organizations.data[0].id, name: 'Integration', slug: 'integration' },
+      token,
+    );
+    await service.tick();
+    const b = `/management/v1/projects/${project.data.id}/branches/${project.data.branchId}`;
+    await call(
+      b + '/migrations',
+      'POST',
+      {
+        id: '001',
+        sql: 'CREATE TABLE tasks(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,title TEXT NOT NULL);',
+      },
+      token,
+    );
+    await call(
+      b + '/exposure/tasks',
+      'PUT',
+      { enabled: true, columns: ['id', 'owner_id', 'title'] },
+      token,
+    );
+    for (const operation of ['select', 'insert', 'update', 'delete'])
+      await call(
+        b + '/policies',
+        'PUT',
+        {
+          resource: 'tasks',
+          operation,
+          roles: ['authenticated'],
+          mode: 'permissive',
+          enabled: true,
+          using: ownership,
+          check: ownership,
+        },
+        token,
+      );
+    const key = await call(`/management/v1/projects/${project.data.id}/keys`, 'POST', {}, token);
+    const client = createClient({
+      url: 'http://localhost:7612',
+      projectId: project.data.id,
+      branch: project.data.branchId,
+      publishableKey: key.data.key,
+      fetch: fetcher,
+    });
+    const session = await client.auth.signUp({
+      email: 'alice@example.com',
+      password: 'alice-password-12345',
+      name: 'Alice',
+    });
+    expect(session?.user.id).toBeTruthy();
+    await client
+      .from('tasks')
+      .insert({ id: 'one', owner_id: session!.user.id, title: 'Persisted' });
+    expect((await client.from('tasks').select(['title'])).data[0].title).toBe('Persisted');
+    await client.from('tasks').update('one', { title: 'Changed' });
+    expect((await client.from('tasks')).data[0].title).toBe('Changed');
+    const unauth = createClient({
+      url: 'http://localhost:7612',
+      projectId: project.data.id,
+      branch: project.data.branchId,
+      publishableKey: key.data.key,
+      fetch: fetcher,
+    });
+    expect((await unauth.from('tasks')).data).toEqual([]);
+    const snapshot = await call(b + '/backups', 'POST', {}, token);
+    const restore = await call(
+      `/management/v1/projects/${project.data.id}/backups/${snapshot.data.id}/restore`,
+      'POST',
+      {},
+      token,
+    );
+    expect(restore.data.sessionsExcluded).toBe(true);
+    await client.auth.signOut();
+    expect((await client.from('tasks')).data).toEqual([]);
+    client.dispose();
+    unauth.dispose();
+  } finally {
+    await service.close();
+    delete process.env.QB_BOOTSTRAP_TOKEN;
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30000);

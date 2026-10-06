@@ -1,0 +1,16 @@
+{
+  "name": "@qb-flex/database",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@qb-flex/auth": "workspace:*",
+    "@qb-flex/contracts": "workspace:*",
+    "@qb-flex/policies": "workspace:*",
+    "@qb-flex/query-engine": "workspace:*",
+    "@qb-flex/schema": "workspace:*"
+  }
+}

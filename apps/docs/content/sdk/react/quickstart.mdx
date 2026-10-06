@@ -1,0 +1,67 @@
+export const frontmatter = {"title": "React quickstart", "description": "Connect a React application with QBProvider and custom hooks.", "section": "Client SDK \u00b7 React", "slug": "sdk/react/quickstart", "order": 41};
+
+# React quickstart
+
+## Before you begin
+
+Create the task table, ownership policies and publishable key from [your first project](/docs/getting-started/first-project). Use React 19. The runnable example is in `examples/react`.
+
+```sh
+bun run --cwd examples/react dev
+```
+
+For an external application, run `bun run sdk:pack` in QB Flex, then install both artifacts and their React peers from your Vite React application:
+
+```sh
+npm install /path/to/QBFlex/dist/packages/qb-flex-client-0.1.0.tgz /path/to/QBFlex/dist/packages/qb-flex-react-0.1.0.tgz react@19.3.0 react-dom@19.3.0
+```
+
+Replace the paths with the actual absolute paths. npm installs the adapter's pinned TanStack Query dependency. Bun 1.4.2 attempts to resolve the unpublished client peer from the registry when installing these local tarballs, so use npm for this external artifact workflow. Configure the application's exact origin in Studio.
+
+## Create the client once
+
+```tsx
+import { createClient } from '@qb-flex/client';
+import { QBProvider } from '@qb-flex/react';
+import type { Database } from './qb-flex.types';
+
+const client = createClient<Database>({
+  url: 'http://localhost:7612',
+  projectId: 'YOUR_PROJECT_ID',
+  branch: 'primary',
+  publishableKey: 'YOUR_PUBLISHABLE_KEY',
+});
+
+export function App() {
+  return <QBProvider client={client}><Tasks /></QBProvider>;
+}
+```
+
+The provider supplies a shared client and its own TanStack Query cache. You may pass an existing `queryClient` when integrating into an application that already uses Query.
+
+## Read data with a custom hook
+
+```tsx
+import { useQBQuery } from '@qb-flex/react';
+
+function Tasks() {
+  const query = useQBQuery({
+    queryKey: ['tasks'],
+    queryFn: (_, signal) => client.from('tasks')
+      .select(['id', 'title'])
+      .abortSignal(signal)
+      .execute(),
+  });
+  if (query.isPending) return <p>Loading tasks…</p>;
+  if (query.error) return <p role="alert">{query.error.message}</p>;
+  return <ul>{query.data.data.map(task =>
+    <li key={task.id}>{task.title}</li>
+  )}</ul>;
+}
+```
+
+Use generated database declarations to retain column and row inference. Include filters and sort choices in `queryKey` whenever they affect the result.
+
+## Next steps
+
+Add [authentication](/docs/sdk/react/authentication), [mutations and realtime](/docs/sdk/react/data), then [file handling](/docs/sdk/react/storage). Every hook requires the provider; a missing provider produces a clear configuration error.

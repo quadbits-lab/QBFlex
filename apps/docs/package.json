@@ -1,0 +1,14 @@
+{
+  "name": "@qb-flex/docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 7611",
+    "build": "vite build && bun ../../scripts/docs-static.ts",
+    "start": "bun server.ts"
+  },
+  "dependencies": {
+    "@qb-flex/ui": "workspace:*"
+  }
+}

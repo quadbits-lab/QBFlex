@@ -1,0 +1,308 @@
+{
+  "formatVersion": 1,
+  "name": "qbflex-skills",
+  "version": "0.1.0",
+  "productVersion": "0.1.0",
+  "checksumAlgorithm": "sha256",
+  "provenance": "Implemented repository sources, emitted SDK declarations and executable tests; design spec is planned-scope context.",
+  "sources": [
+    {
+      "path": "apps/api/src/index.ts",
+      "sha256": "0c8db5ba26bcecaf63164da951bb74e15037ea1e1ef49e62b2ae0b3f2f287cba"
+    },
+    {
+      "path": "apps/api/src/service.ts",
+      "sha256": "2bdbe540e47a63722d937e1df034053f2ab3b0d4301c7e0df51192f63095e702"
+    },
+    {
+      "path": "apps/cli/src/index.ts",
+      "sha256": "2641c45f900bc4f7d6e179e149b0644576aa54056eef7d1649cfeaf8fc1619d6"
+    },
+    {
+      "path": "apps/docs/content/database/policies.mdx",
+      "sha256": "7e90a77138cf2083af6aaddb7f36cc7d4ad9b10243c8d5bd490bd49f4768d791"
+    },
+    {
+      "path": "apps/docs/content/roadmap/phases.mdx",
+      "sha256": "1e6ce84cceef9cd0c4c630e57ac4a6d64a7232ed7c8b86b6381688fb274b35c3"
+    },
+    {
+      "path": "apps/worker/src/index.ts",
+      "sha256": "9c10dfd08c3bf391a5f2957825ba7c4d17621e7bead722d50f2265953ccd5668"
+    },
+    {
+      "path": "apps/worker/src/token.ts",
+      "sha256": "1ec73c7f40ea055e31754841bb6fd44d08ef5c2d42a82dfa4c10211f517e9357"
+    },
+    {
+      "path": "bun.lock",
+      "sha256": "dbe919099666eea35bb418a5d0596c51986889d84b23f11bb625fee19764a1ac"
+    },
+    {
+      "path": "package.json",
+      "sha256": "6023709cbbee4c40bb1fafdad29030bdf9df971377f6680d4ef27bdba3b35ff9"
+    },
+    {
+      "path": "packages/auth/package.json",
+      "sha256": "3dd77b56a545081cde45007c755ae0c24100c499db895650b19c7db386c03f82"
+    },
+    {
+      "path": "packages/auth/src/index.ts",
+      "sha256": "c58e088ea8fd8481f01d0bedb58e0c10adefd1069495cacf24efe0f54c16a206"
+    },
+    {
+      "path": "packages/contracts/package.json",
+      "sha256": "9ab642a10abc1f8f4d9753ad5adbdc2fde56c05f7c95b4ed5e72ef0eb980864b"
+    },
+    {
+      "path": "packages/contracts/src/index.ts",
+      "sha256": "3124e5ec08679f032f2fd04ca52fff4ed47aa9e8f607ff2a6687870675ec4d52"
+    },
+    {
+      "path": "packages/contracts/src/openapi.ts",
+      "sha256": "25a8b2724722018f1e12c7c539729566bfc9a68b649082141d344fb364f4253d"
+    },
+    {
+      "path": "packages/database/package.json",
+      "sha256": "79cdb669fa50e2d63eef3f181d4279b21b6c358672106deed3c89f611dc00c03"
+    },
+    {
+      "path": "packages/database/src/control-backup.ts",
+      "sha256": "d0c5a2d77958c692cbf09cdda7a3eab3fb5df7026992ef6f626a6650afb62e94"
+    },
+    {
+      "path": "packages/database/src/engine.ts",
+      "sha256": "cdab4dcaedaac44626b8e6fff0b55c74c8c70c7f65a36243daabe87eea06eafb"
+    },
+    {
+      "path": "packages/database/src/index.ts",
+      "sha256": "2a2c88d71f10baf1e323145a8a518f4d0536a8b9dfb16fec78bbbd4aebf14a84"
+    },
+    {
+      "path": "packages/database/src/lease.ts",
+      "sha256": "c27d2e3420cdfa7c76c53b9eafa1ce8c4710991d82a24dbbf9c4547e50d712e2"
+    },
+    {
+      "path": "packages/database/src/owner.ts",
+      "sha256": "35e67e1916861338f97fd49359f8aaba19e183a866526b4d722e86d00a2682b3"
+    },
+    {
+      "path": "packages/management-client/package.json",
+      "sha256": "c7259e63191eb7ade2b50eacef1ff9ff7d2d9ac11dd087ea532a0480d39be494"
+    },
+    {
+      "path": "packages/management-client/src/index.ts",
+      "sha256": "d39880eb61045ecb179b9ad3209495b397f8544e3ea51ec1ac8605e0cbfb0215"
+    },
+    {
+      "path": "packages/observability/package.json",
+      "sha256": "cd08f1ad369d49858221993960c1747831b3be2b79b23220c29443073d55d15f"
+    },
+    {
+      "path": "packages/observability/src/index.ts",
+      "sha256": "223f9788b42ba15e4cc9abf83defeab18761448eff9f37e2bda916a2bc34d077"
+    },
+    {
+      "path": "packages/policies/package.json",
+      "sha256": "305da44165df97942717f1566995ddcbdbc1fa6007012a4b2d14a15a95893840"
+    },
+    {
+      "path": "packages/policies/src/index.ts",
+      "sha256": "7c938f04ce5e5cc68b376a2d6473370efe2bb91ab360b6ef93ed5c5fbee6eab7"
+    },
+    {
+      "path": "packages/query-engine/package.json",
+      "sha256": "d723d54006fdd0c83eb52ea5c4bb9fc85ff21ae4b28aae77d58b9839ee7a38f9"
+    },
+    {
+      "path": "packages/query-engine/src/index.ts",
+      "sha256": "90a2f5306fd50789a979ec9fc08e693c854f85b1b9dc3aa10d929e40c41d625c"
+    },
+    {
+      "path": "packages/realtime/package.json",
+      "sha256": "7c191b1525d6cabdde5f804da0fdf2ab084750f367b9c9fe7476fb0053c002e0"
+    },
+    {
+      "path": "packages/realtime/src/index.ts",
+      "sha256": "41c71443a8bd832e65b555d3c9a665039ad23a73f7201a82c7fe755c497d3d5b"
+    },
+    {
+      "path": "packages/schema/package.json",
+      "sha256": "e3ca8b9d9d941e4f5d51031798a456708629db8215a322744529ae4182789ab0"
+    },
+    {
+      "path": "packages/schema/src/index.ts",
+      "sha256": "efeb79b77b1e102c016024f1ca27e0d5ebfb54611a621e702a98d1a843f04d88"
+    },
+    {
+      "path": "packages/sdk-js/package.json",
+      "sha256": "f214a419b4766e13e23fa893eaf71a91c924c042f9cb4ee96a2aacd7e6dd704e"
+    },
+    {
+      "path": "packages/sdk-js/src/index.ts",
+      "sha256": "9fabdca34860aaa66483a261c9379615b8cb8f9680e06a58314f4cbf25cd278b"
+    },
+    {
+      "path": "packages/sdk-react/package.json",
+      "sha256": "04f640edbf152d22e262f13f41a33d6b67f85e31b9dd2282b107566a7eb5142c"
+    },
+    {
+      "path": "packages/sdk-react/src/index.tsx",
+      "sha256": "74fa12f1089a6273de5eba4d05dea37970095c2c9c0fd4ab978e45b10fd0cfe3"
+    },
+    {
+      "path": "packages/storage/package.json",
+      "sha256": "8dfe6296ea7525dfaf9886ea867d6eb8a9f67b244f1934c22cfbe91f8b37f593"
+    },
+    {
+      "path": "packages/storage/src/index.ts",
+      "sha256": "01299550cfbf6d5db30246e3d10f08b91c14b18d52940017e9749cd5fb2f33c0"
+    },
+    {
+      "path": "packages/ui/package.json",
+      "sha256": "7b4e74d7f0b5495689fc65ff622f3c9824cf0ca6796a0642038b9521f2d5bbf0"
+    },
+    {
+      "path": "packages/ui/src/index.tsx",
+      "sha256": "0c302c353ed0061e24a898a5cc63288005c670ee4891b960521981a93bfc9b4a"
+    },
+    {
+      "path": "qb-flex-development-spec.md",
+      "sha256": "d508cc0b8ec08eb50b5c45c19ebb34f42ef4d0745f2947702c260db114d06a1b"
+    },
+    {
+      "path": "scripts/dev.ts",
+      "sha256": "cebb9ba3fdf6b622a0837d6f0b8ec57f8f4d4bef5a863fcf845ac71ba2251ff2"
+    },
+    {
+      "path": "scripts/sdk-build.ts",
+      "sha256": "dac5900841a87e6442db672319f0dfaedfbc093ca6cc29f180e5a512269e7219"
+    },
+    {
+      "path": "scripts/skill-test.ts",
+      "sha256": "a07a89b83bd64dc171e5edec1f73ceacbf0780d41cb4620821b18d16d27e2c98"
+    },
+    {
+      "path": "scripts/skill-typecheck.ts",
+      "sha256": "1ceba4dc76b67276a7a8cef6c672b6feb2bbe79930414256977904f93203aaa9"
+    },
+    {
+      "path": "scripts/skill.ts",
+      "sha256": "a1256863b4bbb876bf0ddd4c3b811f8728e643fa6b68dbb54fdfc0b48b12157d"
+    },
+    {
+      "path": "tests/dev-startup.test.ts",
+      "sha256": "941c18b5c6300f2c29876304f8da7a56c424190403a8fb1c8cf6255bed44538e"
+    },
+    {
+      "path": "tests/durability.test.ts",
+      "sha256": "99534cb4b2d2b4f951dee5a7ef643bf698bca90cfef7700024620e0e493c611c"
+    },
+    {
+      "path": "tests/fixtures-crash.ts",
+      "sha256": "aee507437b45ebc041ed8a6fbd550c2a8a0f409d9a34f91a8d1e17bbd35cb089"
+    },
+    {
+      "path": "tests/fixtures-dev.ts",
+      "sha256": "4d67e200148c04e387df1e805b7250d7fc4d88f29caaa325e9594e469ca41414"
+    },
+    {
+      "path": "tests/fixtures-lease.ts",
+      "sha256": "ab7e917802f4abdb217b87a72c7bf526b43481bcc76f9fa1a129427c415cae8c"
+    },
+    {
+      "path": "tests/fixtures-ssr.tsx",
+      "sha256": "0be630773b859977f6ace20f0427004a6d1ab97f7192ce1316132658ea7381a4"
+    },
+    {
+      "path": "tests/helpers.ts",
+      "sha256": "a65648b36130644c13b8eac8cb460da12759199ec8d52abb1bae2e5aa015f53f"
+    },
+    {
+      "path": "tests/integration/control-backup.test.ts",
+      "sha256": "f4f5ca33e7cdf3cfc43b345430e91691dc3fe93300e532d25c015201ec0f16d4"
+    },
+    {
+      "path": "tests/integration/core.test.ts",
+      "sha256": "415537cd75cef2c2696a6d72517e2c9edf5b94420cee2c1cd3a596af83694940"
+    },
+    {
+      "path": "tests/integration/email.test.ts",
+      "sha256": "28b4eaad52deea518b9d3748c34090c1b39bd6147a3bb9f9a25581e661565acb"
+    },
+    {
+      "path": "tests/integration/mfa.test.ts",
+      "sha256": "0c526e4bb7b5957bfe46472e3f008efd357fe6cbdaa0872d51a720c9287d6a01"
+    },
+    {
+      "path": "tests/integration/network.test.ts",
+      "sha256": "5af0f64bab24c46e4f8c4d6972891055f079473de16a7312dbb1bbffec0a7014"
+    },
+    {
+      "path": "tests/integration/operations.test.ts",
+      "sha256": "edd6ccc85f2797c117408a75429243f12b5afe6ef5b920735485e602b8a37878"
+    },
+    {
+      "path": "tests/integration/relations.test.ts",
+      "sha256": "a0ba3883bd6ec9f03059f7c1f63830487c6086f9cf12e5dee1bd9a31b3e9257c"
+    },
+    {
+      "path": "tests/integration/serialization.test.ts",
+      "sha256": "c97494c067535a61b2ce0911a17b1e413610533a6e8544e6726191fa653e1447"
+    },
+    {
+      "path": "tests/operational.test.ts",
+      "sha256": "3cd8bbf3ae1d34bdae24d559dd48964e971a93ce59598d4df9034a71ffaac298"
+    },
+    {
+      "path": "tests/sdk-react.test.tsx",
+      "sha256": "153fde89680b7aaab85b66a1bbf4682428e8f2bce1b4472ae559b12810c214ba"
+    }
+  ],
+  "files": {
+    "INSTALL.md": "49e50c84b6a9fab8173f8993cae94f3e59039e8a33fca512a3a14bfec825250e",
+    "SKILL.md": "0569d3c4c7ca7f9733a167acb0351f50b1bb9c73b2e0c3148354276a7b10bc88",
+    "agents/openai.yaml": "e18500370c6c22cc0de9bdcc6e6e2e3867132e22b5eff5af9f4c3cae667782dd",
+    "assets/examples/README.md": "4b2e7f1c71e029d2122ad6d7d37d9e18230ad25e41d45bf799cc03fe96cdb226",
+    "assets/examples/prerequisites.json": "7645b48e0659c9dc4ab20f239ed93d4c2afb8477c70d4c95e4ea6d6193b3b20a",
+    "assets/examples/react/config.example.json": "2255e847186f778ce3265c406f19487e3302c8eda7975df6e5139d51c2efac05",
+    "assets/examples/react/index.html": "0c8bad068f882183ce1dfdf45e3b701435f4f8bb79d830ab8ca574cf9fe224cc",
+    "assets/examples/react/package.json": "1244cf3dbe0b82567aeef5d4db883547b77df4b87b45e8dbc3ae7630ba5d222d",
+    "assets/examples/react/src/main.tsx": "9fe9f338e8e2b2d08f028e606e3ed5a2c4fdcedfb1d2bb3b3c6056498fde574d",
+    "assets/examples/react/src/qb-flex.types.ts": "d136353aa222beca7501ee61090802531fd6721d8cb3408ad7053a6d0d1ff421",
+    "assets/examples/react/src/styles.css": "7f4f69acb45c72956b5982b8824f7882eb79ef36468ee95b3939a8f8a4977bc8",
+    "assets/examples/react/tsconfig.json": "2bde94ee38b5115aee3de0ca8a5dc381ccf3df1a2b69176e1ad3b6d111dba0ae",
+    "assets/examples/react/vite.config.ts": "facb0064d0df09fa290fd7da47f989a3f4bd7e908ba6e3c5b24f0a57003b0500",
+    "assets/examples/schema.sql": "b9c71d1b16c47faee67209d18906c6af825cf9e9413432cd0eba1803823fca1a",
+    "assets/examples/vanilla/config.example.json": "2255e847186f778ce3265c406f19487e3302c8eda7975df6e5139d51c2efac05",
+    "assets/examples/vanilla/direct/index.html": "05d9b80c48bb2a42bc5af693111276f4b9e0707fd16b493e1f764448b0c17dfa",
+    "assets/examples/vanilla/direct/main.js": "809fbfe43e317e71db9e5af20154cc6cf30cc5f4244593b481a3df3ba7b16d58",
+    "assets/examples/vanilla/index.html": "b53aac0d7bdb42b2a6b4021ee3964e7c3b5ffd65dfb0c4f45e149d4ae4828b69",
+    "assets/examples/vanilla/package.json": "0efe3f2e1b8d53f1a57d23efd5db71370d5937f0a7e76eb7d09ce9f2fe2450aa",
+    "assets/examples/vanilla/src/main.js": "4da0c3a9d78462a5dcbd5a9142914c6f1a641983e53854f2a4db81abd77c7d33",
+    "assets/examples/vanilla/src/qb-flex.types.ts": "d136353aa222beca7501ee61090802531fd6721d8cb3408ad7053a6d0d1ff421",
+    "assets/examples/vanilla/src/styles.css": "7f4f69acb45c72956b5982b8824f7882eb79ef36468ee95b3939a8f8a4977bc8",
+    "assets/examples/vanilla/src/typecheck.ts": "79322d414e5584fd157b0f4d61b0ea72280771e15a6df07d132391d912fe8a36",
+    "assets/examples/vanilla/tsconfig.json": "56e4f7acc2c1da79871b7cb3903f8887e89782d301b6352071d37c79abbb34fb",
+    "assets/examples/vanilla/vendor/client.js": "59f30e037902080e1e9f0c9dd5dbc1845f1576be994ed8f57031e7e037ed2834",
+    "assets/examples/vanilla/vite.config.ts": "634a4294b85c5585547a6ce6fc60a7b30eb76841042d032dbacdf170a4437780",
+    "references/application.md": "1563f7f618d6c59b56c28cd012cd633702e0411cac7176e43ff78a095712e8dc",
+    "references/architecture.md": "8f13ca5ea6852aeee1ff3880035f6db1c3b18054b905b711bf00892d360bd38a",
+    "references/generated/api.md": "2f4a6a5b6350668753bd591985193c84749516b6e0101d11ebb06b61f48ac684",
+    "references/generated/cli.md": "63741aa53cfca59d30890faa61951af27db43bfb846140d1dc253ba7a3b006ee",
+    "references/generated/sdk.md": "16eee75db9441dbd9b7a13ec684383b59f08a6e85b8cb771ab533ee15e3c9b5d",
+    "references/generated/tests.md": "fb7d2cadb1077cb3a4e2f63aaec75364ae5d453c93740da4cee0f594ba2d3f3d",
+    "references/operations.md": "59e322bc0ce6e95e5f9fe0fb02dcfbb0ab46d53fa5e158163e790ebe4a2341ef",
+    "references/platform.md": "e8243b495b421c26328cc23e38aa22a6e3ed63c0c79b305e9cb23ae6799ff905",
+    "references/react.md": "f47239565782aacebfe4b37509c5a0a36cadf048715166cb29efeafe4243dd33",
+    "references/security.md": "abcd6b0907c9109b2ddd29b162f47b8ddd57efc7e316660d82de4d3058f84aed",
+    "references/troubleshooting.md": "aa786fe03ea84d5e2307ea1ea5710ae66fbe3ec7552a30248ae37d8b54b0e585",
+    "references/vanilla.md": "6b770d1431d7838902031d0a7c37ff345df50dc9ae17eca36cbfd31959f6feb9",
+    "references/verification.md": "749f2800b2fdcbd7f5e973186805954c32a7eec324a2198e62e0bfea12e304c0",
+    "scripts/check-package.d.mts": "d5014595be6ae3f9d72946d4743f9d799b73b7ce47260d31e67ba30394324959",
+    "scripts/check-package.mjs": "80fac5302fc4d926a094e210c4ecd07b8099e5f19e6ebd5e1f487890f1099443",
+    "scripts/diagnose.mjs": "e55117aaa151f763b0a9fb864910791c71e641cdee17a638653a31cb08288e98",
+    "scripts/pack.mjs": "413bf7ac2fa571523eccf1cdd071efed7681676a513a83f69fcb57e893b069e4",
+    "scripts/refresh.ts": "f3287a009a10415ea57ca60f4b89fb8627ab505764d6d42146cc54ffca5e8bc0"
+  }
+}

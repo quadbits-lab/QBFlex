@@ -1,0 +1,31 @@
+export const frontmatter = {"title": "Use QB Flex Studio", "description": "Manage project resources through the Studio workspace.", "section": "Studio", "slug": "studio/workspaces", "order": 10};
+
+# Use QB Flex Studio
+
+## Project navigation
+
+The persistent project and branch selectors define the target of each operation. Verify the environment label before SQL, policy changes or restore. Overview shows actual project state and recorded operations; it does not display simulated traffic.
+
+## Database
+
+Use the table list to select a schema object, inspect columns and view data. The grid requests bounded pages from the server. Filter and sort on the server, change visible columns, edit typed values and nulls, export the current page or import a JSON array of up to 100 rows atomically. Column controls affect the presentation; exposure settings define the public API. Studio data access uses organization permissions rather than an application identity.
+
+The migration editor records a migration ID and SQL. Applied checksums are immutable. Use the policy editor and simulated identity tester to verify user-facing access.
+
+## Authentication and API
+
+Authentication lists application users and allows administrators to revoke sessions. Provider settings accept Google/GitHub credentials, exact origins and verification settings. Secret values are encrypted and never returned by configuration reads.
+
+API shows endpoint paths, publishable keys and generated types. Use application credentials when testing public endpoints.
+
+## Realtime and storage
+
+Realtime documents subscription semantics and lets you inspect capability status. Use an actual application identity for event testing. Storage manages buckets and objects with upload, download and confirmed deletion. Studio uses audited organization capabilities; application uploads use the storage SDK and owner permissions.
+
+## Logs, settings and recovery
+
+Audit logs record actor, action and resource without credentials or row payloads. Settings expose organization and project configuration. Backups are created for the selected branch; restore creates another isolated branch before an explicit cutover.
+
+## Unavailable services
+
+Functions, AI, general branching and replicas are visibly marked planned. Empty screens explain availability without claiming that an operation succeeded.

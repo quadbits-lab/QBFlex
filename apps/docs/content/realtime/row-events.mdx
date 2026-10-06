@@ -1,0 +1,35 @@
+export const frontmatter = {"title": "Subscribe to row changes", "description": "Receive authorized committed database changes.", "section": "Services", "slug": "realtime/row-events", "order": 31};
+
+# Subscribe to row changes
+
+## Commit-driven events
+
+Managed triggers write events in the same transaction as row changes. Rolled-back writes produce no events. Events have branch-local IDs, schema versions and insert/update/delete operations.
+
+```js
+const channel = qb.channel({
+  table: 'tasks',
+  onEvent(event) { console.log(event.event, event.payload); },
+  onStatus(status) { console.log(status); },
+}).subscribe();
+// When the screen is removed:
+channel.unsubscribe();
+```
+
+## Snapshot and cursor
+
+A query result contains `meta.consistencyToken`. Pass that value as the subscription cursor to receive changes committed after the snapshot boundary. Reconnect resumes from the last processed cursor and deduplicates event IDs.
+
+Treat events as invalidation signals when maintaining a filtered/paginated list. Refetch the authorized query rather than assuming every update still belongs in your current list.
+
+## Authorization
+
+Join validates the publishable key, branch, session and exposed table. The connection rechecks authorization while delivering events. Session expiry, revocation or key removal closes the connection. Changes to identity reset the subscription.
+
+Only authorized columns are delivered. Row removals deliver permitted keys. Do not treat realtime as a way around read policies.
+
+## Delivery limits
+
+The implementation provides single-node branch ordering and at-least-once replay. Frames are bounded to 64 KiB. Heartbeats keep connections active. Slow clients are disconnected rather than accumulating unlimited buffers.
+
+Presence, broadcast, binary channels and multi-node fan-out are planned capabilities. Persistent application messages belong in ordinary authorized tables.

@@ -1,0 +1,36 @@
+export const frontmatter = {"title": "Deploy a single node", "description": "Run QB Flex with persistent local disks and separate secrets.", "section": "Operations", "slug": "self-hosting/deployment", "order": 61};
+
+# Deploy a single node
+
+## Deployment shape
+
+The Compose deployment includes a gateway, Studio, Docs, API/database owners, maintenance worker and optional local MinIO/Mailpit. Keep writable SQLite files on persistent local storage owned by one API node. Never share a live WAL file across nodes or network filesystems.
+
+```sh
+docker compose -f compose.yml -f compose.selfhost.yml --profile selfhost build
+docker compose -f compose.yml -f compose.selfhost.yml --profile selfhost up -d
+```
+
+## Required production configuration
+
+Supply `QB_MASTER_KEY`, `QB_BOOTSTRAP_TOKEN` for the first owner, HTTPS `QB_PUBLIC_URL`, Studio/Docs URLs, exact allowed origins and S3/SMTP configuration. Use protected environment injection or mounted secret files rather than checking secrets into the repository.
+
+The master key protects provider settings and backup encryption. Losing it prevents decrypting those records. Back it up separately and restrict access.
+
+## Gateway and TLS
+
+Terminate public HTTPS at the configured reverse proxy. Route API and Studio consistently so cookie and origin semantics match the configured URLs. Internal maintenance endpoints require the operator worker token. Do not expose MinIO operator credentials to browser applications.
+
+Authentication rate limits use the API socket address, ignoring caller-supplied forwarding headers. Behind a proxy, clients therefore share that proxy's address bucket. Configure per-client abuse limits at the gateway; trusted forwarded-address processing is not implemented in this release.
+
+## Docs publishing
+
+Docs has independent build/start commands and prerendered HTML output. Set both `QB_DOCS_URL` and `VITE_DOCS_URL` before generating and building documentation to produce correct canonical and sitemap URLs. Host its static output separately or run its Bun server. No login is required to read documentation.
+
+## Release verification
+
+Local Linux builds, MinIO workflows and recovery drills are verified in the repository. Certify your production S3/SMTP services, live OAuth callbacks and load/recovery targets on the actual deployment. Check the implementation status before exposing a public service.
+
+## Local object-store build
+
+Historical MinIO container images are unavailable in the tested registries. `infra/minio.Dockerfile` builds the archived upstream community source at commit `7aac2a2c5b7c882e68c1ce017d8256be2feea27f` and verifies its source archive SHA-256. The build preserves the upstream license. MinIO is a development backend; configure and certify your production S3 backend independently.

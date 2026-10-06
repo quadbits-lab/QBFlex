@@ -1,0 +1,1337 @@
+[
+  {
+    "title": "Build your backend. Keep control.",
+    "description": "A practical introduction to QB Flex and its architecture.",
+    "section": "Getting started",
+    "slug": "getting-started/introduction",
+    "order": 1,
+    "file": "content/getting-started/introduction.mdx",
+    "headings": [
+      {
+        "title": "Start here",
+        "id": "start-here",
+        "level": 2
+      },
+      {
+        "title": "Three applications, one platform",
+        "id": "three-applications-one-platform",
+        "level": 2
+      },
+      {
+        "title": "What is available",
+        "id": "what-is-available",
+        "level": 2
+      },
+      {
+        "title": "Secure by default",
+        "id": "secure-by-default",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Build your backend. Keep control.\n\nQB Flex gives your application a SQLite database, an authorized REST API, authentication, realtime events and object storage. Studio manages these services; your application connects through a publishable key and its own user sessions.\n\n Start here\n\n1. Follow [installation](/docs/getting-started/installation).\n2. Create your first project and an ownership policy.\n3. Choose the [React tutorial](/docs/sdk/react/quickstart) or [Vanilla JavaScript tutorial](/docs/sdk/vanilla/quickstart).\n\n Three applications, one platform\n\nStudio is the authenticated workspace for project developers. API owns management and application endpoints. Docs is this independently deployable documentation site. A background worker requests scheduled maintenance through an authenticated internal endpoint.\n\nAn organization owns projects. Each project owns an isolated primary branch. A branch has a separate SQLite file and authentication realm. Organization roles and application user identities are different permissions.\n\n What is available\n\nThe initial implementation covers ordinary-table REST CRUD, application policies, email/password authentication, database row subscriptions, basic S3 storage and backup/restore. Read the [compatibility reference](/docs/reference/compatibility) before deployment.\n\nGraphQL, vector search, functions, hosted MCP, general branching and replicas are roadmap capabilities. They are not required to use the core backend.\n\n Secure by default\n\nA publishable key identifies a project. It does not grant access to rows. Tables remain private until exposed, and exposed tables still need applicable permissive policies. Platform credentials never become application user sessions.\n"
+  },
+  {
+    "title": "Install and run locally",
+    "description": "Start Studio, Docs and the API on your computer.",
+    "section": "Getting started",
+    "slug": "getting-started/installation",
+    "order": 2,
+    "file": "content/getting-started/installation.mdx",
+    "headings": [
+      {
+        "title": "Requirements",
+        "id": "requirements",
+        "level": 2
+      },
+      {
+        "title": "Storage and email",
+        "id": "storage-and-email",
+        "level": 2
+      },
+      {
+        "title": "First owner",
+        "id": "first-owner",
+        "level": 2
+      },
+      {
+        "title": "Verify your installation",
+        "id": "verify-your-installation",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Install and run locally\n\n Requirements\n\nUse Bun 1.4.2 and a running Docker-compatible engine for MinIO, Mailpit and container verification. Install the dependencies from the committed lockfile:\n\n\nbun install --frozen-lockfile\ncp .env.example .env\nbun run dev\n\n\nThe development command starts Studio on port 7610, Docs on 7611 and API on 7612. All three applications have independent workspace commands. Database files and local secrets live under .data, which is ignored by Git.\n\nThe launcher checks for occupied ports before starting services and waits for the API to create and accept its worker credential. If the full Docker local profile already owns these ports, use its running applications or switch to native hot reload:\n\n\ndocker compose --profile local stop studio docs api worker\nbun run dev\n\n\nThis preserves database and object volumes and leaves MinIO and Mailpit running. The native .data directory and the Docker database volume are separate installations. An independent worker must use the same QB_DATA_DIR as its API, or the same server-only QB_WORKER_TOKEN. The API owns credential creation; do not create or copy worker.token to bypass a startup error.\n\n Storage and email\n\nStart the infrastructure services in another terminal:\n\n\ndocker compose --profile dependencies up -d --build\n\n\nMinIO provides the S3 backend. Mailpit captures verification and password reset messages at port 7616. Configure the S3 environment settings in .env before starting the API. Local infrastructure credentials are development-only defaults.\n\n First owner\n\nOpen Studio. On a clean installation the setup screen asks for the bootstrap token, name, email, password and organization. The token is in .data/bootstrap.token; do not commit it. After successful setup the file is removed and the setup endpoint cannot create another owner.\n\nPasswords must contain at least 12 characters. Sign in with the account you created. Production setup requires operator-supplied master and bootstrap keys.\n\n Verify your installation\n\n\nbun run spike\nbun run check\nbun run build\n\n\nThe compatibility spike checks auth realm isolation and GraphQL interoperability. Native vector loading is reported separately. Passing local checks does not certify Linux deployment or remote OAuth providers.\n"
+  },
+  {
+    "title": "Create your first project",
+    "description": "Go from an organization to a protected application table.",
+    "section": "Getting started",
+    "slug": "getting-started/first-project",
+    "order": 3,
+    "file": "content/getting-started/first-project.mdx",
+    "headings": [
+      {
+        "title": "Create a project",
+        "id": "create-a-project",
+        "level": 2
+      },
+      {
+        "title": "Create the task table",
+        "id": "create-the-task-table",
+        "level": 2
+      },
+      {
+        "title": "Add ownership policies",
+        "id": "add-ownership-policies",
+        "level": 2
+      },
+      {
+        "title": "Connect an application",
+        "id": "connect-an-application",
+        "level": 2
+      },
+      {
+        "title": "Generate types",
+        "id": "generate-types",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Create your first project\n\n Create a project\n\nIn Studio select your organization and create a project with a name and URL-safe slug. The initial region is local. Project creation returns an operation while the primary database is provisioned; Studio polls until the operation finishes.\n\nSelect the ready project. Its primary branch is shown with a production badge. Changes affect the selected branch.\n\n Create the task table\n\nUse Database → Migrations to apply a migration:\n\n\nCREATE TABLE tasks (\n  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),\n  owner_id TEXT NOT NULL,\n  title TEXT NOT NULL,\n  completed INTEGER NOT NULL DEFAULT 0 CHECK (completed IN (0, 1)),\n  revision INTEGER NOT NULL DEFAULT 1\n);\nCREATE INDEX tasks_owner_idx ON tasks(owner_id);\n\n\nThe schema is private at this point. In the exposure editor enable the table and allow its five columns, including the primary key.\n\n Add ownership policies\n\nCreate a policy for each of select, insert, update and delete, with the authenticated role and permissive mode. Both the read expression and write check use the same ownership condition:\n\n\n{\"op\":\"eq\",\"left\":{\"column\":\"owner_id\"},\"right\":{\"claim\":\"sub\"}}\n\n\nThis permits users to read and modify only their own tasks. An attempted ownership reassignment fails the write check and rolls back.\n\n Connect an application\n\nCreate a publishable key in API → Keys. Copy it when shown; only its hash and prefix are stored. Use the real project ID and primary branch alias in your client configuration. Run either example application with those values.\n\nSign up as an application user. This account is separate from your Studio owner. Insert a task with that user ID as owner_id, then open a second application account to confirm isolation.\n\n Generate types\n\nThe API workspace exposes generated types. The CLI writes the same declarations:\n\n\nbun run qb types generate --project YOUR_PROJECT_ID --branch primary --output qb-flex.types.ts\n\n\nRegenerate after schema changes. Runtime validation and authorization still apply to typed requests.\n"
+  },
+  {
+    "title": "Build your first application",
+    "description": "Complete the same authenticated task workflow in React or Vanilla JavaScript.",
+    "section": "Getting started",
+    "slug": "getting-started/first-application",
+    "order": 4,
+    "file": "content/getting-started/first-application.mdx",
+    "headings": [
+      {
+        "title": "Prerequisites",
+        "id": "prerequisites",
+        "level": 2
+      },
+      {
+        "title": "Choose a client track",
+        "id": "choose-a-client-track",
+        "level": 2
+      },
+      {
+        "title": "Register and create tasks",
+        "id": "register-and-create-tasks",
+        "level": 2
+      },
+      {
+        "title": "Receive changes",
+        "id": "receive-changes",
+        "level": 2
+      },
+      {
+        "title": "Add file attachments",
+        "id": "add-file-attachments",
+        "level": 2
+      },
+      {
+        "title": "Generate types and recover",
+        "id": "generate-types-and-recover",
+        "level": 2
+      },
+      {
+        "title": "Verify the workflow",
+        "id": "verify-the-workflow",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Build your first application\n\n Prerequisites\n\nComplete [installation](/docs/getting-started/installation) and [first project](/docs/getting-started/first-project). Create the tasks table with its generated ID, owner, title, completion flag and revision. Expose the columns and add owner checks for SELECT, INSERT, UPDATE and DELETE. Create a publishable key.\n\n Choose a client track\n\nRun bun run --cwd examples/react dev for the React application at port 7617, or bun run --cwd examples/vanilla dev for the DOM application at port 7618. Both implement the same workflow. Configure the API URL, project ID and publishable key in the form. Add that application's exact origin in Studio Authentication settings.\n\nFollow the [React provider tutorial](/docs/sdk/react/quickstart) or [Vanilla JS tutorial](/docs/sdk/vanilla/quickstart). React uses a context provider, shared auth state and query/mutation hooks. Vanilla uses a client instance, DOM handlers and explicit cleanup.\n\n Register and create tasks\n\nRegister an application user with an email and a password of at least 12 characters. This account is separate from your Studio account. Add a task, mark it complete and delete it. The client sends the current user ID, and the API validates ownership independently.\n\nOpen a second browser profile with another application user. Each user should see only their own tasks. Attempting to update another user's ID returns a missing/invisible resource response.\n\n Receive changes\n\nBoth examples subscribe after loading a snapshot and its consistency token. Make a task change in another tab signed into the same user: the task list updates through committed, authorized events. Disconnect networking briefly, then restore it; the subscription resumes or requests a fresh snapshot when its retention window has expired.\n\n Add file attachments\n\nCreate a private bucket named attachments in Studio Storage. Enter its bucket ID in the example. Upload a file, download the exact bytes and delete it. Another user cannot list or download that private object. See [storage authorization](/docs/storage/files).\n\n Generate types and recover\n\nGenerate types in Studio API or with qb types generate. Create an encrypted backup, restore it into a separate branch and inspect the recovered task rows. Active sessions are excluded and object bytes need separate S3 backup. The primary branch changes only through an explicit cutover.\n\n Verify the workflow\n\nThe repository's browser checks run these workflows against the real API. Run QB_INTEGRATION_STORAGE=1 bun test tests/integration with the local MinIO dependency ready, then bun run test:browser. SDK packages are built and packed locally; no registry release is performed.\n"
+  },
+  {
+    "title": "Use QB Flex Studio",
+    "description": "Manage project resources through the Studio workspace.",
+    "section": "Studio",
+    "slug": "studio/workspaces",
+    "order": 10,
+    "file": "content/studio/workspaces.mdx",
+    "headings": [
+      {
+        "title": "Project navigation",
+        "id": "project-navigation",
+        "level": 2
+      },
+      {
+        "title": "Database",
+        "id": "database",
+        "level": 2
+      },
+      {
+        "title": "Authentication and API",
+        "id": "authentication-and-api",
+        "level": 2
+      },
+      {
+        "title": "Realtime and storage",
+        "id": "realtime-and-storage",
+        "level": 2
+      },
+      {
+        "title": "Logs, settings and recovery",
+        "id": "logs-settings-and-recovery",
+        "level": 2
+      },
+      {
+        "title": "Unavailable services",
+        "id": "unavailable-services",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Use QB Flex Studio\n\n Project navigation\n\nThe persistent project and branch selectors define the target of each operation. Verify the environment label before SQL, policy changes or restore. Overview shows actual project state and recorded operations; it does not display simulated traffic.\n\n Database\n\nUse the table list to select a schema object, inspect columns and view data. The grid requests bounded pages from the server. Filter and sort on the server, change visible columns, edit typed values and nulls, export the current page or import a JSON array of up to 100 rows atomically. Column controls affect the presentation; exposure settings define the public API. Studio data access uses organization permissions rather than an application identity.\n\nThe migration editor records a migration ID and SQL. Applied checksums are immutable. Use the policy editor and simulated identity tester to verify user-facing access.\n\n Authentication and API\n\nAuthentication lists application users and allows administrators to revoke sessions. Provider settings accept Google/GitHub credentials, exact origins and verification settings. Secret values are encrypted and never returned by configuration reads.\n\nAPI shows endpoint paths, publishable keys and generated types. Use application credentials when testing public endpoints.\n\n Realtime and storage\n\nRealtime documents subscription semantics and lets you inspect capability status. Use an actual application identity for event testing. Storage manages buckets and objects with upload, download and confirmed deletion. Studio uses audited organization capabilities; application uploads use the storage SDK and owner permissions.\n\n Logs, settings and recovery\n\nAudit logs record actor, action and resource without credentials or row payloads. Settings expose organization and project configuration. Backups are created for the selected branch; restore creates another isolated branch before an explicit cutover.\n\n Unavailable services\n\nFunctions, AI, general branching and replicas are visibly marked planned. Empty screens explain availability without claiming that an operation succeeded.\n"
+  },
+  {
+    "title": "Schema and migrations",
+    "description": "Understand schema exposure, SQL support and migration behavior.",
+    "section": "Database & APIs",
+    "slug": "database/schema",
+    "order": 20,
+    "file": "content/database/schema.mdx",
+    "headings": [
+      {
+        "title": "Supported objects",
+        "id": "supported-objects",
+        "level": 2
+      },
+      {
+        "title": "Exposure",
+        "id": "exposure",
+        "level": 2
+      },
+      {
+        "title": "Migration lifecycle",
+        "id": "migration-lifecycle",
+        "level": 2
+      },
+      {
+        "title": "Representation",
+        "id": "representation",
+        "level": 2
+      },
+      {
+        "title": "Generated types",
+        "id": "generated-types",
+        "level": 2
+      },
+      {
+        "title": "Out-of-band schema changes",
+        "id": "out-of-band-schema-changes",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Schema and migrations\n\n Supported objects\n\nThe generated REST API supports ordinary tables with stable primary keys. Composite keys use a base64url-encoded JSON array in primary-key order. Views, virtual tables and custom-trigger tables are not automatically exposed.\n\nSQLite remains the underlying SQL engine. Studio SQL is a privileged developer operation. Reserved _qb_ objects, extension loading, ATTACH and runtime PRAGMA changes are blocked through the console.\n\n Exposure\n\nNew tables are private. Exposure chooses the allowed public columns; all primary-key columns must be included. Policies are a separate requirement. Hiding a column rejects projections, sorting and filtering against that column.\n\n Migration lifecycle\n\nEach migration records its identifier, checksum, author and application time. Reapplying the same identifier and content is idempotent. Changing the content of an applied migration returns a conflict.\n\nApply migrations under the branch owner transaction. Destructive migrations trigger a consistent backup first. Failed SQL or foreign-key validation rolls back the schema changes. Successful changes advance the schema version and regenerate managed event triggers.\n\nUse forward migrations for corrections. There is no automatic destructive rollback. Restore a backup into an isolated branch when data recovery is necessary.\n\n Representation\n\nBooleans use constrained 0/1 integers. Store dates as UTC ISO strings and JSON as validated text. Integers outside JavaScript's safe range are returned as strings. Write these values as signed 64-bit decimal strings. Blob writes and equality filters use canonical base64; JSON columns require valid JSON text. Blob values are base64 encoded in row responses and in authorized realtime projections.\n\n Generated types\n\nTypes describe the exposed schema, nullable values, defaults and generated columns. Simple CHECK (column IN (...)) constraints on literal values generate enum unions. More complex constraint expressions require explicit application validation. Insert fields with defaults are optional; generated fields are read-only. Keep declarations under version control and regenerate when migrations change.\n\n Out-of-band schema changes\n\nThe branch records a fingerprint of user tables, indexes, views and triggers. A schema changed through direct file access returns SCHEMA_STALE on public reads, mutations, schema discovery and row subscriptions. Reconcile it with a reviewed forward migration through Studio or CLI. Trusted file access still bypasses application row policies.\n"
+  },
+  {
+    "title": "Write and test access policies",
+    "description": "Protect every public data path with default-deny ownership policies.",
+    "section": "Database & APIs",
+    "slug": "database/policies",
+    "order": 21,
+    "file": "content/database/policies.mdx",
+    "headings": [
+      {
+        "title": "Policy model",
+        "id": "policy-model",
+        "level": 2
+      },
+      {
+        "title": "Ownership example",
+        "id": "ownership-example",
+        "level": 2
+      },
+      {
+        "title": "Available expressions",
+        "id": "available-expressions",
+        "level": 2
+      },
+      {
+        "title": "Read and write semantics",
+        "id": "read-and-write-semantics",
+        "level": 2
+      },
+      {
+        "title": "Test identities",
+        "id": "test-identities",
+        "level": 2
+      },
+      {
+        "title": "Realtime permissions",
+        "id": "realtime-permissions",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Write and test access policies\n\n Policy model\n\nQB Flex implements row policies in its application layer. Direct filesystem access to SQLite is trusted access and bypasses these checks. Policies are restricted JSON expressions rather than arbitrary SQL or JavaScript.\n\nAn operation needs at least one applicable permissive grant. Matching permissive expressions are ORed, and restrictive expressions are ANDed. No applicable grant means denial.\n\n Ownership example\n\nFor a table with owner_id, compare the column to the server-supplied authenticated subject:\n\n\n{\"op\":\"eq\",\"left\":{\"column\":\"owner_id\"},\"right\":{\"claim\":\"sub\"}}\n\n\nCreate separate select, insert, update and delete policies. Include authenticated in the role list. For inserts and updates use the ownership expression as the write check as well.\n\n Available expressions\n\nBoolean expressions support and, or, not, true and false. Comparisons support eq, ne, lt, lte, gt, gte, in and isNull. Operands reference validated columns, verified sub/role claims or scalar values.\n\nRelationship-existence expressions support {\"op\":\"exists\",\"relationship\":\"APPROVED_NAME\",\"where\":{\"op\":\"true\"}} for registered, exposed relationships. They apply the related table's select policies as well as the where expression. Unapproved relationships, cycles and excessive nesting are rejected. See [relationships and reviewed RPC](/docs/database/relationships-rpc) for setup and limits.\n\n Read and write semantics\n\nReads apply policies before counts and pagination. Updates check both the old row and the actual updated row; an ownership change cannot escape the new-row check. Atomic batches roll back if any prospective row is denied. Returned rows require select permission.\n\n Test identities\n\nUse Studio's policy tester with a simulated user ID and application role. It executes the policy-filtered query without creating an unrestricted token. Then verify with real application users: two users should see separate rows, counts and realtime events.\n\n Realtime permissions\n\nEvents are reevaluated with current identity and policy. A deletion or row leaving visibility delivers only its key to an identity that could read the old image. A user who could not read that row receives no event.\n"
+  },
+  {
+    "title": "Query the REST API",
+    "description": "Read, filter, paginate and mutate authorized data.",
+    "section": "Database & APIs",
+    "slug": "database/rest",
+    "order": 22,
+    "file": "content/database/rest.mdx",
+    "headings": [
+      {
+        "title": "Endpoints",
+        "id": "endpoints",
+        "level": 2
+      },
+      {
+        "title": "Structured reads",
+        "id": "structured-reads",
+        "level": 2
+      },
+      {
+        "title": "Pagination",
+        "id": "pagination",
+        "level": 2
+      },
+      {
+        "title": "Writes",
+        "id": "writes",
+        "level": 2
+      },
+      {
+        "title": "Results and errors",
+        "id": "results-and-errors",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Query the REST API\n\n Endpoints\n\nThe branch base URL is:\n\n\n/v1/projects/{projectId}/branches/{branchId}\n\n\nUse the primary alias or an explicit branch ID. Include X-QB-Key with a publishable key. Include an application bearer token when authenticated.\n\n Structured reads\n\n\n{\"columns\":[\"id\",\"title\"],\"filters\":[{\"column\":\"completed\",\"op\":\"eq\",\"value\":0}],\"order\":[{\"column\":\"id\",\"direction\":\"asc\"}],\"limit\":50,\"count\":true}\n\n\nPOST this body to /data/tasks/query. The default page is 50 rows; maximum is 500. Filters never accept raw SQL. Counts include only authorized rows.\n\n Pagination\n\nFollow the response's meta.cursor with the same projection, filters, ordering, identity and schema version. Cursors are signed and bind that query scope. Changing scope rejects the cursor. Pagination does not provide a database snapshot spanning multiple requests.\n\n Writes\n\nPOST inserts one row or an atomic batch of up to 100 rows. PATCH updates a row by key; DELETE removes it. Supply Idempotency-Key to safely reconcile a retried mutation. Reusing the same key with different content returns a conflict.\n\nTables with a revision column support conditional updates through If-Match. The server increments revisions and rejects mismatched values.\n\n Results and errors\n\nSuccess returns data and meta, including a request ID and relevant schema metadata. Errors provide a stable code, human-readable message and retryability. SDK methods throw QBError on failed responses.\n\nAn invisible row is returned as unavailable without revealing whether it exists. Public responses do not contain SQL, filesystem paths or credentials.\n"
+  },
+  {
+    "title": "Relationships, upsert and reviewed RPC",
+    "description": "Use approved related data and named operations with the same authorization engine.",
+    "section": "Database & APIs",
+    "slug": "database/relationships-rpc",
+    "order": 24,
+    "file": "content/database/relationships-rpc.mdx",
+    "headings": [
+      {
+        "title": "Register a relationship",
+        "id": "register-a-relationship",
+        "level": 2
+      },
+      {
+        "title": "Existence policies",
+        "id": "existence-policies",
+        "level": 2
+      },
+      {
+        "title": "Upsert",
+        "id": "upsert",
+        "level": 2
+      },
+      {
+        "title": "Reviewed named operations",
+        "id": "reviewed-named-operations",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Relationships, upsert and reviewed RPC\n\n Register a relationship\n\nCreate a foreign key with a migration, expose both tables and the linking columns, then PUT a declaration to the branch Management API /relationships. Specify name, source, target, localColumn, foreignColumn and cardinality (one or many). A one relationship must follow a source foreign key. Reverse foreign-key links can use many.\n\nA related query must select its linking column. Use .include([{ name: 'project' }]) after registering that relationship. Child rows pass their own SELECT policies; an invisible parent becomes null, and an invisible child collection becomes empty. Counts still describe authorized parent rows. Nested expansion is unavailable.\n\n Existence policies\n\nA policy can use an expression with op: 'exists', a registered relationship name and a where expression evaluated against the target table. The target's SELECT policies are also enforced. This cannot turn a hidden table into a public join. Cycles and relationship paths deeper than four levels are rejected.\n\n Upsert\n\n.upsert(row, { idempotencyKey }) requires every primary-key field. An absent row follows INSERT/WITH CHECK; a conflict follows old-row UPDATE/USING and new-row WITH CHECK. The entire batch rolls back if one row fails. It does not grant access to invisible conflicts. Returned rows must pass SELECT policies.\n\n Reviewed named operations\n\nDevelopers register a declaration by PUT to /rpc in the branch Management API. A declaration contains name, table, kind, typed args, optional query settings, and value mappings. Mutation kinds are insert, update or delete; update/delete require keyArg. A value mapping can use { arg: 'title' } or { claim: 'sub' }. Claims come from the server identity.\n\nThe browser calls qb.rpc('operation_name', args, options). This API exposes structured operations over the same read/mutation engine. SQL text, arbitrary functions and unrestricted transactions are unavailable. Generated RPC declarations describe argument and return types. Pass both generated interfaces to createClientDatabase, RPC(options) to check operation names, arguments and results.\n"
+  },
+  {
+    "title": "Authenticate application users",
+    "description": "Separate application sessions from platform administration.",
+    "section": "Services",
+    "slug": "authentication/overview",
+    "order": 30,
+    "file": "content/authentication/overview.mdx",
+    "headings": [
+      {
+        "title": "Separate realms",
+        "id": "separate-realms",
+        "level": 2
+      },
+      {
+        "title": "Email and password",
+        "id": "email-and-password",
+        "level": 2
+      },
+      {
+        "title": "Verification and reset",
+        "id": "verification-and-reset",
+        "level": 2
+      },
+      {
+        "title": "Google and GitHub",
+        "id": "google-and-github",
+        "level": 2
+      },
+      {
+        "title": "Browser sessions",
+        "id": "browser-sessions",
+        "level": 2
+      },
+      {
+        "title": "Platform MFA",
+        "id": "platform-mfa",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Authenticate application users\n\n Separate realms\n\nPlatform sessions authorize Studio and management operations. Application users belong to a branch's authentication realm. Tokens from another project or branch are rejected, even when the same email address exists in both.\n\nBetter Auth provides password hashing, session creation, verification, reset and OAuth mechanisms. QB Flex provides routing, realm isolation and reserved metadata tables.\n\n Email and password\n\nUse SDK auth.signUp, auth.signIn and auth.signOut. Passwords require at least 12 characters. Auth requests are rate limited. Revoking sessions in Studio takes effect on later requests and realtime authorization checks.\n\n Verification and reset\n\nEnable email verification in project settings and configure SMTP. Unverified users cannot sign in when verification is required. SDK sendVerification requests a new message; resetPassword requests a reset link, and updatePassword completes it with the one-use token.\n\nUse an allowlisted callback URL. Local messages appear in Mailpit. SMTP failures are recoverable operation failures rather than silently delivered messages.\n\n Google and GitHub\n\nRegister an OAuth application with the selected provider. Configure its callback to the explicit branch auth endpoint, then store its client ID and secret in project settings. Add the browser application origin to the project allowlist.\n\nCall auth.signInWithProvider and navigate to the returned authorization URL. After the callback, refresh the application session. These adapters require provider credentials and live callback verification before certification.\n\n Browser sessions\n\nThe API uses HttpOnly cookies where supported, while SDK bearer tokens remain in memory. The client refreshes session state on initialization. Do not put service keys or management tokens in browser applications. Cross-origin cookies may be restricted by browser privacy settings; use a same-site deployment or explicitly manage an approved session adapter.\n\n Platform MFA\n\nPlatform owners can enable Better Auth two-factor authentication. Production readiness requires administrator enrollment and MFA enforcement; local availability alone is not a production certification.\n"
+  },
+  {
+    "title": "Administrator MFA and recovery",
+    "description": "Enroll an authenticator and manage platform credentials safely.",
+    "section": "Authentication",
+    "slug": "authentication/administrator-mfa",
+    "order": 31,
+    "file": "content/authentication/administrator-mfa.mdx",
+    "headings": [
+      {
+        "title": "Enroll the platform owner",
+        "id": "enroll-the-platform-owner",
+        "level": 2
+      },
+      {
+        "title": "Sign in with MFA",
+        "id": "sign-in-with-mfa",
+        "level": 2
+      },
+      {
+        "title": "Credential recovery",
+        "id": "credential-recovery",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Administrator MFA and recovery\n\n Enroll the platform owner\n\nOpen Studio Settings even before creating a project. Enter the current password and enable the authenticator. Import the shown TOTP URI into an authenticator application, save the one-time recovery codes in a password manager and verify a code. The seed is shown during enrollment and never logged.\n\nProduction defaults to QB_REQUIRE_ADMIN_MFA=true. Owner and administrator writes require enrollment. Viewer access does not disclose secrets. Application user authentication is a separate branch realm.\n\n Sign in with MFA\n\nAfter password verification, Studio shows the authenticator challenge. A password-only response does not contain an authenticated platform session. Enter a valid TOTP code to complete login. The Better Auth plugin applies attempt limits and locks repeated failed challenges.\n\nEnrollment verification rotates the active session. Management tokens are revoked when enrolling; issue new project-scoped tokens after completing MFA. Keep recovery codes outside the data volume.\n\n Credential recovery\n\nUse Better Auth's authenticated backup-code verification endpoint /platform/auth/two-factor/verify-backup-code when your authenticator is lost. Treat a recovery code like a password. An operator should revoke compromised management tokens and application sessions, rotate project keys and provider secrets, then examine audit events.\n\nNever change the database's MFA columns to bypass a lost factor. Restore the protected control-plane backup only through an operator-reviewed recovery process.\n"
+  },
+  {
+    "title": "Subscribe to row changes",
+    "description": "Receive authorized committed database changes.",
+    "section": "Services",
+    "slug": "realtime/row-events",
+    "order": 31,
+    "file": "content/realtime/row-events.mdx",
+    "headings": [
+      {
+        "title": "Commit-driven events",
+        "id": "commit-driven-events",
+        "level": 2
+      },
+      {
+        "title": "Snapshot and cursor",
+        "id": "snapshot-and-cursor",
+        "level": 2
+      },
+      {
+        "title": "Authorization",
+        "id": "authorization",
+        "level": 2
+      },
+      {
+        "title": "Delivery limits",
+        "id": "delivery-limits",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Subscribe to row changes\n\n Commit-driven events\n\nManaged triggers write events in the same transaction as row changes. Rolled-back writes produce no events. Events have branch-local IDs, schema versions and insert/update/delete operations.\n\n\nconst channel = qb.channel({\n  table: 'tasks',\n  onEvent(event) { console.log(event.event, event.payload); },\n  onStatus(status) { console.log(status); },\n}).subscribe();\n// When the screen is removed:\nchannel.unsubscribe();\n\n\n Snapshot and cursor\n\nA query result contains meta.consistencyToken. Pass that value as the subscription cursor to receive changes committed after the snapshot boundary. Reconnect resumes from the last processed cursor and deduplicates event IDs.\n\nTreat events as invalidation signals when maintaining a filtered/paginated list. Refetch the authorized query rather than assuming every update still belongs in your current list.\n\n Authorization\n\nJoin validates the publishable key, branch, session and exposed table. The connection rechecks authorization while delivering events. Session expiry, revocation or key removal closes the connection. Changes to identity reset the subscription.\n\nOnly authorized columns are delivered. Row removals deliver permitted keys. Do not treat realtime as a way around read policies.\n\n Delivery limits\n\nThe implementation provides single-node branch ordering and at-least-once replay. Frames are bounded to 64 KiB. Heartbeats keep connections active. Slow clients are disconnected rather than accumulating unlimited buffers.\n\nPresence, broadcast, binary channels and multi-node fan-out are planned capabilities. Persistent application messages belong in ordinary authorized tables.\n"
+  },
+  {
+    "title": "Upload and download files",
+    "description": "Use S3-compatible storage through the authorization gateway.",
+    "section": "Services",
+    "slug": "storage/files",
+    "order": 32,
+    "file": "content/storage/files.mdx",
+    "headings": [
+      {
+        "title": "Configure the backend",
+        "id": "configure-the-backend",
+        "level": 2
+      },
+      {
+        "title": "Upload lifecycle",
+        "id": "upload-lifecycle",
+        "level": 2
+      },
+      {
+        "title": "Ownership policies",
+        "id": "ownership-policies",
+        "level": 2
+      },
+      {
+        "title": "Download and delete",
+        "id": "download-and-delete",
+        "level": 2
+      },
+      {
+        "title": "Recovery boundaries",
+        "id": "recovery-boundaries",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Upload and download files\n\n Configure the backend\n\nSet the S3 endpoint, region, physical bucket and operator credentials. These credentials remain server-side. Start local MinIO and initialize its physical bucket through the Compose setup service.\n\nCreate logical buckets in Studio with a name, public/private visibility, size limit and optional MIME allowlist.\n\n Upload lifecycle\n\n\nconst result = await qb.storage.upload(bucketId, 'notes/report.txt', file);\nconsole.log(result.data.id);\n\n\nThe SDK creates an upload intent, then sends the bytes to the authenticated gateway. The object is visible only after S3 persistence and expected-size verification succeed. Failed objects remain unavailable and can be retried.\n\nThe initial gateway caps uploads at 100 MiB and buffers each bounded upload. Streaming and resumable uploads are later enhancements. Choose smaller bucket limits for constrained hosts.\n\n Ownership policies\n\nOnly authenticated users can upload. Private objects are read and modified by their owners. Public buckets allow reads of ready objects; writes remain owner-restricted. The metadata owner check and current session are enforced on each request.\n\nObject bytes stay in S3 while searchable metadata stays in the branch database. Keys are normalized, and project/branch object prefixes are independent.\n\n Download and delete\n\n\nconst blob = await qb.storage.download(objectId);\nconst url = URL.createObjectURL(blob);\n// Use the URL in your UI, then release it:\nURL.revokeObjectURL(url);\nawait qb.storage.remove(objectId);\n\n\nDelete marks the object as deleting before removing its backend bytes. Metadata is finalized only after cleanup succeeds. Private responses use no-store caching.\n\n Recovery boundaries\n\nA database backup includes metadata, not object bytes. Enable object-backend backups separately. Restored branch metadata cannot assume a new branch prefix contains the source bytes; perform an explicit object restore before expecting restored files to be available.\n"
+  },
+  {
+    "title": "Client SDKs",
+    "description": "Choose React hooks or a framework-independent JavaScript client.",
+    "section": "Client SDK",
+    "slug": "sdk/overview",
+    "order": 40,
+    "file": "content/sdk/overview.mdx",
+    "headings": [
+      {
+        "title": "Package availability",
+        "id": "package-availability",
+        "level": 2
+      },
+      {
+        "title": "Client configuration",
+        "id": "client-configuration",
+        "level": 2
+      },
+      {
+        "title": "Error handling",
+        "id": "error-handling",
+        "level": 2
+      },
+      {
+        "title": "Shared lifecycle",
+        "id": "shared-lifecycle",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Client SDKs\n\nThe two SDK packages share the same transport, authentication and authorization semantics. Choose the React package for component-level state and caching, or the framework-independent package for direct calls.\n\n| Application | Packages | Guide |\n| --- | --- | --- |\n| React 19 | @qb-flex/client, @qb-flex/react | [React quickstart](/docs/sdk/react/quickstart) |\n| Vanilla JavaScript | @qb-flex/client | [JavaScript quickstart](/docs/sdk/vanilla/quickstart) |\n\n Package availability\n\nSDK artifacts are built and packed locally. They are not yet published to the npm registry. Workspace examples import the local packages. External applications can install the generated tarballs from dist/packages.\n\n\nbun run sdk:pack\n\n\n Client configuration\n\nProvide an API URL, project ID, branch alias/ID and publishable key. Set an exact application origin in project settings. Create one browser client for the application. SSR applications must create a separate client and query cache per request.\n\n Error handling\n\nMethods return successful data envelopes and throw QBError for failures. Inspect its code, status and retryable fields. Validation, policy denials and conflicts should be corrected by the application; repeatedly retrying them does not help.\n\n Shared lifecycle\n\nSubscriptions expose explicit cleanup. Session refresh is single-flight. Safe reads and explicitly idempotent writes receive bounded retries. Requests support timeout and AbortSignal cancellation.\n\nReact Native, offline writes, GraphQL, functions and AI SDK modules are deferred. Browser compatibility is the initial supported target.\n"
+  },
+  {
+    "title": "React quickstart",
+    "description": "Connect a React application with QBProvider and custom hooks.",
+    "section": "Client SDK · React",
+    "slug": "sdk/react/quickstart",
+    "order": 41,
+    "file": "content/sdk/react/quickstart.mdx",
+    "headings": [
+      {
+        "title": "Before you begin",
+        "id": "before-you-begin",
+        "level": 2
+      },
+      {
+        "title": "Create the client once",
+        "id": "create-the-client-once",
+        "level": 2
+      },
+      {
+        "title": "Read data with a custom hook",
+        "id": "read-data-with-a-custom-hook",
+        "level": 2
+      },
+      {
+        "title": "Next steps",
+        "id": "next-steps",
+        "level": 2
+      }
+    ],
+    "text": "\n\n React quickstart\n\n Before you begin\n\nCreate the task table, ownership policies and publishable key from [your first project](/docs/getting-started/first-project). Use React 19. The runnable example is in examples/react.\n\n\nbun run --cwd examples/react dev\n\n\nFor an external application, run bun run sdk:pack in QB Flex, then install both artifacts and their React peers from your Vite React application:\n\n\nnpm install /path/to/QBFlex/dist/packages/qb-flex-client-0.1.0.tgz /path/to/QBFlex/dist/packages/qb-flex-react-0.1.0.tgz react@19.3.0 react-dom@19.3.0\n\n\nReplace the paths with the actual absolute paths. npm installs the adapter's pinned TanStack Query dependency. Bun 1.4.2 attempts to resolve the unpublished client peer from the registry when installing these local tarballs, so use npm for this external artifact workflow. Configure the application's exact origin in Studio.\n\n Create the client once\n\n\nimport { createClient } from '@qb-flex/client';\nimport { QBProvider } from '@qb-flex/react';\nimport type { Database } from './qb-flex.types';\n\nconst client = createClientDatabase({\n  url: 'http://localhost:7612',\n  projectId: 'YOUR_PROJECT_ID',\n  branch: 'primary',\n  publishableKey: 'YOUR_PUBLISHABLE_KEY',\n});\n\nexport function App() {\n  return QBProvider client={client}Tasks //QBProvider;\n}\n\n\nThe provider supplies a shared client and its own TanStack Query cache. You may pass an existing queryClient when integrating into an application that already uses Query.\n\n Read data with a custom hook\n\n\nimport { useQBQuery } from '@qb-flex/react';\n\nfunction Tasks() {\n  const query = useQBQuery({\n    queryKey: ['tasks'],\n    queryFn: (_, signal) = client.from('tasks')\n      .select(['id', 'title'])\n      .abortSignal(signal)\n      .execute(),\n  });\n  if (query.isPending) return pLoading tasks…/p;\n  if (query.error) return p role=\"alert\"{query.error.message}/p;\n  return ul{query.data.data.map(task =\n    li key={task.id}{task.title}/li\n  )}/ul;\n}\n\n\nUse generated database declarations to retain column and row inference. Include filters and sort choices in queryKey whenever they affect the result.\n\n Next steps\n\nAdd [authentication](/docs/sdk/react/authentication), [mutations and realtime](/docs/sdk/react/data), then [file handling](/docs/sdk/react/storage). Every hook requires the provider; a missing provider produces a clear configuration error.\n"
+  },
+  {
+    "title": "React authentication",
+    "description": "Use shared session state and protect application screens.",
+    "section": "Client SDK · React",
+    "slug": "sdk/react/authentication",
+    "order": 42,
+    "file": "content/sdk/react/authentication.mdx",
+    "headings": [
+      {
+        "title": "Read the shared session",
+        "id": "read-the-shared-session",
+        "level": 2
+      },
+      {
+        "title": "Sign in or register",
+        "id": "sign-in-or-register",
+        "level": 2
+      },
+      {
+        "title": "Enable protected queries",
+        "id": "enable-protected-queries",
+        "level": 2
+      },
+      {
+        "title": "Identity changes",
+        "id": "identity-changes",
+        "level": 2
+      },
+      {
+        "title": "Server rendering",
+        "id": "server-rendering",
+        "level": 2
+      }
+    ],
+    "text": "\n\n React authentication\n\n Read the shared session\n\n\nimport { useQBAuth } from '@qb-flex/react';\n\nfunction Account() {\n  const auth = useQBAuth();\n  if (auth.isLoading) return pChecking your session…/p;\n  if (!auth.user) return SignIn /;\n  return section\n    pSigned in as {auth.user.email}/p\n    button onClick={() = auth.signOut().catch(console.error)}Sign out/button\n  /section;\n}\n\n\nAll components under the provider observe the same session. The hook exposes session, user, loading/error state and signIn/signUp/signOut/refresh actions.\n\n Sign in or register\n\n\nawait auth.signIn({ email, password });\nawait auth.signUp({ email, password, name });\n\n\nCatch failures and present auth.error.message in the form. Registration may require verification before a session is available. Never assume signup always authenticates the user.\n\n Enable protected queries\n\n\nconst auth = useQBAuth();\nconst tasks = useQBQuery({\n  queryKey: ['tasks'],\n  enabled: Boolean(auth.user),\n  queryFn: (_, signal) = client.from('tasks').abortSignal(signal).execute(),\n});\n\n\nConditional rendering improves the interface; server policies are still the authorization boundary.\n\n Identity changes\n\nQuery keys include the project, branch and identity generation. The provider cancels in-flight queries and removes affected cached results when the user changes. Realtime subscriptions reauthorize under the new session.\n\nDo not keep copies of protected query data in unrelated global state. Clear application-specific derived state on signout as well.\n\n Server rendering\n\nCreate clients and QueryClient instances per request. Do not reuse a module-global authenticated client on a server. Hooks do not read browser APIs during server rendering; session loading occurs after initialization. Advanced request-session hydration requires an explicit integration rather than assuming browser cookies exist on the server.\n"
+  },
+  {
+    "title": "React queries, mutations and realtime",
+    "description": "Build an authenticated task list with cache invalidation.",
+    "section": "Client SDK · React",
+    "slug": "sdk/react/data",
+    "order": 43,
+    "file": "content/sdk/react/data.mdx",
+    "headings": [
+      {
+        "title": "Query ownership",
+        "id": "query-ownership",
+        "level": 2
+      },
+      {
+        "title": "Insert a task",
+        "id": "insert-a-task",
+        "level": 2
+      },
+      {
+        "title": "Update or delete",
+        "id": "update-or-delete",
+        "level": 2
+      },
+      {
+        "title": "Subscribe through a hook",
+        "id": "subscribe-through-a-hook",
+        "level": 2
+      },
+      {
+        "title": "Loading and failure states",
+        "id": "loading-and-failure-states",
+        "level": 2
+      }
+    ],
+    "text": "\n\n React queries, mutations and realtime\n\n Query ownership\n\nThe query function receives the configured client and a cancellation signal. A query key must include every input that changes the data. The provider prefixes it with project, branch and identity scope.\n\n Insert a task\n\n\nconst auth = useQBAuth();\nconst addTask = useQBMutation({\n  mutationFn: (_, title: string) = client.from('tasks').insert({\n    title,\n    owner_id: auth.user!.id,\n  }, { idempotencyKey: crypto.randomUUID() }),\n  invalidate: [['tasks']],\n});\n\nawait addTask.mutateAsync('Write the first integration');\n\n\nThe hook exposes TanStack Query mutation state, including pending/error state. Generate the idempotency key once for each logical action; keep it when retrying that action manually.\n\n Update or delete\n\n\nawait client.from('tasks').update(task.id, { completed: 1 }, {\n  revision: Number(task.revision),\n});\nawait client.from('tasks').delete(task.id);\n\n\nWrap these operations in useQBMutation and invalidate the task query after success. A stale revision returns a conflict; refetch and let the user reconcile rather than overwriting blindly.\n\n Subscribe through a hook\n\n\nconst realtime = useQBRealtime({\n  table: 'tasks',\n  enabled: Boolean(auth.user),\n  cursor: tasks.data?.meta.consistencyToken,\n  onEvent: () = {},\n  invalidate: [['tasks']],\n});\n\n\nThe hook creates and disposes the subscription with the component lifecycle. It invalidates the selected queries when events arrive and exposes connection status. React Strict Mode cleanup must not leave a duplicate connection.\n\n Loading and failure states\n\nShow empty lists distinctly from policy denial or network errors. Disable duplicate mutation submissions while pending. Keep user drafts when a write fails. Use query refetch for recoverable failures; denied writes need a changed identity, policy or input.\n"
+  },
+  {
+    "title": "React file handling",
+    "description": "Upload and download files with a custom storage hook.",
+    "section": "Client SDK · React",
+    "slug": "sdk/react/storage",
+    "order": 44,
+    "file": "content/sdk/react/storage.mdx",
+    "headings": [
+      {
+        "title": "Use the storage hook",
+        "id": "use-the-storage-hook",
+        "level": 2
+      },
+      {
+        "title": "Download safely",
+        "id": "download-safely",
+        "level": 2
+      },
+      {
+        "title": "Delete and refresh",
+        "id": "delete-and-refresh",
+        "level": 2
+      },
+      {
+        "title": "Cancellation",
+        "id": "cancellation",
+        "level": 2
+      }
+    ],
+    "text": "\n\n React file handling\n\n Use the storage hook\n\n\nimport { useQBStorage } from '@qb-flex/react';\n\nfunction Upload({ bucketId }: { bucketId: string }) {\n  const storage = useQBStorage();\n  return labelAttach a file\n    input type=\"file\" disabled={storage.isPending} onChange={async event = {\n      const file = event.target.files?.[0];\n      if (!file) return;\n      try { await storage.upload(bucketId, file.name, file); }\n      catch { / Render storage.error in the form. / }\n    }} /\n    {storage.error && span role=\"alert\"{storage.error.message}/span}\n  /label;\n}\n\n\nisPending describes transfer activity, not byte progress. Initial uploads are bounded, non-resumable transfers. Keep filename and size visible while the transfer runs.\n\n Download safely\n\nCall storage.download(objectId) to receive a Blob. Create an object URL for the browser and revoke it after use. Do not expose an S3 backend URL or credentials.\n\n Delete and refresh\n\nCall storage.remove(objectId) and invalidate the file-list query after success. Listing uses the same client identity. An object from another private owner is unavailable.\n\n Cancellation\n\nUpload/download methods accept a request option containing an AbortSignal. Cancel operations when the user deliberately leaves the transfer flow. Cancellation does not guarantee that remote work did not commit; refresh object state before retrying.\n"
+  },
+  {
+    "title": "Vanilla JavaScript quickstart",
+    "description": "Use the browser SDK with or without a framework.",
+    "section": "Client SDK · Vanilla JS",
+    "slug": "sdk/vanilla/quickstart",
+    "order": 45,
+    "file": "content/sdk/vanilla/quickstart.mdx",
+    "headings": [
+      {
+        "title": "Vite application",
+        "id": "vite-application",
+        "level": 2
+      },
+      {
+        "title": "Import and initialize",
+        "id": "import-and-initialize",
+        "level": 2
+      },
+      {
+        "title": "Direct browser modules",
+        "id": "direct-browser-modules",
+        "level": 2
+      },
+      {
+        "title": "Run the tutorial",
+        "id": "run-the-tutorial",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Vanilla JavaScript quickstart\n\n Vite application\n\nThe runnable example is in examples/vanilla. It uses ordinary DOM APIs and no React dependency.\n\n\nbun run --cwd examples/vanilla dev\n\n\nSet the API URL, project ID and publishable key in the example configuration form. Add http://localhost:7618 to the project's exact origin allowlist.\n\n Import and initialize\n\n\nimport { createClient } from '@qb-flex/client';\nconst qb = createClient({\n  url: 'http://localhost:7612',\n  projectId: 'YOUR_PROJECT_ID',\n  branch: 'primary',\n  publishableKey: 'YOUR_PUBLISHABLE_KEY',\n});\n\n\nInstall the locally packed client artifact when integrating into a separate Vite application.\n\nFirst run bun run sdk:pack in QB Flex. In your Vite application, install the resulting tarball using its actual absolute path:\n\n\nnpm install /path/to/QBFlex/dist/packages/qb-flex-client-0.1.0.tgz\n\n\nImport the client in your application entry module. The repository example already supplies a complete Vite configuration and can be copied as a starting application; its Vite version is pinned to 8.3.2.\n\n Direct browser modules\n\nThe Docs build includes a standalone browser ESM bundle at /sdk/client.js. Copy it into your application's public directory and import it locally:\n\n\nscript type=\"module\"\n  import { createClient } from '/sdk/client.js';\n  const qb = createClient({\n    url: 'http://localhost:7612',\n    projectId: 'YOUR_PROJECT_ID',\n    publishableKey: 'YOUR_PUBLISHABLE_KEY',\n  });\n/script\n\n\nServe the page over HTTP; do not open it through a filesystem URL. The standalone client bundle has no React or Node runtime dependency.\n\n Run the tutorial\n\nPrepare the [task table and policies](/docs/getting-started/first-project), then add [authentication and CRUD](/docs/sdk/vanilla/data) and [realtime/file workflows](/docs/sdk/vanilla/realtime-storage).\n"
+  },
+  {
+    "title": "JavaScript authentication and CRUD",
+    "description": "Build an authenticated task list with ordinary DOM APIs.",
+    "section": "Client SDK · Vanilla JS",
+    "slug": "sdk/vanilla/data",
+    "order": 46,
+    "file": "content/sdk/vanilla/data.mdx",
+    "headings": [
+      {
+        "title": "Sign in and observe session state",
+        "id": "sign-in-and-observe-session-state",
+        "level": 2
+      },
+      {
+        "title": "Load tasks",
+        "id": "load-tasks",
+        "level": 2
+      },
+      {
+        "title": "Insert, update and delete",
+        "id": "insert-update-and-delete",
+        "level": 2
+      },
+      {
+        "title": "Pagination and cancellation",
+        "id": "pagination-and-cancellation",
+        "level": 2
+      },
+      {
+        "title": "Error handling",
+        "id": "error-handling",
+        "level": 2
+      }
+    ],
+    "text": "\n\n JavaScript authentication and CRUD\n\n Sign in and observe session state\n\n\nawait qb.auth.signUp({ email, password, name });\nawait qb.auth.signIn({ email, password });\nconst stopAuth = qb.onAuthStateChange(session = {\n  accountLabel.textContent = session?.user.email ?? 'Signed out';\n});\nawait qb.auth.refreshSession();\n\n\nAlways handle rejected promises and verification requirements. Sessions are shared by calls through the same client instance. SDK tokens are not automatically written to localStorage.\n\n Load tasks\n\n\nconst result = await qb.from('tasks')\n  .select(['id', 'title', 'completed'])\n  .eq('completed', 0)\n  .limit(50);\n\nlist.replaceChildren(...result.data.map(task = {\n  const item = document.createElement('li');\n  item.textContent = task.title;\n  return item;\n}));\n\n\nUse textContent for application values instead of inserting user-provided HTML.\n\n Insert, update and delete\n\n\nconst session = qb.getSession();\nif (!session) throw new Error('Sign in first');\nawait qb.from('tasks').insert({\n  owner_id: session.user.id,\n  title: 'Ship the first application',\n}, { idempotencyKey: crypto.randomUUID() });\nawait qb.from('tasks').update(taskId, { completed: 1 });\nawait qb.from('tasks').delete(taskId);\n\n\nOwnership is validated by the server. Refetch the list after mutations so sorting, filters and counts remain consistent.\n\n Pagination and cancellation\n\nFollow result.meta.cursor with the exact same query configuration. Use abortSignal(controller.signal) for a pending read and call controller.abort() when it is no longer needed.\n\n Error handling\n\n\ntry { await qb.from('tasks').insert(row); }\ncatch (error) { errorMessage.textContent = error instanceof Error ? error.message : 'Request failed'; }\n\n\nKeep form input on failure. Resolve validation and policy errors before retrying. For a potentially committed mutation, reuse the original idempotency key rather than creating another action.\n"
+  },
+  {
+    "title": "JavaScript realtime and files",
+    "description": "Manage subscriptions and object transfers without React.",
+    "section": "Client SDK · Vanilla JS",
+    "slug": "sdk/vanilla/realtime-storage",
+    "order": 47,
+    "file": "content/sdk/vanilla/realtime-storage.mdx",
+    "headings": [
+      {
+        "title": "Subscribe after an authorized snapshot",
+        "id": "subscribe-after-an-authorized-snapshot",
+        "level": 2
+      },
+      {
+        "title": "Upload a file",
+        "id": "upload-a-file",
+        "level": 2
+      },
+      {
+        "title": "Lifecycle cleanup",
+        "id": "lifecycle-cleanup",
+        "level": 2
+      },
+      {
+        "title": "Identity changes",
+        "id": "identity-changes",
+        "level": 2
+      }
+    ],
+    "text": "\n\n JavaScript realtime and files\n\n Subscribe after an authorized snapshot\n\n\nconst snapshot = await qb.from('tasks');\nconst channel = qb.channel({\n  table: 'tasks',\n  cursor: snapshot.meta.consistencyToken,\n  onEvent: () = refreshTasks(),\n  onStatus: status = { connectionLabel.textContent = status; },\n  onResync: () = refreshTasks(),\n}).subscribe();\n\n\nA subscription is an explicit resource. Dispose it when replacing the screen or leaving the application. Realtime delivery uses the current session and exposed-table policies.\n\n Upload a file\n\n\nconst file = fileInput.files?.[0];\nif (file) {\n  const uploaded = await qb.storage.upload(bucketId, file.name, file);\n  const blob = await qb.storage.download(uploaded.data.id);\n  const url = URL.createObjectURL(blob);\n  downloadLink.href = url;\n  downloadLink.download = file.name;\n  // Release after the UI no longer uses the URL:\n  URL.revokeObjectURL(url);\n}\n\n\nUse an authenticated application user and a configured S3 backend. Private files are restricted to their owner.\n\n Lifecycle cleanup\n\n\nchannel.unsubscribe();\nstopAuth();\nqb.dispose();\n\n\nCall cleanup only when the instance is no longer used. dispose closes channels and removes session listeners. A disposed client rejects later requests.\n\n Identity changes\n\nRefetch and clear protected DOM state after signout. Keep every application's state scoped to its client and user; do not mix results from another project. The SDK reauthorizes its channels after identity changes, while your application remains responsible for clearing previously rendered private content.\n"
+  },
+  {
+    "title": "Use the qb CLI",
+    "description": "Authenticate and automate local project workflows.",
+    "section": "Operations",
+    "slug": "cli/commands",
+    "order": 60,
+    "file": "content/cli/commands.mdx",
+    "headings": [
+      {
+        "title": "Login and linking",
+        "id": "login-and-linking",
+        "level": 2
+      },
+      {
+        "title": "Schema workflows",
+        "id": "schema-workflows",
+        "level": 2
+      },
+      {
+        "title": "Recovery",
+        "id": "recovery",
+        "level": 2
+      },
+      {
+        "title": "Development",
+        "id": "development",
+        "level": 2
+      },
+      {
+        "title": "Local reset and secrets",
+        "id": "local-reset-and-secrets",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Use the qb CLI\n\n Login and linking\n\n\nbun run qb login --url http://localhost:7612 --email owner@example.com\nbun run qb projects list\nbun run qb link --project YOUR_PROJECT_ID --branch primary\n\n\nOn macOS, login reads the password from a hidden interactive prompt and stores a 30-day management token in the OS keychain. Add --organization ORGANIZATION_ID only when the CLI must provision projects. Linux and CI use QB_MANAGEMENT_TOKEN: create the scoped token in Studio Settings after completing administrator MFA and inject it through your protected environment store. The CLI does not print or write credentials to a plaintext configuration file.\n\n Schema workflows\n\n\nbun run qb db migrate --file migrations/001_tasks.sql --id 001_tasks\nbun run qb db export --table tasks --output tasks.json\nbun run qb db import --table tasks --file tasks.json\nbun run qb types generate --output qb-flex.types.ts\n\n\nMigrations and table writes require developer permissions. Import uses bounded batches; an import spanning batches is not a single all-or-nothing transaction.\n\n Recovery\n\n\nbun run qb backup create\nbun run qb backup restore --backup YOUR_BACKUP_ID\n\n\nRestore creates a new isolated branch. It does not switch primary traffic automatically. Perform cutover deliberately through management operations after validating the restored branch.\n\n Development\n\nqb init writes a local configuration file without credentials. qb dev starts the workspace processes. Commands accept explicit project/branch flags, with linked defaults for convenience.\n\nGeneral branch creation, functions, hosted MCP and remote reset are not enabled in P0. Unsupported commands return an actionable error rather than simulating success.\n\n Local reset and secrets\n\nqb db reset --data-dir .data --confirm-local-reset requires a stopped API and a disposable local directory with a generated master key. It removes the local databases and generated local keys. It never selects a remote branch by default.\n\nqb secrets set --name SERVICE_SECRET --env MY_SECRET reads a secret from the named environment variable, stores an encrypted version and returns only its identifier. Viewer access cannot recover secret values.\n\nqb storage sync --bucket BUCKET_ID --directory ./attachments adds missing objects from a local directory. Existing and remote-only objects are preserved. Hidden files and symlinks are skipped. Use the explicit object APIs for deletion.\n\nqb db diff --file expected-schema.json compares the current introspected schema with your checked-in schema manifest. It reports column differences; it does not invent a migration.\n"
+  },
+  {
+    "title": "Deploy a single node",
+    "description": "Run QB Flex with persistent local disks and separate secrets.",
+    "section": "Operations",
+    "slug": "self-hosting/deployment",
+    "order": 61,
+    "file": "content/self-hosting/deployment.mdx",
+    "headings": [
+      {
+        "title": "Deployment shape",
+        "id": "deployment-shape",
+        "level": 2
+      },
+      {
+        "title": "Required production configuration",
+        "id": "required-production-configuration",
+        "level": 2
+      },
+      {
+        "title": "Gateway and TLS",
+        "id": "gateway-and-tls",
+        "level": 2
+      },
+      {
+        "title": "Docs publishing",
+        "id": "docs-publishing",
+        "level": 2
+      },
+      {
+        "title": "Release verification",
+        "id": "release-verification",
+        "level": 2
+      },
+      {
+        "title": "Local object-store build",
+        "id": "local-object-store-build",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Deploy a single node\n\n Deployment shape\n\nThe Compose deployment includes a gateway, Studio, Docs, API/database owners, maintenance worker and optional local MinIO/Mailpit. Keep writable SQLite files on persistent local storage owned by one API node. Never share a live WAL file across nodes or network filesystems.\n\n\ndocker compose -f compose.yml -f compose.selfhost.yml --profile selfhost build\ndocker compose -f compose.yml -f compose.selfhost.yml --profile selfhost up -d\n\n\n Required production configuration\n\nSupply QB_MASTER_KEY, QB_BOOTSTRAP_TOKEN for the first owner, HTTPS QB_PUBLIC_URL, Studio/Docs URLs, exact allowed origins and S3/SMTP configuration. Use protected environment injection or mounted secret files rather than checking secrets into the repository.\n\nThe master key protects provider settings and backup encryption. Losing it prevents decrypting those records. Back it up separately and restrict access.\n\n Gateway and TLS\n\nTerminate public HTTPS at the configured reverse proxy. Route API and Studio consistently so cookie and origin semantics match the configured URLs. Internal maintenance endpoints require the operator worker token. Do not expose MinIO operator credentials to browser applications.\n\nAuthentication rate limits use the API socket address, ignoring caller-supplied forwarding headers. Behind a proxy, clients therefore share that proxy's address bucket. Configure per-client abuse limits at the gateway; trusted forwarded-address processing is not implemented in this release.\n\n Docs publishing\n\nDocs has independent build/start commands and prerendered HTML output. Set both QB_DOCS_URL and VITE_DOCS_URL before generating and building documentation to produce correct canonical and sitemap URLs. Host its static output separately or run its Bun server. No login is required to read documentation.\n\n Release verification\n\nLocal Linux builds, MinIO workflows and recovery drills are verified in the repository. Certify your production S3/SMTP services, live OAuth callbacks and load/recovery targets on the actual deployment. Check the implementation status before exposing a public service.\n\n Local object-store build\n\nHistorical MinIO container images are unavailable in the tested registries. infra/minio.Dockerfile builds the archived upstream community source at commit 7aac2a2c5b7c882e68c1ce017d8256be2feea27f and verifies its source archive SHA-256. The build preserves the upstream license. MinIO is a development backend; configure and certify your production S3 backend independently.\n"
+  },
+  {
+    "title": "Backups and restore",
+    "description": "Create encrypted snapshots and rehearse recovery.",
+    "section": "Operations",
+    "slug": "self-hosting/backups",
+    "order": 62,
+    "file": "content/self-hosting/backups.mdx",
+    "headings": [
+      {
+        "title": "Consistent snapshots",
+        "id": "consistent-snapshots",
+        "level": 2
+      },
+      {
+        "title": "Isolated restore",
+        "id": "isolated-restore",
+        "level": 2
+      },
+      {
+        "title": "Production cutover",
+        "id": "production-cutover",
+        "level": 2
+      },
+      {
+        "title": "Object bytes and control metadata",
+        "id": "object-bytes-and-control-metadata",
+        "level": 2
+      },
+      {
+        "title": "Recovery drill",
+        "id": "recovery-drill",
+        "level": 2
+      },
+      {
+        "title": "Retention and cancellation",
+        "id": "retention-and-cancellation",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Backups and restore\n\n Consistent snapshots\n\nSnapshots are created through the database owner using SQLite VACUUM INTO, then encrypted using AES-256-GCM and recorded with a checksum and schema version. Never copy only a live main SQLite file while committed changes remain in the WAL.\n\nManual snapshots are available in Studio and the CLI. The maintenance worker requests scheduled backups. Retention is configurable; the default is seven days.\n\n Isolated restore\n\nRestore decrypts and verifies the checksum, writes a new branch database and runs integrity/foreign-key checks. Active sessions, verification challenges and stored OAuth access/refresh tokens are excluded. Restored application users remain in the isolated database and must establish new sessions.\n\nValidate expected table data, policies and migrations before cutover. The restored branch has its own authentication identity and routing.\n\n Production cutover\n\nThe cutover endpoint requires the project owner role and an explicit project-slug confirmation. It creates a rollback backup, closes the old primary owner and changes the primary alias. Existing requests and sockets must be reconciled against the changed branch.\n\nThe previous primary is retired and refuses public reads and writes. Restore the rollback snapshot into another isolated branch to reverse the cutover. Do not assume that alias switching merges data.\n\n Object bytes and control metadata\n\nBranch snapshots do not back up S3 object bytes. The worker separately creates encrypted, checksummed control catalog snapshots under backups/control with the same daily/weekly retention. Protect the master key and copy archives off the node; configure object-store versioning/backups separately.\n\nControl recovery is offline. Stop the API/worker, preserve all referenced project database files and verify the archive before replacement. The local ownership lock prevents restoration over a running API. The command checks integrity, foreign keys, applied control migrations and referenced branch files, creates an encrypted rollback checkpoint, excludes platform sessions and revokes all restored project/management credentials. Reissue keys after recovery.\n\n\nbun run qb backup control-create --data-dir .data\nbun run qb backup control-restore --data-dir .data --file CONTROL_ARCHIVE --confirm-local-control-restore\n\n\nInject the original QB_MASTER_KEY for production recovery. A catalog archive does not include project databases or object bytes; coordinate their recovery to a compatible checkpoint.\n\n Recovery drill\n\nCreate representative data, take a snapshot, alter the data, restore into another branch and compare results. Repeat after a process restart and verify secrets/session behavior. Publish measured RPO/RTO only after a reference-dataset drill passes.\n\n Retention and cancellation\n\nMaintenance keeps the daily window (QB_BACKUP_RETENTION_DAYS, default 7) and one newest checkpoint per week (QB_BACKUP_RETENTION_WEEKS, default 4). Preserve encrypted snapshots and the master key on separate storage for disaster recovery. A local backup volume is not off-site redundancy.\n\nProject provisioning can be cancelled through POST /management/v1/operations/{id}/cancel while its status is requested. Running or completed operations return OPERATION_NOT_CANCELLABLE; cancellation never rolls back a committed database operation.\n"
+  },
+  {
+    "title": "Monitoring and troubleshooting",
+    "description": "Diagnose owner saturation, unavailable services and failed operations.",
+    "section": "Operations",
+    "slug": "self-hosting/monitoring",
+    "order": 63,
+    "file": "content/self-hosting/monitoring.mdx",
+    "headings": [
+      {
+        "title": "Health checks",
+        "id": "health-checks",
+        "level": 2
+      },
+      {
+        "title": "Logs and audit records",
+        "id": "logs-and-audit-records",
+        "level": 2
+      },
+      {
+        "title": "Branch unavailable",
+        "id": "branch-unavailable",
+        "level": 2
+      },
+      {
+        "title": "Busy writers and disk pressure",
+        "id": "busy-writers-and-disk-pressure",
+        "level": 2
+      },
+      {
+        "title": "Authentication failures",
+        "id": "authentication-failures",
+        "level": 2
+      },
+      {
+        "title": "Storage failures",
+        "id": "storage-failures",
+        "level": 2
+      },
+      {
+        "title": "Operational limits",
+        "id": "operational-limits",
+        "level": 2
+      },
+      {
+        "title": "Maintenance and metrics",
+        "id": "maintenance-and-metrics",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Monitoring and troubleshooting\n\n Health checks\n\n/health indicates process liveness. /ready checks control-database access and reports active owner count. Readiness is not a claim that every external provider is healthy.\n\n Logs and audit records\n\nStructured API errors include request ID, path, status and a stable code. Audit records include actor, organization/project, action and resource. Credential values, passwords and raw row payloads are not logged by default.\n\n Branch unavailable\n\nInspect provisioning status and confirm the persistent disk is mounted and writable. An unavailable or deadline-terminated owner returns a retriable failure. Restarting the API recovers branch handles; reconcile any uncertain mutation with its idempotency key.\n\n Busy writers and disk pressure\n\nRequests are bounded by branch queue size and execution deadlines. Monitor database/WAL sizes and available disk. Stop introducing writes before the disk fills, drain work and follow the backup/restore runbook. Do not delete WAL files to reclaim space from a running database.\n\n Authentication failures\n\nVerify project key, branch, exact browser origin and application session. A platform session cannot be used as an application identity. Check SMTP configuration for reset/verification delivery. Provider configuration alone does not prove a social callback works.\n\n Storage failures\n\nCheck S3 endpoint, credentials, physical bucket and bucket MIME/size constraints. Failed upload metadata is not publicly readable. Reconcile pending/deleting objects before retrying remote effects.\n\n Operational limits\n\nThis is a single-node implementation. Do not horizontally scale writable owners without fencing and routing certification. Advanced telemetry, distributed abuse controls and tenant fairness require the release tests listed in the development specification.\n\n Maintenance and metrics\n\napps/worker invokes the API's authenticated /internal/maintenance endpoint every minute. It removes expired sessions/idempotency entries, checkpoints WALs, retains the outbox for 24 hours, reconciles abandoned upload/deletion records and creates daily primary-branch snapshots. QB_BACKUP_RETENTION_DAYS defaults to seven. Local workers read .data/worker.token; production injects QB_WORKER_TOKEN.\n\nScrape /internal/metrics with the worker bearer token from the private network. The gateway returns 404 for internal routes. Prometheus output covers request/error counts, cumulative/max duration, active owners and available disk bytes. Do not interpret these as a complete tracing or performance certification.\n"
+  },
+  {
+    "title": "Management and REST API",
+    "description": "Routes generated from the shared contract registry.",
+    "section": "Reference",
+    "slug": "reference/management-api",
+    "order": 90,
+    "file": "content/reference/management-api.mdx",
+    "headings": [
+      {
+        "title": "Response envelope",
+        "id": "response-envelope",
+        "level": 2
+      },
+      {
+        "title": "Availability",
+        "id": "availability",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Management and REST API\n\nThe Management API requires a platform session or management token. Project APIs require a publishable key and evaluate the application identity separately.\n\n| Method | Route | Purpose |\n| --- | --- | --- |\n| GET | /health | Health operation |\n| GET | /ready | Ready operation |\n| GET | /setup | Setup operation |\n| POST | /setup | Setup operation |\n| GET/POST | /platform/auth/ |  operation |\n| GET | /management/v1/capabilities | Feature availability |\n| GET | /management/v1/organizations | List organizations |\n| POST | /management/v1/organizations | Create organization |\n| GET | /management/v1/organizations/{id}/members | Members operation |\n| POST | /management/v1/organizations/{id}/members | Members operation |\n| POST | /management/v1/invitations | Invitations operation |\n| POST | /management/v1/tokens | Tokens operation |\n| GET | /management/v1/tokens | Tokens operation |\n| DELETE | /management/v1/tokens/{token} | Token operation |\n| GET | /management/v1/projects | List projects |\n| POST | /management/v1/projects | Provision project |\n| GET | /management/v1/operations/{id} | Operation status |\n| POST | /management/v1/operations/{id}/cancel | Cancel before provisioning starts |\n| GET | /management/v1/projects/{id}/branches | List branches |\n| GET | /management/v1/projects/{id}/keys | List keys |\n| POST | /management/v1/projects/{id}/keys | Create key |\n| DELETE | /management/v1/projects/{id}/keys/{key} | Key operation |\n| GET | /management/v1/projects/{id}/config | Config operation |\n| PUT | /management/v1/projects/{id}/config | Config operation |\n| PUT | /management/v1/projects/{id}/secrets/{name} | Name operation |\n| GET | /management/v1/projects/{id}/secrets | Secrets operation |\n| GET | /management/v1/projects/{id}/branches/{branch}/schema | Inspect schema |\n| GET | /management/v1/projects/{id}/branches/{branch}/data/{table} | Table operation |\n| POST | /management/v1/projects/{id}/branches/{branch}/data/{table} | Table operation |\n| PATCH | /management/v1/projects/{id}/branches/{branch}/data/{table}/{key} | Key operation |\n| DELETE | /management/v1/projects/{id}/branches/{branch}/data/{table}/{key} | Key operation |\n| GET | /management/v1/projects/{id}/branches/{branch}/migrations | Migrations operation |\n| POST | /management/v1/projects/{id}/branches/{branch}/migrations | Apply migration |\n| POST | /management/v1/projects/{id}/branches/{branch}/sql | Execute privileged SQL |\n| GET | /management/v1/projects/{id}/branches/{branch}/policies | Policies operation |\n| PUT | /management/v1/projects/{id}/branches/{branch}/policies | Save policy |\n| POST | /management/v1/projects/{id}/branches/{branch}/policies/test | Test operation |\n| PUT | /management/v1/projects/{id}/branches/{branch}/exposure/{table} | Configure exposure |\n| PUT | /management/v1/projects/{id}/branches/{branch}/relationships | Relationships operation |\n| PUT | /management/v1/projects/{id}/branches/{branch}/rpc | Rpc operation |\n| GET | /management/v1/projects/{id}/branches/{branch}/rpc | Rpc operation |\n| GET | /management/v1/projects/{id}/branches/{branch}/types | Types operation |\n| GET | /management/v1/projects/{id}/branches/{branch}/users | Users operation |\n| DELETE | /management/v1/projects/{id}/branches/{branch}/users/{user}/sessions | Sessions operation |\n| GET | /management/v1/projects/{id}/backups | Backups operation |\n| POST | /management/v1/projects/{id}/branches/{branch}/backups | Backups operation |\n| POST | /management/v1/projects/{id}/backups/{backup}/restore | Restore operation |\n| POST | /management/v1/projects/{id}/branches/{branch}/cutover | Cutover operation |\n| GET | /management/v1/audit | Audit operation |\n| GET | /management/v1/projects/{id}/branches/{branch}/buckets | Buckets operation |\n| POST | /management/v1/projects/{id}/branches/{branch}/buckets | Buckets operation |\n| GET | /management/v1/projects/{id}/branches/{branch}/buckets/{bucket}/objects | Objects operation |\n| POST | /management/v1/projects/{id}/branches/{branch}/buckets/{bucket}/objects | Objects operation |\n| PUT | /management/v1/projects/{id}/branches/{branch}/objects/{object}/content | Content operation |\n| GET | /management/v1/projects/{id}/branches/{branch}/objects/{object}/content | Content operation |\n| DELETE | /management/v1/projects/{id}/branches/{branch}/objects/{object} | Object operation |\n| GET/POST | /v1/projects/{projectId}/branches/{branchId}/auth/ |  operation |\n| POST | /v1/projects/{projectId}/branches/{branchId}/rpc/{operation} | Operation operation |\n| GET | /v1/projects/{projectId}/branches/{branchId}/schema | Exposed schema |\n| GET | /v1/projects/{projectId}/branches/{branchId}/openapi.json | Generated OpenAPI |\n| GET | /v1/projects/{projectId}/branches/{branchId}/data/{table} | Read authorized rows |\n| POST | /v1/projects/{projectId}/branches/{branchId}/data/{table}/query | Structured query |\n| POST | /v1/projects/{projectId}/branches/{branchId}/data/{table} | Insert rows |\n| POST | /v1/projects/{projectId}/branches/{branchId}/data/{table}/upsert | Upsert operation |\n| PATCH | /v1/projects/{projectId}/branches/{branchId}/data/{table}/{key} | Update row |\n| DELETE | /v1/projects/{projectId}/branches/{branchId}/data/{table}/{key} | Delete row |\n| GET | /v1/projects/{projectId}/branches/{branchId}/storage/buckets | Buckets operation |\n| GET | /v1/projects/{projectId}/branches/{branchId}/storage/buckets/{bucket}/objects | Objects operation |\n| POST | /v1/projects/{projectId}/branches/{branchId}/storage/buckets/{bucket}/objects | Objects operation |\n| PUT | /v1/projects/{projectId}/branches/{branchId}/storage/objects/{object}/content | Content operation |\n| GET | /v1/projects/{projectId}/branches/{branchId}/storage/objects/{object}/content | Content operation |\n| DELETE | /v1/projects/{projectId}/branches/{branchId}/storage/objects/{object} | Object operation |\n| WS | /v1/projects/{projectId}/branches/{branchId}/realtime | Authorized row subscriptions |\n\n Response envelope\n\nQB resource operations return { data, meta }. Errors return { error: { code, message, requestId, retryable } }. Auth endpoints retain Better Auth’s native response contract; binary downloads return bytes and OpenAPI returns a schema document. Schema-sensitive results include a schema version. Provisioning returns HTTP 202 and an operation ID; poll its status until succeeded or failed.\n\n Availability\n\n- organizations: available\n- projects: available\n- database: available\n- rest: available\n- policies: available\n- auth: available\n- realtime: available\n- storage: configured\n- backups: available\n- graphql: planned\n- branching: planned\n- functions: planned\n- ai: planned\n- mcp: planned\n- replicas: planned\n"
+  },
+  {
+    "title": "React provider and hook API",
+    "description": "Public declarations generated from the SDK source.",
+    "section": "Reference",
+    "slug": "reference/react-api",
+    "order": 90,
+    "file": "content/reference/react-api.mdx",
+    "headings": [],
+    "text": "\n\n React provider and hook API\n\nThese declarations are generated by TypeScript from the same code used by the example applications.\n\n\nimport { type ReactNode } from 'react';\nimport { QueryClient, type QueryKey } from '@tanstack/react-query';\nimport { QBClient, type Session, type ChannelOptions } from '@qb-flex/client';\nexport interface QBProviderProps {\n    client: QBClientany, any;\n    queryClient?: QueryClient;\n    children: ReactNode;\n}\n/ Supply a stable client created outside rendering, or once with useState. /\nexport declare function QBProvider({ client, queryClient, children }: QBProviderProps): import(\"react\").JSX.Element;\nexport declare function useQBClientD = any, R = any(): QBClientD, R;\nexport declare function useQBAuth(): {\n    session: Session | null;\n    user: {\n        id: string;\n        email: string;\n        name: string;\n    } | null;\n    isLoading: boolean;\n    error: Error | null;\n    signIn: (input: Parameters(input: {\n        email: string;\n        password: string;\n    }) = Promise{\n        user: any;\n        token: any;\n    }[0]) = Promise{\n        user: any;\n        token: any;\n    };\n    signUp: (input: Parameters(input: {\n        email: string;\n        password: string;\n        name: string;\n    }) = Promise{\n        user: any;\n        token: any;\n    } | null[0]) = Promise{\n        user: any;\n        token: any;\n    } | null;\n    signOut: () = Promisevoid;\n    refresh: () = PromiseSession | null;\n};\nexport declare function useQBQueryT, D = any(options: {\n    queryKey: QueryKey;\n    queryFn: (client: QBClientD, signal: AbortSignal) = PromiseLikeT;\n    enabled?: boolean;\n}): import(\"@tanstack/react-query\").UseQueryResultT, Error;\nexport declare function useQBMutationT, V, D = any(options: {\n    mutationFn: (client: QBClientD, variables: V) = PromiseT;\n    invalidate?: QueryKey[];\n}): import(\"@tanstack/react-query\").UseMutationResultT, Error, V, unknown;\nexport declare function useQBRealtime(options: ChannelOptions & {\n    enabled?: boolean;\n    invalidate?: QueryKey[];\n}): {\n    status: string;\n};\nexport declare function useQBStorage(): {\n    isPending: boolean;\n    error: Error | null;\n    upload: (bucket: string, key: string, file: Blob, options?: import(\"@qb-flex/client\").RequestOptions | undefined) = Promiseimport(\"@qb-flex/contracts\").Result{\n        id: string;\n        state: string;\n    };\n    download: (id: string, options?: import(\"@qb-flex/client\").RequestOptions | undefined) = PromiseBlob;\n    remove: (id: string, options?: import(\"@qb-flex/client\").RequestOptions | undefined) = Promiseimport(\"@qb-flex/contracts\").Result{\n        deleted: boolean;\n    };\n    list: (bucket: string) = Promiseimport(\"@qb-flex/contracts\").Resultany[];\n};\n\n\n"
+  },
+  {
+    "title": "JavaScript client API",
+    "description": "Public declarations generated from the SDK source.",
+    "section": "Reference",
+    "slug": "reference/vanilla-api",
+    "order": 90,
+    "file": "content/reference/vanilla-api.mdx",
+    "headings": [],
+    "text": "\n\n JavaScript client API\n\nThese declarations are generated by TypeScript from the same code used by the example applications.\n\n\nimport { type DatabaseShape, type RowOf, type InsertOf, type UpdateOf, type Query, type Result, type Session, type Filter, type RelationsOf } from './contracts';\nexport { QBError } from './contracts';\nexport type { Result, Session, Query } from './contracts';\nexport interface ClientOptions {\n    url: string;\n    projectId: string;\n    branch?: string;\n    publishableKey: string;\n    fetch?: (input: RequestInfo | URL, init?: RequestInit) = PromiseResponse;\n    timeoutMs?: number;\n    credentials?: RequestCredentials;\n}\nexport interface RequestOptions {\n    signal?: AbortSignal;\n    idempotencyKey?: string;\n    revision?: number;\n}\nexport interface DatabaseEvent {\n    type: 'database';\n    eventId: string;\n    table: string;\n    event: 'insert' | 'update' | 'delete';\n    payload: Recordstring, unknown;\n    schemaVersion: number;\n}\nexport interface ChannelOptions {\n    table: string;\n    cursor?: string;\n    onEvent: (event: DatabaseEvent) = void;\n    onStatus?: (status: string) = void;\n    onResync?: () = void;\n}\n/ Create one client per application or SSR request. Only publishable keys belong in browser bundles. /\nexport type RPCShape = Recordstring, {\n    Args: Recordstring, unknown;\n    Returns: unknown;\n};\nexport declare function createClientD = DatabaseShape, R = RPCShape(options: ClientOptions): QBClientD, R;\nexport declare class QBClientD = DatabaseShape, R = RPCShape {\n    readonly options: ClientOptions;\n    readonly baseURL: string;\n    readonly scope: string;\n    private token;\n    private session;\n    private listeners;\n    private refreshPromise;\n    private channels;\n    private disposed;\n    private epoch;\n    private pending;\n    constructor(options: ClientOptions);\n    getSession(): Session | null;\n    getIdentityVersion(): number;\n    getToken(): string | null;\n    onAuthStateChange(listener: (session: Session | null) = void): () = void;\n    private setSession;\n    requestT(path: string, method?: string, body?: unknown, options?: RequestOptions & {\n        safe?: boolean;\n        raw?: boolean;\n        auth?: boolean;\n        refresh?: boolean;\n    }): PromiseT;\n    private delay;\n    fromK extends keyof D & string(table: K): QueryBuilderD, K, RowOfD, K;\n    auth: {\n        signUp: (input: {\n            email: string;\n            password: string;\n            name: string;\n        }) = Promise{\n            user: any;\n            token: any;\n        } | null;\n        signIn: (input: {\n            email: string;\n            password: string;\n        }) = Promise{\n            user: any;\n            token: any;\n        };\n        signOut: () = Promisevoid;\n        refreshSession: () = PromiseSession | null;\n        resetPassword: (email: string, redirectTo: string) = Promiseunknown;\n        updatePassword: (token: string, newPassword: string) = Promiseunknown;\n        sendVerification: (email: string, callbackURL: string) = Promiseunknown;\n        signInWithProvider: (provider: \"google\" | \"github\", callbackURL: string) = Promise{\n            url: string;\n        };\n    };\n    rpcK extends keyof R & string(operation: K, args: R[K] extends {\n        Args: infer A;\n    } ? A : never, options?: RequestOptions): PromiseResultR[K] extends {\n        Returns: infer T;\n    } ? T : unknown;\n    channel(options: ChannelOptions): QBChannel;\n    storage: {\n        listBuckets: () = PromiseResultany[];\n        list: (bucket: string) = PromiseResultany[];\n        upload: (bucket: string, key: string, file: Blob, options?: RequestOptions) = PromiseResult{\n            id: string;\n            state: string;\n        };\n        download: (id: string, options?: RequestOptions) = PromiseBlob;\n        remove: (id: string, options?: RequestOptions) = PromiseResult{\n            deleted: boolean;\n        };\n    };\n    dispose(): void;\n}\nexport declare class QueryBuilderD, K extends keyof D & string, R implements PromiseLikeResultR[] {\n    private client;\n    private table;\n    private query;\n    private options;\n    constructor(client: QBClientD, any, table: K, query: Query, options?: RequestOptions);\n    private next;\n    selectC extends keyof RowOfD, K & string(columns?: C[]): QueryBuilderD, K, PickRowOfD, K, C;\n    filter(column: keyof RowOfD, K & string, op: Filter['op'], value?: Filter['value']): QueryBuilderD, K, R;\n    eqC extends keyof RowOfD, K & string(column: C, value: RowOfD, K[C]): QueryBuilderD, K, R;\n    order(column: keyof RowOfD, K & string, direction?: 'asc' | 'desc'): QueryBuilderD, K, R;\n    limit(limit: number): QueryBuilderD, K, R;\n    cursor(cursor: string): QueryBuilderD, K, R;\n    includeN extends keyof RelationsOfD, K & string(relations: {\n        name: N;\n        columns?: string[];\n        limit?: number;\n    }[]): QueryBuilderD, K, R & PickRelationsOfD, K, N;\n    count(): QueryBuilderD, K, R;\n    abortSignal(signal: AbortSignal): QueryBuilderD, K, R;\n    execute(): PromiseResultR[];\n    thenA = ResultR[], B = never(fulfilled?: ((result: ResultR[]) = A | PromiseLikeA) | null, rejected?: ((reason: any) = B | PromiseLikeB) | null): PromiseLikeA | B;\n    insert(row: InsertOfD, K | InsertOfD, K[], options?: RequestOptions): PromiseResultRowOfD, K[];\n    upsert(row: InsertOfD, K | InsertOfD, K[], options?: RequestOptions): PromiseResultRowOfD, K[];\n    update(key: string | number | unknown[], row: UpdateOfD, K, options?: RequestOptions): PromiseResultRowOfD, K[];\n    delete(key: string | number | unknown[], options?: RequestOptions): PromiseResultRowOfD, K[];\n}\nexport declare class QBChannel {\n    private client;\n    private options;\n    private onDispose;\n    private socket;\n    private stopped;\n    private retry;\n    private timer?;\n    private heartbeat?;\n    private cursor?;\n    private seen;\n    constructor(client: QBClientany, any, options: ChannelOptions, onDispose: () = void);\n    subscribe(): this;\n    private connect;\n    reauthenticate(): void;\n    unsubscribe(): void;\n}\n\n\n"
+  },
+  {
+    "title": "Errors and limits",
+    "description": "Handle failures and bounded workloads predictably.",
+    "section": "Reference",
+    "slug": "reference/errors",
+    "order": 91,
+    "file": "content/reference/errors.mdx",
+    "headings": [
+      {
+        "title": "Error contract",
+        "id": "error-contract",
+        "level": 2
+      },
+      {
+        "title": "Default bounds",
+        "id": "default-bounds",
+        "level": 2
+      },
+      {
+        "title": "Safe retry",
+        "id": "safe-retry",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Errors and limits\n\n Error contract\n\nSDK methods throw QBError with code, message, status, retryable and optional details. API failures include a request ID. Preserve it when reporting a failure.\n\n| Status | Meaning | Application response |\n| --- | --- | --- |\n| 400 | Validation or unsupported input | Correct the request |\n| 401 | Missing, expired or wrong-realm credential | Authenticate again |\n| 403 | Policy or organization denial | Check permissions |\n| 404 | Missing or invisible resource | Treat as unavailable |\n| 409 | Revision, checksum or idempotency conflict | Refetch/reconcile |\n| 413 | Body or object size limit | Reduce the payload |\n| 429 | Rate quota | Back off |\n| 503 | Owner or external dependency unavailable | Retry eligible operations |\n\n Default bounds\n\nRead pages default to 50 and cap at 500 rows. Atomic inserts cap at 100 rows. Query filters cap at 30, membership values at 100 and policy nesting at 12. Branch queues cap at 64 requests and active owners at 32 per API instance.\n\nThe default database and total reserved object quotas are 1 GiB per branch. Project configuration exposes quotas.databaseBytes, quotas.storageBytes and quotas.requestsPerMinute with optimistic If-Match updates. The default rate quota is 600 requests per minute per credential; the process keeps at most 10,000 credential buckets. Database admission includes the main file and WAL; a final admitted transaction may cross its threshold. Object intents reserve space before upload.\n\nRealtime connections cap at 100 per project and 256 per process. Realtime frames cap at 64 KiB. Storage uploads cap at 100 MiB, with smaller bucket-specific limits. Privileged SQL console results cap at 500 rows.\n\nDatabase pages and their expanded relationships share a conservative 2 MiB serialization budget, measured in SQLite before loading row values. Reduce the projection or page size after RESULT_TOO_LARGE. Events with oversized row images require a fresh snapshot instead of replay. The API admits four concurrent uploads and two snapshots; additional work receives retryable TRANSFER_BUSY or BACKUP_BUSY. Object listings currently return at most 500 ready objects.\n\n Safe retry\n\nThe SDK retries bounded safe reads and explicitly idempotent writes. A timeout may leave commit status uncertain. Reconcile using the same idempotency key; do not assume cancellation undoes a committed database transaction.\n"
+  },
+  {
+    "title": "Compatibility and implementation status",
+    "description": "Measured checks and remaining deployment certifications.",
+    "section": "Reference",
+    "slug": "reference/compatibility",
+    "order": 92,
+    "file": "content/reference/compatibility.mdx",
+    "headings": [
+      {
+        "title": "Verified locally",
+        "id": "verified-locally",
+        "level": 2
+      },
+      {
+        "title": "Deployment certification",
+        "id": "deployment-certification",
+        "level": 2
+      },
+      {
+        "title": "Measured baseline",
+        "id": "measured-baseline",
+        "level": 2
+      },
+      {
+        "title": "Native extensions",
+        "id": "native-extensions",
+        "level": 2
+      },
+      {
+        "title": "Current boundaries",
+        "id": "current-boundaries",
+        "level": 2
+      },
+      {
+        "title": "Supported clients",
+        "id": "supported-clients",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Compatibility and implementation status\n\n Verified locally\n\nBun 1.4.2, Elysia, worker-owned SQLite, Better Auth realm isolation, MFA enrollment/challenges, generated TypeScript, React Strict Mode lifecycle tests, realtime reconnect, MinIO storage and encrypted restore have executable tests in this repository. Consult VERIFICATION.md for the actual build/browser/Linux results and environment.\n\n Deployment certification\n\nGoogle and GitHub adapters require your registered credentials and live callback testing. Production TLS, SMTP delivery outside Mailpit, encrypted disks, external S3 backends and sustained performance/recovery objectives require checks in your deployment. No scale, RPO or RTO targets are advertised as measured achievements.\n\n Measured baseline\n\nOn 6 October 2026, a Linux ARM64 container on an Apple M5 Pro host ran a one-million-row ownership-policy workload with WAL/FULL durability. With four CPU equivalents and an 8 GiB container memory limit, 1,000 indexed reads at 100 requests/second measured p95 4.29 ms; 100 writes at 25 writes/second measured p95 8.97 ms. All requests and authorized row events succeeded. Event delivery measured p95 250.18 ms from request start, including commit time. Snapshot and validated isolated restore took 1.393 and 1.820 seconds.\n\nThe temporary filesystem was Docker OverlayFS on the local VM disk. The shared VM reported 8,317,267,968 bytes of physical memory; the container's 8 GiB setting was a configured ceiling. These short virtualized runs do not certify sustained scale, multi-tenant fairness, power-loss recovery or production disks. [Download the raw result and environment metadata](/benchmark.json). The reproducible source is scripts/benchmark.ts in the repository.\n\n Native extensions\n\nThe macOS system SQLite rejects the tested dynamic vector extension. The bounded spike reports the result separately on each OS. Vector product features remain planned even when the Linux extension loads successfully.\n\n Current boundaries\n\nPublic APIs support ordinary tables, scalar filters, keyset pagination, atomic batches, upsert, registered foreign-key relationships, relationship existence policies and reviewed structured RPC. Relationship expansion is one level deep and capped at three relationships, 100 parent rows and 50 child rows. Policies reject recursive relationship cycles.\n\nStorage has owner/private and public-read rules with bounded gateway uploads. Custom storage-policy expressions, resumable transfers and image processing are planned. Management tokens grant selected projects; server service keys require explicit branch/table/method scopes. SQL developer privileges are trusted schema administration.\n\nThe deployment owns all writable databases from one API process. It does not provide distributed owners, automatic failover, SQLCipher, point-in-time recovery or external OAuth certification. Metrics cover HTTP traffic, active owners and disk capacity; complete distributed tracing and advanced feature metrics are future work.\n\n Supported clients\n\nThe initial supported application tracks are React 19 and Vanilla JavaScript browser ESM. SSR must create a client and QueryClient per request; browser effects start after hydration. Other framework adapters and React Native remain deferred.\n"
+  },
+  {
+    "title": "Complete development specification",
+    "description": "The full architecture and phased implementation baseline.",
+    "section": "Reference",
+    "slug": "reference/development-spec",
+    "order": 99,
+    "file": "content/reference/development-spec.mdx",
+    "headings": [
+      {
+        "title": "1. Product definition",
+        "id": "1-product-definition",
+        "level": 2
+      },
+      {
+        "title": "1.1 Release scope",
+        "id": "11-release-scope",
+        "level": 3
+      },
+      {
+        "title": "2. Feature coverage and SQLite adaptation",
+        "id": "2-feature-coverage-and-sqlite-adaptation",
+        "level": 2
+      },
+      {
+        "title": "3. Technical stack and responsibilities",
+        "id": "3-technical-stack-and-responsibilities",
+        "level": 2
+      },
+      {
+        "title": "4. Architecture",
+        "id": "4-architecture",
+        "level": 2
+      },
+      {
+        "title": "4.1 Control plane",
+        "id": "41-control-plane",
+        "level": 3
+      },
+      {
+        "title": "4.2 Data plane",
+        "id": "42-data-plane",
+        "level": 3
+      },
+      {
+        "title": "4.3 Deployment profiles",
+        "id": "43-deployment-profiles",
+        "level": 3
+      },
+      {
+        "title": "5. Repository structure",
+        "id": "5-repository-structure",
+        "level": 2
+      },
+      {
+        "title": "6. Database lifecycle and supported SQL",
+        "id": "6-database-lifecycle-and-supported-sql",
+        "level": 2
+      },
+      {
+        "title": "6.1 File layout and settings",
+        "id": "61-file-layout-and-settings",
+        "level": 3
+      },
+      {
+        "title": "6.2 Exposure contract",
+        "id": "62-exposure-contract",
+        "level": 3
+      },
+      {
+        "title": "6.3 Migrations and schema cache",
+        "id": "63-migrations-and-schema-cache",
+        "level": 3
+      },
+      {
+        "title": "7. Metadata model",
+        "id": "7-metadata-model",
+        "level": 2
+      },
+      {
+        "title": "8. Identity, authorization and RLS",
+        "id": "8-identity-authorization-and-rls",
+        "level": 2
+      },
+      {
+        "title": "8.1 Credential classes",
+        "id": "81-credential-classes",
+        "level": 3
+      },
+      {
+        "title": "8.2 Policy engine",
+        "id": "82-policy-engine",
+        "level": 3
+      },
+      {
+        "title": "9. Generated REST API",
+        "id": "9-generated-rest-api",
+        "level": 2
+      },
+      {
+        "title": "10. Generated GraphQL API",
+        "id": "10-generated-graphql-api",
+        "level": 2
+      },
+      {
+        "title": "11. Authentication",
+        "id": "11-authentication",
+        "level": 2
+      },
+      {
+        "title": "11.1 Social provider acceptance registry",
+        "id": "111-social-provider-acceptance-registry",
+        "level": 3
+      },
+      {
+        "title": "12. Realtime and database change events",
+        "id": "12-realtime-and-database-change-events",
+        "level": 2
+      },
+      {
+        "title": "12.1 Commit event source",
+        "id": "121-commit-event-source",
+        "level": 3
+      },
+      {
+        "title": "12.2 WebSocket protocol",
+        "id": "122-websocket-protocol",
+        "level": 3
+      },
+      {
+        "title": "13. Database webhooks and durable jobs",
+        "id": "13-database-webhooks-and-durable-jobs",
+        "level": 2
+      },
+      {
+        "title": "14. Storage, CDN and uploads",
+        "id": "14-storage-cdn-and-uploads",
+        "level": 2
+      },
+      {
+        "title": "14.1 Object contract",
+        "id": "141-object-contract",
+        "level": 3
+      },
+      {
+        "title": "14.2 Resumable uploads",
+        "id": "142-resumable-uploads",
+        "level": 3
+      },
+      {
+        "title": "14.3 Transformations and CDN",
+        "id": "143-transformations-and-cdn",
+        "level": 3
+      },
+      {
+        "title": "14.4 Analytics buckets",
+        "id": "144-analytics-buckets",
+        "level": 3
+      },
+      {
+        "title": "15. Backups, branches and replicas",
+        "id": "15-backups-branches-and-replicas",
+        "level": 2
+      },
+      {
+        "title": "15.1 Backups and restore",
+        "id": "151-backups-and-restore",
+        "level": 3
+      },
+      {
+        "title": "15.2 Branching",
+        "id": "152-branching",
+        "level": 3
+      },
+      {
+        "title": "15.3 Read replicas",
+        "id": "153-read-replicas",
+        "level": 3
+      },
+      {
+        "title": "16. AI, vector toolkit and RAG",
+        "id": "16-ai-vector-toolkit-and-rag",
+        "level": 2
+      },
+      {
+        "title": "16.1 Vector layer",
+        "id": "161-vector-layer",
+        "level": 3
+      },
+      {
+        "title": "16.2 Built-in AI API",
+        "id": "162-built-in-ai-api",
+        "level": 3
+      },
+      {
+        "title": "16.3 Studio AI Assistant",
+        "id": "163-studio-ai-assistant",
+        "level": 3
+      },
+      {
+        "title": "17. TypeScript and Deno functions",
+        "id": "17-typescript-and-deno-functions",
+        "level": 2
+      },
+      {
+        "title": "18. SDK, types and CLI",
+        "id": "18-sdk-types-and-cli",
+        "level": 2
+      },
+      {
+        "title": "18.1 JavaScript client",
+        "id": "181-javascript-client",
+        "level": 3
+      },
+      {
+        "title": "18.2 Type generation",
+        "id": "182-type-generation",
+        "level": 3
+      },
+      {
+        "title": "18.3 QB CLI",
+        "id": "183-qb-cli",
+        "level": 3
+      },
+      {
+        "title": "19. Management API and Terraform",
+        "id": "19-management-api-and-terraform",
+        "level": 2
+      },
+      {
+        "title": "20. Hosted MCP Server",
+        "id": "20-hosted-mcp-server",
+        "level": 2
+      },
+      {
+        "title": "21. Studio UI specification",
+        "id": "21-studio-ui-specification",
+        "level": 2
+      },
+      {
+        "title": "21.1 Visual system",
+        "id": "211-visual-system",
+        "level": 3
+      },
+      {
+        "title": "21.2 Studio tabs and flows",
+        "id": "212-studio-tabs-and-flows",
+        "level": 3
+      },
+      {
+        "title": "22. Security and isolation requirements",
+        "id": "22-security-and-isolation-requirements",
+        "level": 2
+      },
+      {
+        "title": "23. Observability and operational behavior",
+        "id": "23-observability-and-operational-behavior",
+        "level": 2
+      },
+      {
+        "title": "24. Performance and quality targets",
+        "id": "24-performance-and-quality-targets",
+        "level": 2
+      },
+      {
+        "title": "25. Testing and acceptance criteria",
+        "id": "25-testing-and-acceptance-criteria",
+        "level": 2
+      },
+      {
+        "title": "26. Implementation roadmap and dependencies",
+        "id": "26-implementation-roadmap-and-dependencies",
+        "level": 2
+      },
+      {
+        "title": "27. Configuration baseline",
+        "id": "27-configuration-baseline",
+        "level": 2
+      },
+      {
+        "title": "28. Required developer documentation",
+        "id": "28-required-developer-documentation",
+        "level": 2
+      },
+      {
+        "title": "29. Technical decisions to finalize at M0",
+        "id": "29-technical-decisions-to-finalize-at-m0",
+        "level": 2
+      },
+      {
+        "title": "30. Source notes and references",
+        "id": "30-source-notes-and-references",
+        "level": 2
+      }
+    ],
+    "text": "\n\n QB Flex — BaaS Platform Development Specification\n\nVersion: 1.0 • Date: 5 October 2026 • Status: proposed implementation baseline\n\n 1. Product definition\n\nQB Flex is a lightweight, self-hostable Backend as a Service for small applications, prototypes, internal tools, and early-stage products. It combines SQLite databases, generated APIs, authentication, realtime, storage, functions, and AI tooling behind a dark monochrome Studio.\n\nThe product should offer the convenience of Supabase while using Bun and SQLite as its core. It is a separate platform with its own APIs, SDK, CLI, and security semantics. Supabase interoperability is an explicitly scoped adapter project; neither its CLI nor its PostgreSQL wire protocol works automatically with QB Flex.\n\nPrimary goals: provision a project in minutes; create tables visually or through migrations; generate typed REST and GraphQL access; protect every user-facing data path; provide straightforward backups and local development; keep a single-node installation operationally small.\n\nInitial scale assumptions: one writable SQLite database per project branch, local persistent SSD, one active database owner per branch, bounded write workloads, and one primary region. Higher traffic is addressed through independent project placement, read scaling, and quotas rather than simultaneous writers to one file.\n\nTerminology: an organization owns projects; a project owns branches; each branch is an isolated database environment. Platform operators and project developers are control-plane identities. Application end users belong to a project authentication realm. A project role is not an application user role.\n\n 1.1 Release scope\n\n- P0 — foundation/MVP: organizations, projects, primary branches, SQLite lifecycle, migrations, table editor, generated REST, application RLS, email/password auth, initial social providers, realtime row events, basic S3 storage, TypeScript SDK, CLI, audit logs, backups.\n- P1 — complete small-project BaaS: GraphQL, magic links/OTP, 20+ certified social connectors, phone auth, CAPTCHA, webhooks, presence/broadcast/binary channels, resumable uploads, image transforms, snapshot branching, AI inference/vector search, isolated Bun functions, hosted MCP.\n- P2 — advanced platform: SSO, OAuth identity provider, read replicas, CDN integration, analytics buckets, RAG workflows, Deno functions, regional placement, Terraform provider, advanced Studio assistant.\n\nThese are delivery phases, not removal of requested scope. Feature flags and the Management API must expose availability and experimental status accurately.\n\n 2. Feature coverage and SQLite adaptation\n\n| Requested feature | QB Flex implementation | Phase / qualification |\n| --- | --- | --- |\n| Full SQLite database | Native SQLite SQL, transactions, indexes, triggers, views, FTS5 where built in; owner SQL console | P0; API exposure is a supported subset |\n| Auto REST API | Schema registry generates validated CRUD/query routes | P0 |\n| Auto GraphQL API | Generated types, relations and mutations using the same query/policy engine | P1 |\n| RLS | Default-deny application policy compiler and transaction enforcement | P0; not native SQLite RLS |\n| Database webhooks | Transactional event outbox, signed asynchronous delivery | P1 |\n| Read replicas | Versioned consistent read-only snapshots first; incremental replication adapter later | P2; eventual consistency |\n| Database branching | Consistent snapshot fork plus branch-specific metadata/configuration | P1; no automatic data merge |\n| Password, magic link, OTP | Better Auth integration with project-isolated realms and delivery adapters | P0 password; P1 link/OTP |\n| Social login, 20+ | Registry of tested OAuth/OIDC provider adapters | P1; credentials/configuration required |\n| SSO and phone auth | Enterprise OIDC/SAML adapter and SMS verification adapter | P2 SSO; P1 phone |\n| OAuth 2.1 identity provider | Dedicated authorization server configuration and consent UI | P2 |\n| CAPTCHA | Pluggable challenge verification on abuse-sensitive endpoints | P1 |\n| Postgres change listeners | Native SQLite transaction change stream | P0; optional external Postgres ingestion in P2 |\n| Broadcast, presence, binary | Authorized WebSocket channels, heartbeat leases, bounded binary frames | P1 |\n| Granular channels | Join/read/write/presence permissions, quotas, retention settings | P1 |\n| S3-compatible storage | QB metadata/policies plus S3-compatible object backend | P0 |\n| Global CDN | Optional CDN origin adapter; signed private access and public immutable caching | P2; requires CDN infrastructure |\n| Image transformations | Isolated Sharp-based processing and derivative cache | P1 |\n| Resumable uploads | tus-compatible gateway mapped to multipart object uploads | P1 |\n| Analytics buckets | Separate append-only usage/event objects with manifests and scheduled aggregates | P2; not object-store queries by default |\n| pgvector embeddings | SQLite vector adapter, initially sqlite-vec candidate | P1; pgvector requires PostgreSQL |\n| Inference, semantic search, RAG | Provider gateway, embedding collections, ingestion jobs and permission-aware retrieval | P1/P2 |\n| Ollama, Llamafile | Operator-configured HTTP model adapters | P1; inference runs outside API process |\n| OpenAI, LangChain | OpenAI provider adapter and documented LangChain integration | P1 |\n| Global TypeScript/Deno functions | Region-pinned isolated Bun workers; optional separate Deno runtime | P1 Bun / P2 Deno; deployment infrastructure required |\n| NPM modules | Build-time dependency resolution, lockfiles, runtime-specific compatibility checks | P1 |\n| Region pinning | Project placement registry and regional worker routing | P2 |\n| Built-in AI API | Unified inference, embeddings and retrieval routes | P1 |\n| Supabase CLI | New qb CLI; migration guidance and optional import adapter | P0 CLI; not drop-in compatible |\n| Management API | Versioned organization/project/configuration lifecycle API | P0 |\n| Terraform provider | Provider over Management API, async operations and drift detection | P2 |\n| MCP Server | Hosted Streamable HTTP MCP with scoped browser OAuth | P1 |\n| Studio tabs | Database, Auth, APIs, Realtime, Storage, Functions, AI, Logs, Settings | Progressive across phases |\n\n 3. Technical stack and responsibilities\n\n| Layer | Technology | Responsibility |\n| --- | --- | --- |\n| Toolchain | Bun, TypeScript, Bun workspaces | Runtime, installation, scripts, builds and unit tests |\n| Studio | TanStack Start | React application, routes, loaders and server rendering |\n| Remote state | TanStack Query | Management requests, job polling, cache invalidation |\n| Table UI | TanStack Table | Virtualized database grids, sorting, selection and column controls |\n| Forms | TanStack Form | Schema-driven editors and validation |\n| UI state | TanStack Store | Project/branch selection, panels and non-server transient state |\n| Reactive collections | TanStack DB | Selected Studio collections and live derived queries; not the server database |\n| API | Elysia | REST, authentication middleware, WebSocket gateway and management routes |\n| GraphQL | GraphQL Yoga candidate mounted under Elysia | Generated schema, execution limits, resolver integration; validate Bun interoperability |\n| Persistence | bun:sqlite | Prepared SQL, project databases and control-plane metadata |\n| Auth | Better Auth candidate | Password/session/provider mechanisms with explicit tenant isolation |\n| UI | ShadCN UI, Tailwind | Accessible primitives and theme tokens |\n| UI references | bklit.com, blocks.so, Supabase Library | Selected dashboards, forms and AI UI patterns, adapted to QB branding |\n| Object storage | S3-compatible backend | MinIO/S3/R2-style adapter contract, tested per backend |\n| Image pipeline | Sharp candidate | Bounded transforms outside request event loop |\n| Vector search | sqlite-vec candidate | Extension-backed similarity search behind interchangeable adapter |\n| Telemetry | OpenTelemetry + structured logs | Request traces, metrics and job diagnostics |\n\nUse pinned compatible versions and a committed Bun lockfile. Resolve exact releases during the initial compatibility spike; this document does not prescribe unverified future version numbers. Verify SSR, GraphQL, native extensions, auth adapters and image binaries together on the production Linux image.\n\nTanStack DB is a client reactive collection layer. MVP uses Query for requests; DB collections are introduced only where live joins or optimistic interactions justify them. Cache ownership must be explicit so Query and DB do not independently mutate the same canonical collection.\n\nUI reference libraries are optional copied/adapted components, not mandatory infrastructure dependencies. Confirm component licenses, accessibility, React compatibility, SSR behavior and bundle size before adoption. bklit.com could not be inspected during preparation; treat it as a requested design reference pending review.\n\n 4. Architecture\n\n\nflowchart TD\n  Clients[\"Studio, SDK, CLI and AI clients\"] -- Gateway[\"TLS gateway and project routing\"]\n  Gateway -- Control[\"Management API and platform auth\"]\n  Gateway -- Data[\"Project API, auth and realtime\"]\n  Control -- Catalog[\"Control SQLite and encrypted config\"]\n  Data -- Engine[\"Policy and query engine\"]\n  Engine -- Owner[\"Branch database owner\"]\n  Owner -- SQLite[\"Branch SQLite and transaction outbox\"]\n  SQLite -- Jobs[\"Durable job workers\"]\n  Data -- Storage[\"Storage policy gateway\"]\n  Storage -- Objects[\"S3 backend\"]\n  Jobs -- Extensions[\"Webhooks, AI and isolated functions\"]\n\n\n 4.1 Control plane\n\nManages organizations, memberships, projects, routing, region placement, branch lifecycle, keys, billing-ready quotas, operations and audit trails. Control-plane credentials never serve as end-user sessions. Initial deployment uses one control SQLite file with backups; an adapter boundary permits later migration if platform metadata concurrency outgrows SQLite.\n\n 4.2 Data plane\n\nEach branch has its own SQLite file and its own execution owner. API instances route work to that owner through internal authenticated IPC/RPC. MVP can colocate owner and API; production multi-node deployment must preserve ownership, fencing and authentication. Separate projects can live on different nodes.\n\nKeep database handles in bounded worker processes or Bun workers. Synchronous SQLite execution must not block the shared API event loop. Use queue depth limits, query deadlines, cancellation/worker termination strategy, bounded result streaming and a capped connection cache. Confirm SQLite interrupt support in the selected runtime; if unavailable, terminate isolated query workers and recover safely.\n\n 4.3 Deployment profiles\n\n1. Local: one CLI-managed stack with Studio, API, worker and local S3 backend.\n2. Single node: reverse proxy, Studio, API/database owner, jobs and persistent volumes; optional external SMTP, S3 and inference services.\n3. Regional: control service plus region-specific owners, functions and storage adapters; each writable branch still has one primary.\n\nDo not mount one WAL database across nodes or network filesystems. Durable local disks plus explicit replication/backup are required. Failover requires old-owner fencing before new-owner activation.\n\n 5. Repository structure\n\n\nqb-flex/\n  apps/\n    studio/                  TanStack Start\n    api/                     Elysia control/data endpoints\n    worker/                  Durable jobs and outbox delivery\n    function-runner/         Isolated function supervisor\n    cli/                     qb CLI\n    mcp/                     Hosted MCP transport and tools\n  packages/\n    contracts/               Shared schemas, errors, API versions\n    database/                SQLite lifecycle and ownership\n    schema/                  Introspection and schema registry\n    query-engine/            Validated query AST and SQL compiler\n    policies/                Policy parser/compiler/evaluator\n    auth/                    Platform/project auth adapters\n    realtime/                Channels and event protocol\n    storage/                 S3/tus/transformation adapters\n    ai/                      Providers, vector adapters, RAG\n    functions/               Build/deploy/runtime contracts\n    sdk-js/                  @qb-flex/client\n    sdk-react/               Optional Query/DB bindings\n    management-client/       Typed management SDK\n    ui/                      QB components and tokens\n    observability/\n  providers/terraform/\n  migrations/control/\n  templates/project/\n  tests/{integration,security,e2e,load,fixtures}/\n  infra/{docker,compose,terraform-examples}/\n  docs/\n\n\nPackages import contracts rather than application internals. The policy/query engine is a single implementation shared by REST, GraphQL, vector retrieval and user-scoped function calls. Keep third-party providers behind interfaces.\n\n 6. Database lifecycle and supported SQL\n\n 6.1 File layout and settings\n\nUse opaque server-generated IDs and canonical validated paths: /data/projects/project-id/branches/branch-id/main.sqlite. Never derive file paths directly from a user slug. Keep control data outside project files. Authentication and storage metadata use reserved _qb_ tables within the project branch where transactional coordination is needed.\n\nDefault connection initialization:\n\n\nPRAGMA journal_mode = WAL;\nPRAGMA foreign_keys = ON;\nPRAGMA synchronous = FULL;\nPRAGMA busy_timeout = 5000;\n\n\nVerify returned settings on every connection. FULL is the durable default; NORMAL may be an explicit operator tradeoff. Busy timeout is bounded waiting, not a throughput solution. Monitor checkpoints, WAL growth, free disk and long readers. Allocate per-project writer queues; expose saturation with a retriable error rather than unbounded waiting.\n\n 6.2 Exposure contract\n\nIntrospect sqlite_schema, column/index/foreign-key PRAGMAs and migration records. Store exposure metadata separately from physical schema. Tables are private until deliberately exposed with policies. Public CRUD requires stable primary keys; define composite-key encoding. FTS/vector/virtual tables and views require explicit read adapters. Views are private by default because underlying row policies do not automatically apply. Arbitrary triggers, SQL console and migrations are trusted developer operations; they are not available to application users.\n\nRepresent booleans as validated 0/1, timestamps as UTC ISO strings or an explicitly selected integer convention, JSON as validated text and blobs as base64 or separate binary endpoints. Return 64-bit integers outside JavaScript's safe range as strings. Document nullability, defaults, generated columns and numeric precision in generated types.\n\n 6.3 Migrations and schema cache\n\nEach migration has ID, checksum, author, applied time, schema version and status. Reject edited applied checksums. Preflight SQL and backup before destructive changes. Apply migrations under an exclusive branch maintenance lock and a SQLite transaction where supported. Table-rebuild migrations copy, validate, swap and regenerate managed triggers atomically. No automatic destructive rollback; restore or apply a forward migration.\n\nAfter commit, publish a monotonic schema version. Regenerate API metadata, GraphQL schema and type declarations; invalidate prepared statements and realtime/table caches. Requests carry or resolve a coherent schema version. DDL bypassing the migration API is detected and marks the schema stale until reconciled.\n\n 7. Metadata model\n\nIDs use opaque UUIDs; creation/update times use UTC. Foreign keys and uniqueness constraints are mandatory. Sensitive fields use encrypted envelopes referencing an operator-managed key; secret hashes are used where plaintext recovery is unnecessary.\n\n| Store | Entities and important fields |\n| --- | --- |\n| Control | organizations(id,name), memberships(org_id,user_id,role), projects(id,org_id,slug,status,region,quotas_json) |\n| Control | branches(id,project_id,parent_id,owner_node,generation,schema_version,status), operations(id,type,status,progress,error) |\n| Control | project_keys(id,project_id,scope,hash,prefix,expires_at,revoked_at), secret_versions(id,project_id,name,ciphertext) |\n| Control | backups(id,branch_id,checksum,object_key,created_at,retention_until), replicas(id,branch_id,applied_version,lag,status) |\n| Control | audit_events(id,actor,project_id,action,resource,result,request_id,time) |\n| Branch | _qb_schema_exposure(table_name,enabled,allowed_columns,relations_json,schema_version) |\n| Branch | _qb_policies(id,resource,operation,roles,using_ast,check_ast,version,enabled) |\n| Branch | Auth adapter-owned users, sessions, identities, verification challenges and MFA tables under reserved names |\n| Branch | _qb_outbox(seq,tx_id,table_name,operation,pk_json,old_json,new_json,schema_version,created_at) |\n| Branch | _qb_webhooks(id,filter_json,url,secret_ref,enabled), _qb_deliveries(id,event_seq,status,attempts,next_attempt,lease_until) |\n| Branch | _qb_channels(id,topic_pattern,permissions_json,limits_json); ephemeral presence kept separately |\n| Branch | _qb_buckets(id,name,visibility,max_size,mime_rules,policy_version), _qb_objects(id,bucket_id,key,owner_id,size,etag,state) |\n| Branch | _qb_uploads(id,object_id,backend_upload_id,offset,status,expires_at) |\n| Branch | _qb_jobs(id,type,payload,status,attempts,lease_until,idempotency_key) |\n| Branch | _qb_functions(id,name,runtime,region,active_version), _qb_function_versions(id,artifact_key,hash,permissions_json) |\n| Branch | _qb_ai_providers(id,type,secret_ref,allowed_models), _qb_collections(id,model,dimensions,distance,policy_resource) |\n| Branch | _qb_documents(id,collection_id,source_ref,owner_id,version,status) and chunks linked to vector rows |\n\nAdd indexes for scoped lookups, expiry cleanup, queue claim order and ownership filters. Prevent public API access to reserved tables. Large payloads and detailed logs belong in bounded log/object stores, not indefinitely in the branch database.\n\n 8. Identity, authorization and RLS\n\n 8.1 Credential classes\n\n- Platform session: Studio and organization administration, with owner/admin/developer/viewer roles.\n- Publishable project key: identifies project; it does not grant unrestricted data access.\n- End-user session/access token: project-bound user identity with validated issuer, audience, expiry and signing key.\n- Secret service key: server-only explicitly scoped capability; bypass is opt-in, auditable and prohibited in browser bundles.\n- Management token: granular project/org operations; never accepted as an application session.\n- MCP OAuth token: tool scopes and selected projects; never inherits unlimited organization access.\n\nKeys support rotation, expiry and revocation. Store hashes of opaque API keys, show plaintext once, rate-limit by credential and never log secrets. For browser sessions use HttpOnly, Secure cookies, controlled SameSite settings and CSRF protections. Bearer SDK sessions must have documented secure storage guidance. CORS origins and auth redirect URLs are per-project allowlists.\n\n 8.2 Policy engine\n\nSQLite does not provide PostgreSQL-style native RLS. QB Flex enforces policies at all exposed execution boundaries; trusted direct access to the database file bypasses this layer. Do not market file-level isolation as row authorization.\n\nPolicies use a restricted JSON AST, not arbitrary JavaScript or user SQL. Supported expressions include boolean operations, comparisons, null checks, membership and approved relationship existence checks. Claims are verified and server-supplied. Identifiers come from schema allowlists; all values use parameter bindings.\n\nPolicy combination rule: default deny; matching permissive policies are ORed, restrictive policies are ANDed, with at least one applicable permissive grant required. Roles are fixed by verified identity or trusted membership resolution.\n\n- SELECT applies USING before filtering, joins, aggregation, counts and pagination.\n- INSERT applies WITH CHECK to every prospective row after defaults and before commit.\n- UPDATE requires old-row USING and new-row WITH CHECK; protect ownership/tenant columns against unauthorized reassignment.\n- DELETE requires old-row USING; event delivery must not leak deleted row content.\n- Upsert checks both insert and conflict-update paths. RETURNING obeys readable-column and row permissions.\n\nWrites run inside one owner transaction so authorization and mutation cannot race. Privileged SQL-trigger behavior is treated as trusted schema logic; prevent triggers from rewriting protected values or validate actual final rows before commit. Gate unsupported trigger patterns on exposed tables. Public RPC is limited to reviewed named operations with declared policy context; never expose arbitrary SQL.\n\nGraphQL relations, batched CRUD, realtime, storage, vector retrieval, functions and AI tools must use the same authorization model. Disable public aggregate capabilities that reveal inaccessible rows or hidden columns. A policy test UI evaluates fixtures under explicit simulated identities without minting unrestricted user tokens.\n\n 9. Generated REST API\n\nBase: /v1/projects/{projectId}/branches/{branchId}. SDK resolves a configured branch endpoint; production defaults to an explicit primary alias. No implicit branch from untrusted headers without validation.\n\n| Route | Behavior |\n| --- | --- |\n| GET /data/{table} | Authorized select, projection, filters, ordering and cursor |\n| POST /data/{table} | Insert one or bounded batch; atomic by default |\n| PATCH /data/{table}/{key} | Validated partial update, optional optimistic version check |\n| DELETE /data/{table}/{key} | Authorized delete |\n| POST /data/{table}/query | Structured advanced query AST |\n| POST /rpc/{operation} | Explicitly registered operation |\n| GET /schema | Public exposed metadata, excluding sensitive configuration |\n| GET /openapi.json | Generated versioned API definition |\n\nFilters: equality/inequality, ranges, null checks, bounded in, and approved text search. Relations come only from registry metadata. No raw SQL fragments. Identifiers are escaped after allowlist validation; values are parameterized. Default page 50, maximum 500, batch maximum 100 rows and configurable query complexity limits.\n\nUse keyset pagination with a unique tiebreaker; opaque signed cursors bind filters, identity scope and schema version. Explicitly document that cursors do not establish a cross-request database snapshot. Offset pagination is optional for small Studio grids.\n\nSuccess envelope: { data, meta: { requestId, schemaVersion, cursor, consistencyToken } }. Error envelope: { error: { code, message, details, requestId, retryable } }. Strip SQL, internal paths and secrets from public errors. Use 400 validation, 401 invalid identity, 403 denied operation, 404 missing/invisible resources, 409 conflict, 413 size, 429 quota and 503 owner unavailable. Avoid exposing whether a denied row exists.\n\nMutations accept idempotency keys scoped to credential, branch and operation; persist request hash and committed response in the same transaction. Reusing a key with different content returns 409. Conditional updates use an explicit revision column or server-managed revision rather than timestamp equality.\n\n 10. Generated GraphQL API\n\nEndpoint: POST /graphql. Generate types only for supported exposed objects. Use custom JSON, DateTime, Bytes and BigInt scalars; SQLite does not imply PostgreSQL GraphQL semantics. Generate paginated connections, allowlisted filter inputs and named mutations. Foreign-key relationships use batched resolvers and the shared policy engine.\n\nLimits: maximum depth 8, configurable complexity budget, bounded aliases and page sizes, request/body/time limits, per-request DataLoader caches keyed by user and branch. Disable unrestricted introspection in production by configuration; developers can use authenticated schema tooling. Persisted operations are an optional production mode.\n\nSchema changes are versioned; clients regenerate types on breaking changes. Realtime stays on the QB channel protocol initially. GraphQL subscriptions are a later transport adapter, not a second event source. REST and GraphQL must return equivalent authorized results for equivalent queries.\n\n 11. Authentication\n\nIntegrate Better Auth through a project adapter only after proving database and cookie/session isolation. Use a separate platform realm and branch-aware application realm. Do not put all project end users in an unscoped shared auth table. External provider credentials and delivery keys are encrypted and bound to the realm.\n\nImplement registration, email verification, login/logout, password reset, session listing/revocation, account linking and optional MFA. Use the library's reviewed password hashing, verification and session mechanisms; never implement custom cryptography. Token signing keys support kid, rotation and overlap. Project and branch audiences must be checked on every route.\n\nMagic links and OTPs are single-use, hashed, short-lived and bound to intent. Set resend cooldowns, attempt limits and enumeration-resistant responses. SMS delivery requires an operator-configured provider and spending caps. Phone number changes require verification and sensitive-action reauthentication. Account linking requires verified provider identities and explicit confirmation; email equality alone is insufficient.\n\n 11.1 Social provider acceptance registry\n\nTarget at least 20 certified connectors: Google, GitHub, Microsoft Entra ID, Apple, Facebook, Discord, GitLab, LinkedIn, Slack, Spotify, Twitch, X, Reddit, Dropbox, Box, Atlassian, Notion, LINE, Kakao and Naver. This is a product target, not a claim of native support in one library. Use built-in or generic OAuth/OIDC adapters where possible; unsupported protocols need separately reviewed connectors. Every connector must pass redirect, state/nonce, PKCE where supported, callback failure, verified email, linking and revocation tests. Availability depends on provider registration, permissions and commercial requirements.\n\nSSO adds organization discovery, OIDC/SAML connection configuration, verified domains, enforced login and safe just-in-time provisioning. SCIM is optional future scope. OAuth identity provider adds registered clients, authorization-code + PKCE flow, exact redirect matching, consent, discovery/JWKS, revocation, audience-bound tokens and scoped access; avoid password/implicit grants. CAPTCHA is provider-pluggable and verified server-side.\n\n 12. Realtime and database change events\n\n 12.1 Commit event source\n\nInstall managed INSERT/UPDATE/DELETE triggers on exposed ordinary tables to insert outbox events in the same SQLite transaction. Rollback removes events. Triggers capture primary keys and bounded permitted images; blobs/oversized columns are omitted or referenced. Outbox tables have no recursive capture triggers. Managed trigger regeneration is part of migrations.\n\nDurable consumers poll committed events using a branch-local sequence. At-least-once delivery is expected; event IDs enable deduplication. Transaction IDs preserve grouping; order is defined within one branch, not across projects. Direct trusted SQL changes are captured only on tables with installed triggers. Changes on unsupported virtual tables require explicit adapter events.\n\nThis stream replaces the requested PostgreSQL listener for QB-native databases. A future external PostgreSQL connector can ingest logical changes, but is optional and not required to operate SQLite.\n\n 12.2 WebSocket protocol\n\nEndpoint /realtime; versioned envelopes include type, channel, ref, eventId and payload. Operations: join, leave, broadcast, presence-update, database-subscribe, ack and error. Reauthenticate on token refresh/expiry; reevaluate channel membership on revocation or policy changes.\n\nAuthorize database events under current identity and policy. Insert/update snapshots require readable new rows. Updates moving a row out of visibility may emit an authorized removal notification containing only previously authorized keys. Delete old images never go to users lacking permission. Replay uses current permissions and schema version; expired cursors return RESYNC_REQUIRED. Clients then query an authorized snapshot and resume with a server-issued cursor boundary to prevent missed changes.\n\nPresence is ephemeral heartbeat state with per-connection IDs, user aggregation, TTL and disconnect grace. Broadcasting is ephemeral by default, acknowledged acceptance does not mean every subscriber received the message. Durable messages belong in application tables.\n\nDefault limits: 64 KiB event/frame, heartbeat 25 seconds, lease 75 seconds, 100 joined channels per connection and bounded outbound buffers. Binary frames have an authenticated/versioned header and obey the same channel checks. Slow clients are disconnected with resumable data-event cursors; binary broadcasts have no replay guarantee.\n\nMulti-node fan-out requires an optional broker and shared presence coordination. Until that adapter exists, route branch channels to one realtime owner and advertise single-node semantics.\n\n 13. Database webhooks and durable jobs\n\nCreate webhook subscriptions for tables and operations with reviewed payload projection. Queue deliveries only after transaction commit. Sign the exact body using HMAC with timestamp and event ID; publish receiver verification instructions. Support secret rotation with an overlap window.\n\nDelivery policy: bounded exponential backoff with jitter, maximum 10 attempts over 24 hours, per-hook concurrency cap, timeout, dead-letter queue and manual replay. Receivers must deduplicate event IDs. Claim jobs atomically using leases, expire abandoned claims and record attempts. Jobs must be idempotent around external effects.\n\nBlock SSRF targets: loopback, link-local, metadata endpoints, private addresses by default, unsupported schemes and redirects to blocked destinations. Revalidate DNS and connection destination. Explicit operator allowlists enable internal targets when required. Redact request credentials and response secrets from logs.\n\n 14. Storage, CDN and uploads\n\n 14.1 Object contract\n\nBuckets have public/private visibility, allowed MIME types, per-object size limits, retention and policies. Store object metadata in SQLite; bytes stay in S3. Object keys are project/branch scoped and normalized. Do not expose raw backend credentials. Authorized upload intents issue short-lived URLs limited to one object, size and content constraints supported by the backend.\n\nObjects transition pending → uploading → verifying → ready or failed. Finalization checks backend existence, expected size/checksum and content validation before publishing metadata. SQLite and S3 are not one atomic transaction: use retryable workflows and orphan cleanup. Deletes use tombstones and retryable backend cleanup. Downloads require ready state and current policy.\n\n 14.2 Resumable uploads\n\nExpose tus-compatible creation, offset reads and chunk writes. Bind upload sessions to user/project/object, authenticate each request and expire abandoned sessions. Adapter maps chunks to S3 multipart uploads with backend minimum part sizes. Persist offsets only after bytes are durable; prevent concurrent offset races. Stream bodies with bounded memory and backpressure. Checksums, resume after restart and multipart abortion are release gates.\n\n 14.3 Transformations and CDN\n\nTransformation API allows bounded width/height, fit, quality and approved formats; rejects arbitrary commands and remote URLs. Detect dimensions before decoding, cap pixel count, strip metadata and use isolated workers with CPU/memory/time limits. Cache derivatives by source version plus canonical transform settings.\n\nPublic immutable objects can use long CDN TTLs. Private objects require edge token verification or short-lived signed access whose expiry governs cache behavior. Never share cached private content across users without authorization. Policy revocation and cache purge behavior must be documented; private authorization should be evaluated at delivery for immediate revocation.\n\nGlobal CDN is an optional provider integration, not a property of SQLite or S3 compatibility. Show CDN provider status, region availability, cache hits and purge failures.\n\n 14.4 Analytics buckets\n\nStore append-only sanitized events as compressed partitioned objects with manifests. Aggregate usage in scheduled jobs into SQLite summaries for Studio. Optional columnar query adapter can be added later. Separate platform usage analytics from application events; define schemas, retention, consent configuration and project-specific access. Do not write sensitive row payloads into usage analytics.\n\n 15. Backups, branches and replicas\n\n 15.1 Backups and restore\n\nUse a tested SQLite online backup or consistent snapshot mechanism, not copying only a live main file while WAL contains commits. Encrypt backup objects, checksum contents and persist schema/configuration manifests. Proposed defaults: daily full snapshots, 7 daily and 4 weekly copies; retention is operator-configurable.\n\nRestore into a new isolated branch first, run integrity/foreign-key checks and compare expected migration/schema versions. Switching production traffic requires an explicit cutover operation, rollback checkpoint and old-owner fencing. Auth/session and secret restore behavior must be visible. Database snapshots do not restore object bytes unless object-version backups are enabled.\n\nMVP recovery objective target: RPO 24 hours and RTO 60 minutes on the reference dataset, verified by drills. Continuous recoverable replication/backup is a P2 adapter with separately measured objectives. The API outbox alone is not sufficient for point-in-time recovery of every SQLite operation.\n\n 15.2 Branching\n\nFork creates a consistent database snapshot, new identity/endpoints and independent policies/configuration. Default development branches exclude active sessions, production secrets, webhook destinations and scheduled jobs; auth users are excluded or explicitly sanitized. Storage metadata refers to immutable source objects read-only or copies selected objects through a declared operation. Branch writes always use a separate object prefix.\n\nStates: requested, snapshotting, validating, provisioning, ready, failed, deleting. Operations are idempotent and resumable. Branch TTL and disk quotas prevent forgotten copies. Promotion applies reviewed schema migrations to primary; it does not merge arbitrary divergent data. Offer schema diff/export; automatic bidirectional data merge is out of initial scope.\n\n 15.3 Read replicas\n\nP2 baseline replicas are asynchronously refreshed consistent snapshots, reporting applied generation and age. This provides read offload, not low-latency streaming replication. For incremental replicas, choose and certify an SQLite-specific replication engine before promising latency or automatic failover; do not manually copy live WAL files between running owners.\n\nClients choose primary or eventual; writes always route to primary. Read-after-write uses primary or waits for a verified consistency token within a timeout. If policy/auth/configuration freshness cannot be guaranteed, route protected reads to primary; stale replicas must not honor revoked access. Region placement and replica residency are explicit. Never allow a read replica to become writable without owner fencing and recovery validation.\n\n 16. AI, vector toolkit and RAG\n\n 16.1 Vector layer\n\nProvide VectorAdapter operations for collection creation, upsert, delete and filtered nearest-neighbor query. sqlite-vec is a candidate requiring a Bun extension-loading, platform packaging and performance spike. Fallback exact search is allowed only for capped small collections and must be labeled. pgvector cannot run inside SQLite; an optional PostgreSQL adapter would be a separate backend.\n\nCollections pin embedding provider/model/version, dimensions, distance metric and normalization. Enforce dimensions and reject mixed models. Index/version changes trigger re-embedding jobs. Store document metadata and ACLs alongside chunks; embeddings link to stable chunk IDs.\n\nPermission filtering must occur before ranking/limit over unauthorized content, or use a bounded authorization-aware search strategy with correctness guarantees. Never fetch unrestricted chunks into a prompt and filter afterward. Delete/revocation must invalidate retrieval caches. Search returns source references, score and embedding version; thresholds are model-specific.\n\n 16.2 Built-in AI API\n\n| Route | Contract |\n| --- | --- |\n| POST /ai/chat | Authorized model selection, streaming chat and usage accounting |\n| POST /ai/embeddings | Bounded embedding batches and dimensions metadata |\n| POST /ai/search | Policy-aware vector/text retrieval |\n| POST /ai/rag | Retrieval + grounded generation with source references |\n| GET /ai/models | Configured/allowed model capabilities and availability |\n| POST /ai/ingestions | Async document ingestion; returns operation ID |\n\nProviders: OpenAI, configured Ollama HTTP, configured Llamafile HTTP and an OpenAI-compatible adapter. Validate capabilities rather than assume every provider supports tools, JSON outputs or embeddings. Llamafile/Ollama hosting, GPU capacity and model licensing are operator concerns exposed through configuration. Provider URLs are operator-controlled, not arbitrary user-supplied fetch targets.\n\nRAG pipeline: authorized upload/source selection → malware/type checks → isolated extraction → chunking → embeddings → transactional metadata publication → retrieval → prompt assembly → streamed inference. Track document version, job status, retryability and citations. Quotas cover tokens, concurrent streams, ingestion bytes and provider spend. Handle cancellation and partial streams without double charging.\n\nLangChain integration is an example adapter using QB APIs for retriever/vector-store operations; it is not required inside the core server. Implement a provider-neutral SDK surface and optional OpenAI-compatible subset with documented deviations.\n\n 16.3 Studio AI Assistant\n\nAssistant context includes selected schema, sanitized query errors and documentation. It may explain SQL, propose migrations, generate policies and diagnose validation errors. Show proposed diffs and affected resources before executing writes. Use user-scoped tools, current branch permissions and audit logs; never silently attach service keys.\n\nRow values are excluded from AI requests unless explicitly included. Treat retrieved documents, SQL comments and tool results as untrusted instructions. Model output does not determine authorization. Destructive SQL, policy changes and production deploys require a visible deliberate execution action. Cancellation, provider timeout, contextual error recovery and source links are first-class UI states.\n\n 17. TypeScript and Deno functions\n\nDeploy versioned TypeScript functions with HTTP and async-event triggers. Bun is the default; Deno runs through a separate optional runner. NPM support is evaluated per runtime and dependency; native addons and Node APIs are not universally portable.\n\nBuild pipeline: upload source → resolve locked dependencies → isolate build → scan/configuration checks → bundle → hash/store artifact → deploy immutable version → health check → switch alias. No dependency installation on an invocation path. Keep previous versions for rollback.\n\nRun untrusted functions in per-project/version containers with unprivileged UID, read-only root, bounded CPU/memory/time/concurrency, no host filesystem or Docker socket, scoped secrets and controlled egress. A shared JavaScript isolate alone is not sufficient tenant security. For mutually untrusted public tenants, add a hardened sandbox/microVM boundary or keep hosting restricted until isolation is validated.\n\nProposed defaults: 10-second HTTP execution, 256 MiB memory, 1 MiB request, 5 MiB response and 10 concurrent invocations per project; async workloads use separate limits. Stream responses when supported and stop work on cancellation. User-invoked functions inherit user context by default; privileged service capability must be explicitly assigned and audited.\n\nRegion pinning binds function, project database and sensitive storage to permitted regions. Global invocation routes to the pinned region; it does not imply writable databases everywhere. External AI/email providers may process data elsewhere and must be displayed. Scheduled jobs use durable deduplication and at-least-once semantics.\n\n 18. SDK, types and CLI\n\n 18.1 JavaScript client\n\nPublish @qb-flex/client, with an optional @qb-flex/react package. Support browser, Bun, Node-compatible consumers and React Native through tested adapters. Keep keys server-only where appropriate. The client exposes database, auth, realtime, storage, functions and AI modules.\n\nIllustrative target API, not existing implementation:\n\n\nimport { createClient } from '@qb-flex/client'\nimport type { Database } from './qb-flex.types'\n\nconst qb = createClientDatabase({\n  url: 'https://flex.example.com',\n  projectId: 'project-id',\n  branch: 'primary',\n  publishableKey: 'qb_pk_example',\n})\n\nconst result = await qb.from('tasks')\n  .select(['id', 'title', 'completed'])\n  .eq('completed', false)\n  .limit(50)\n\nconst channel = qb.channel('project:123')\nchannel.on('database', { table: 'tasks', event: '' }, handleChange)\nawait channel.subscribe()\n\n\nUse a transport abstraction with timeout, AbortSignal, request IDs and normalized errors. Retry safe reads and explicitly idempotent writes only. Token refresh is single-flight. Realtime reconnect includes jitter, resume and resync handling. React Native secure session persistence and background reconnect require adapters; initial SDK does not promise offline writes or background synchronization.\n\n 18.2 Type generation\n\nGenerate row/insert/update types, nullable relationships, enums represented by explicit metadata/check constraints, bigint conventions and registered RPC signatures. RPC types come from operation declarations; SQLite lacks PostgreSQL SETOF typing. Invalid table names, selected fields and RPC argument names should fail compile-time tests. Runtime validators remain mandatory.\n\nSchema artifacts contain a hash/version. CI compares generated output with migration state. Relationship inference uses foreign keys plus explicit registry declarations; do not infer arbitrary views or dynamic SQL return types. Maintain packages in one monorepo for consistent errors and versioning, while keeping package exports modular.\n\n 18.3 QB CLI\n\nCommands: qb init, dev, login, link, projects list/create, db migrate/diff/reset/export/import, types generate, branches create/list/delete, functions deploy/logs, secrets set, storage sync, backup create/restore, and mcp config.\n\nCI supports scoped noninteractive tokens, JSON output and stable exit codes. Interactive destructive operations show branch/project and consequences; automated operations require explicit flags. Never reset remote primary through the local reset default. Store credentials in OS secure storage where possible; support environment tokens without printing them.\n\nSupabase migration tooling may import supported SQL/data through a conversion report. Flag unsupported PostgreSQL extensions, roles, functions, schemas, types, policies and auth differences; never silently drop them. Supabase CLI commands are not promised compatible.\n\n 19. Management API and Terraform\n\nManagement base: /management/v1. Resources include organizations, memberships, projects, branches, keys, schema exposures, policies, auth connections, buckets, webhook subscriptions, function deployments, AI providers, replicas, backups and quotas.\n\nProvisioning returns 202 plus an operation resource. Operations have status/progress/error, cancellation semantics and idempotency keys. Use optimistic configuration versions to avoid overwriting concurrent changes. List routes use stable cursor pagination. RBAC is enforced per resource; viewer access never includes secrets. Audit creation, rotation, deployment, restore and deletion.\n\nTerraform resources cover project, branch, bucket, policy, auth connection, webhook, function deployment and quota configuration. Data sources expose regions and project metadata. Provider implements import, read/refresh, diff, asynchronous waits, destroy order, timeout and retry rules. Mark sensitive values and prefer external secret references, because sensitive Terraform fields may still reside in state. Test drift, interrupted apply, resource deletion and provider upgrades.\n\n 20. Hosted MCP Server\n\nExpose /mcp using the supported Streamable HTTP protocol and standard tool schemas. Browser OAuth binds client consent to selected organization/projects/branches and explicit scopes. Authorization-code PKCE, resource/audience checks, token expiry and revocation are required. Provide authorization server and protected-resource discovery as required by the pinned MCP protocol version; certify actual ChatGPT/Cursor clients during delivery.\n\nTools include list_projects, list_tables, describe_table, query_rows, explain_error, generate_types, get_logs, search_docs, create_migration_draft, apply_migration, manage_policy, and deploy_function. Start read-only by default. Writes use narrowly scoped tokens, optimistic version checks and auditable operations. A tool confirmation UI is useful but never substitutes for server authorization.\n\nDo not grant arbitrary SQL to read-only OAuth clients: SELECT can invoke unsafe behavior or access hidden objects. Prefer the validated query AST; owner SQL execution requires a separate privileged scope and reviewed execution path. Redact logs and secret fields in results. Paginate and size-limit tool output. Provide local development transport separately; hosted access does not require personal access tokens or npx once OAuth integration is certified.\n\n 21. Studio UI specification\n\n 21.1 Visual system\n\nDark monochrome theme with clear hierarchy and restrained motion. Suggested tokens:\n\n| Token | Value |\n| --- | --- |\n| Background | 0C0C0C |\n| Surface | 141414 |\n| Raised surface | 1C1C1C |\n| Border | 2A2A2A |\n| Primary text | F5F5F5 |\n| Secondary text | A3A3A3 |\n| Muted text | 737373 — decorative/disabled use only where contrast is insufficient |\n| Primary action | Light background with near-black text |\n| Radius | 8–12 px |\n| Spacing | 4 px base scale |\n\nUse Inter/system sans for UI and a legible monospace for SQL, IDs and logs. Status must include text/icon, never color alone. Preserve keyboard focus, semantic tables, accessible dialogs, contrast and reduced-motion preferences. Optional semantic error/warning accents may be limited to operational states while main surfaces remain monochrome.\n\nLayout: top bar with organization/project/branch selectors, command search and account; left product navigation; central workspace; optional right details/assistant panel. Persistent production branch badge and explicit environment labels reduce editing mistakes. Grid and SQL layouts prioritize desktop; smaller screens use contained horizontal grids and drawers.\n\n 21.2 Studio tabs and flows\n\n| Tab | Required capabilities |\n| --- | --- |\n| Overview | Project health, usage, API quickstart, limits and recent operations |\n| Database | Table grid, create/edit schema, indexes, relationships, import/export, policy editor, SQL console, migrations, backups, branches, replicas |\n| Authentication | Users, sessions, providers, templates, redirects, SSO, MFA, CAPTCHA, OAuth clients |\n| API | REST/GraphQL explorer, generated examples, schema versions, keys and types |\n| Realtime | Channel settings, subscriptions, presence inspector and authorized event preview |\n| Storage | Buckets, object browser, uploads, policies, transforms, CDN status, analytics buckets |\n| Functions | Versions, deploy, environment refs, triggers, region and logs |\n| AI | Providers/models, vector collections, ingestion, search tester, RAG and assistant settings |\n| Logs & Metrics | Filtered requests/jobs/auth/audit events, traces, quota and latency charts |\n| Integrations | SMTP/SMS, object backend, CDN, MCP and Terraform setup |\n| Settings | Members, placement, quotas, retention, keys, export and deletion |\n\nTable editor supports virtual scrolling, server filtering/sorting, column visibility, typed cells, null handling, saved views and bounded bulk operations. Optimistic edits reconcile server validation/policy errors. Never show unauthorized counts or hidden columns. Show relation navigation only when authorized.\n\nCore onboarding: create organization → project/region → primary branch → table/schema → policy → API example → test with an application identity. Keep empty, loading, denied, stale schema, replica lag, quota, partial upload, disconnected realtime and failed operation states consistent. Use TanStack Form for validated settings and Query for background operation status. Adopt blocks.so patterns for forms/dialogs/AI panes; adapt Supabase Library ideas without copying branding or implying compatibility.\n\n 22. Security and isolation requirements\n\nTLS on public and internal remote traffic; scoped internal service authentication; encryption at rest through encrypted volumes and object backend plus encrypted secret envelopes. Stock SQLite is not automatically encrypted. SQLCipher would require a separately certified integration and must not be assumed available in bun:sqlite.\n\nRun API/database/jobs/functions under distinct least-privilege permissions where feasible. Public database files and backend object endpoints are never directly downloadable. Reserved tables and secrets are inaccessible through generated APIs. Disable arbitrary extension loading and ATTACH/PRAGMA operations from untrusted inputs. Install only operator-approved signed/verified extension artifacts.\n\nEnforce per-project CPU/query/write queues, storage, logs, connection, function and inference quotas to control noisy neighbors. Auth endpoints require distributed abuse control before multi-node deployment. Platform administrator MFA, key rotation, incident audit export and dependency scanning are production requirements.\n\nThreat-model gates: cross-project ID substitution, SQL injection, broken policy composition, nested relation leakage, realtime stale authorization, signed URL misuse, branch secret cloning, SSRF, function escape, AI tool privilege escalation and backup exposure. Security tests are release blockers, not optional enhancements.\n\n 23. Observability and operational behavior\n\nPropagate request/trace IDs through Studio, API, owners and jobs. Metrics include REST/GraphQL latency/error rate, write queue age, SQLite busy errors, WAL bytes, disk capacity, schema refresh failures, outbox lag, webhook retries, WebSocket connections/drops, upload failures, function resource use, provider latency/tokens and replica age.\n\nLogs contain actor/resource identifiers, operation and redacted errors. Payload logging is off by default. Proposed retention: request logs 7 days, job logs 14 days, audit logs 90 days; configurable with explicit storage quotas. Never log passwords, OTPs, auth headers or raw AI prompts by default.\n\nReadiness checks verify routing/ownership, critical metadata access and disk thresholds; liveness does not restart the service for a temporarily slow external AI provider. Graceful shutdown stops new requests, drains bounded work, closes sockets with reconnect signals and releases ownership only after safe shutdown. Worker leases recover interrupted jobs.\n\nOperator runbooks cover disk-full recovery, stuck writer, WAL growth, restore, lost owner, key compromise, expired provider credentials, outbox backlog and failed deploy rollback.\n\n 24. Performance and quality targets\n\nTargets below are acceptance goals, not measured product claims. Reference environment: 4 vCPU, 8 GiB RAM, local SSD, Linux, no remote inference; publish CPU model, filesystem, durability settings, dataset and benchmark scripts with results.\n\n| Workload | Initial target |\n| --- | --- |\n| Indexed policy-filtered reads | p95  100 ms at 100 requests/sec, 1 million ordinary rows |\n| Small single-row writes | p95  200 ms at 25 writes/sec per branch with FULL durability |\n| Local committed row event | p95  500 ms at baseline workload |\n| Studio first interactive view |  3 seconds on defined desktop/network profile |\n| Graceful overload | Bounded memory/queues and explicit 429/503; no lost acknowledged commits |\n| Backup restore | Integrity-checked recovery within 60 minutes on reference dataset |\n\nBenchmark policy joins, counts, large blobs, long readers, multiple projects, concurrent uploads and transformation jobs separately. If targets fail, constrain quotas or optimize measured bottlenecks before advertising higher scale. Replica snapshots and vector search require their own datasets and latency/recall reports.\n\n 25. Testing and acceptance criteria\n\n- Unit/property tests: query/policy AST validation, SQL parameterization, cursor signing, serialization, policy algebra and auth audience checks.\n- Integration: migrations, generated REST/GraphQL parity, transaction rollback/outbox, idempotency, storage workflows, webhook leases and function deployment.\n- Security: two users/two projects/two branches; protected counts/joins/views/upserts; ownership reassignment; revoked sessions; replay/delete event leakage; MCP scope denial; SSRF and function isolation.\n- End-to-end: create project → table → policies → register user → CRUD → receive event → upload/download → generate SDK types → backup/restore.\n- Failure injection: process kill during write/backup/upload/deploy, disk full, busy writer, expired job lease, SMTP outage, duplicate webhook delivery and AI timeout.\n- Compatibility: Linux builds, Bun pinned version, browser targets, selected RN SDK adapter, S3 backends, auth providers, native extension binaries and MCP clients.\n- Load: bounded queues, tenant fairness, database owner saturation, memory leak checks and long-lived WebSocket behavior.\n\nMVP release gate: a clean self-host deployment and CLI quickstart succeed; default exposure denies data; all supported public paths pass policy isolation tests; committed writes survive tested crashes; restore works; generated types compile; logs omit credentials; quotas shed load predictably.\n\nP1 gate: GraphQL authorization matches REST; certified auth connectors reach the documented target; resumable uploads survive restart; private transforms remain private; AI retrieval cannot cross ACL boundaries; functions pass isolation checks; MCP tokens cannot exceed consent scope.\n\nP2 gate: replica lag/freshness behavior is visible and safe, failover is fenced, regional residency is enforced, Terraform drift tests pass, SSO/provider flows are certified, Deno compatibility is explicit and CDN revocation behavior is verified.\n\n 26. Implementation roadmap and dependencies\n\n| Milestone | Deliverables | Exit dependency |\n| --- | --- | --- |\n| M0 — compatibility/design spike | Bun/Start/Elysia smoke app, GraphQL mount, auth realm prototype, vector extension proof, policy threat model | Resolve unsupported dependencies before implementation |\n| M1 — control foundation | Monorepo, organization RBAC, projects/branches, owners, encrypted config, Management API | Provision/restart project safely |\n| M2 — database/API core | Schema registry, migrations, query compiler, RLS, REST, type generation | Isolation and transaction tests pass |\n| M3 — usable MVP | Studio grids/SQL/policies, auth basics, row stream, S3, CLI, backups/metrics | MVP release gate |\n| M4 — complete developer surfaces | GraphQL, webhooks, auth expansion, channel controls, uploads/transforms | Shared policy parity and delivery tests |\n| M5 — AI/functions/MCP | Vector toolkit, providers, RAG baseline, isolated Bun runner, hosted OAuth MCP | ACL, sandbox and scoped-tool gates |\n| M6 — advanced operations | Branch refinements, replicas, CDN, regional placement, analytics buckets | Recovery, freshness and residency tests |\n| M7 — enterprise/interoperability | SSO/OAuth provider, Deno, Terraform, optional import/external connectors | P2 gate and documented limitations |\n\nSuggested planning envelope: MVP 12–16 weeks for an experienced small team; advanced scope requires separate estimation after M0. This is a planning assumption, not a delivery commitment. Team responsibilities: backend/security, Studio, infrastructure/runtime and QA; one person may cover multiple roles. Prioritize RLS and crash recovery before adding feature breadth.\n\n 27. Configuration baseline\n\nIllustrative configuration; exact names become versioned contracts during implementation:\n\n\nQB_MODE=single-node\nQB_PUBLIC_URL=https://flex.example.com\nQB_STUDIO_URL=https://studio.flex.example.com\nQB_DATA_DIR=/data/qb-flex\nQB_REGION=local\nQB_SQLITE_SYNCHRONOUS=FULL\nQB_SQLITE_BUSY_TIMEOUT_MS=5000\nQB_MAX_QUERY_ROWS=500\nQB_MAX_BATCH_ROWS=100\nQB_REALTIME_FRAME_BYTES=65536\nQB_LOG_RETENTION_DAYS=7\nQB_BACKUP_RETENTION_DAYS=7\nQB_S3_ENDPOINT=https://objects.example.com\nQB_S3_REGION=local\nQB_S3_BUCKET=qb-flex\nQB_SMTP_HOST=smtp.example.com\nQB_FUNCTION_RUNTIME=bun\n\n\nInject master encryption keys, S3 credentials, SMTP passwords, signing material and AI keys through secret storage or protected mounted files. No secrets in repository examples. Startup validates dependencies, migrations, encryption-key presence and unsafe public configuration. Production must not auto-enable anonymous SQL or administrator access.\n\n 28. Required developer documentation\n\nDeliver quickstart, self-host guide, project lifecycle, supported SQLite SQL/API subset, RLS semantics, auth connector setup, realtime consistency, S3/tus adapters, function permissions, AI data handling, SDK/CLI references, Management OpenAPI, GraphQL schema, MCP OAuth scopes, backup/restore runbooks and Supabase migration differences.\n\nMaintain architecture decision records for per-branch ownership, application RLS, event capture, vector engine, auth isolation, replica strategy and function sandbox. Document experimental modules plainly and expose supported capabilities through a machine-readable feature endpoint.\n\n 29. Technical decisions to finalize at M0\n\n1. Certify the pinned Bun/Start/Elysia/GraphQL/auth combination and production image.\n2. Prove project authentication realm isolation and signing/session semantics.\n3. Select policy AST operators and a constrained exposed-table/trigger contract.\n4. Confirm vector extension loading and packaging; benchmark permission-aware search.\n5. Select consistent snapshot mechanism, recovery tests and future replication engine.\n6. Select S3/tus/image adapters and certify backend-specific behavior.\n7. Choose minimum safe function sandbox for the intended hosting audience.\n8. Review bklit.com assets and all copied component licenses.\n9. Choose initial hosting regions, external delivery/CDN providers and their operating costs.\n10. Define a compatibility statement before releasing any Supabase import adapter.\n\nThese decisions affect adapters and delivery estimates. They do not change the requested Bun, TanStack, Elysia, SQLite or monochrome product direction.\n\n 30. Source notes and references\n\nArchitecture and feature choices above are proposed QB Flex requirements. They are not claims that third-party libraries already provide the complete platform. Official documentation was consulted on 5 October 2026; pin and retest actual dependencies before shipping.\n\n- [SQLite WAL](https://www.sqlite.org/wal.html): concurrent reads, one writer, checkpoint/durability tradeoffs and local-host constraints. This is the basis for the single-primary branch design.\n- [Bun SQLite](https://bun.sh/docs/runtime/sqlite): native SQLite integration and runtime API; verify required backup/cancellation/extension features against the pinned release.\n- [TanStack DB overview](https://github.com/TanStack/db/blob/main/docs/overview.md): client reactive collections/local queries; does not replace project SQLite persistence.\n- [Better Auth OAuth provider](https://better-auth.com/docs/plugins/oauth-provider): candidate OAuth authorization server integration; realm isolation and deployment security remain QB requirements.\n- [Better Auth generic OAuth](https://better-auth.com/docs/plugins/generic-oauth): provider adapter option; each requested social provider needs certification.\n- [Supabase repository](https://github.com/supabase/supabase): PostgreSQL-based product reference; PostgreSQL-specific capabilities require adaptation for SQLite.\n- [blocks.so](https://blocks.so/): requested React/ShadCN component reference.\n- [Supabase Library](https://supabase.com/library): requested UI/library reference.\n- [bklit.com](https://bklit.com/): requested UI reference; site inspection was unavailable during preparation.\n- [sqlite-vec](https://github.com/asg017/sqlite-vec): vector adapter candidate, pending compatibility certification.\n- [GraphQL Yoga](https://the-guild.dev/graphql/yoga-server): GraphQL adapter candidate, pending Elysia/Bun integration certification.\n- [tus protocol](https://tus.io/protocols/resumable-upload): resumable upload contract to pin during implementation.\n- [MCP specification](https://modelcontextprotocol.io/specification): protocol/authorization contract to pin and verify with target clients.\n\n"
+  },
+  {
+    "title": "Feature roadmap",
+    "description": "See P1 and P2 capabilities without confusing them with shipped features.",
+    "section": "Roadmap",
+    "slug": "roadmap/phases",
+    "order": 100,
+    "file": "content/roadmap/phases.mdx",
+    "headings": [
+      {
+        "title": "P0 foundation",
+        "id": "p0-foundation",
+        "level": 2
+      },
+      {
+        "title": "P1 developer platform",
+        "id": "p1-developer-platform",
+        "level": 2
+      },
+      {
+        "title": "P2 advanced operations",
+        "id": "p2-advanced-operations",
+        "level": 2
+      },
+      {
+        "title": "Architecture baseline",
+        "id": "architecture-baseline",
+        "level": 2
+      }
+    ],
+    "text": "\n\n Feature roadmap\n\n P0 foundation\n\nOrganizations, projects, primary databases, migrations, protected REST access, application auth, row events, basic S3 storage, SDKs, CLI, audit records and backups form the foundation. The repository verification report tracks whether each release gate has passed.\n\n P1 developer platform\n\nPlanned work includes GraphQL with REST policy parity, magic links/OTP, more certified social providers, database webhooks, presence/broadcast channels, resumable uploads, transforms and general snapshot branching. Approved relationship-existence policies are already implemented in P0.\n\nVector search, provider-neutral AI, permission-aware ingestion, isolated Bun functions and hosted OAuth MCP require additional native/runtime certification. They are not available simply because their navigation item exists.\n\n P2 advanced operations\n\nSSO, OAuth identity-provider behavior, replicas, CDN integration, analytics buckets, regional placement, RAG workflows, Deno functions and Terraform follow separate authorization and recovery gates.\n\n Architecture baseline\n\nRead the [complete development specification](/docs/reference/development-spec) for platform design, requested capabilities, phased contracts and threat-model requirements. It is a baseline specification, not a claim that every phase is implemented.\n"
+  }
+]

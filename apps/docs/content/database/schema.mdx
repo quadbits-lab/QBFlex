@@ -1,0 +1,33 @@
+export const frontmatter = {"title": "Schema and migrations", "description": "Understand schema exposure, SQL support and migration behavior.", "section": "Database & APIs", "slug": "database/schema", "order": 20};
+
+# Schema and migrations
+
+## Supported objects
+
+The generated REST API supports ordinary tables with stable primary keys. Composite keys use a base64url-encoded JSON array in primary-key order. Views, virtual tables and custom-trigger tables are not automatically exposed.
+
+SQLite remains the underlying SQL engine. Studio SQL is a privileged developer operation. Reserved `_qb_*` objects, extension loading, ATTACH and runtime PRAGMA changes are blocked through the console.
+
+## Exposure
+
+New tables are private. Exposure chooses the allowed public columns; all primary-key columns must be included. Policies are a separate requirement. Hiding a column rejects projections, sorting and filtering against that column.
+
+## Migration lifecycle
+
+Each migration records its identifier, checksum, author and application time. Reapplying the same identifier and content is idempotent. Changing the content of an applied migration returns a conflict.
+
+Apply migrations under the branch owner transaction. Destructive migrations trigger a consistent backup first. Failed SQL or foreign-key validation rolls back the schema changes. Successful changes advance the schema version and regenerate managed event triggers.
+
+Use forward migrations for corrections. There is no automatic destructive rollback. Restore a backup into an isolated branch when data recovery is necessary.
+
+## Representation
+
+Booleans use constrained 0/1 integers. Store dates as UTC ISO strings and JSON as validated text. Integers outside JavaScript's safe range are returned as strings. Write these values as signed 64-bit decimal strings. Blob writes and equality filters use canonical base64; JSON columns require valid JSON text. Blob values are base64 encoded in row responses and in authorized realtime projections.
+
+## Generated types
+
+Types describe the exposed schema, nullable values, defaults and generated columns. Simple `CHECK (column IN (...))` constraints on literal values generate enum unions. More complex constraint expressions require explicit application validation. Insert fields with defaults are optional; generated fields are read-only. Keep declarations under version control and regenerate when migrations change.
+
+## Out-of-band schema changes
+
+The branch records a fingerprint of user tables, indexes, views and triggers. A schema changed through direct file access returns `SCHEMA_STALE` on public reads, mutations, schema discovery and row subscriptions. Reconcile it with a reviewed forward migration through Studio or CLI. Trusted file access still bypasses application row policies.

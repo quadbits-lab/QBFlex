@@ -1,0 +1,37 @@
+export const frontmatter = {"title": "Write and test access policies", "description": "Protect every public data path with default-deny ownership policies.", "section": "Database & APIs", "slug": "database/policies", "order": 21};
+
+# Write and test access policies
+
+## Policy model
+
+QB Flex implements row policies in its application layer. Direct filesystem access to SQLite is trusted access and bypasses these checks. Policies are restricted JSON expressions rather than arbitrary SQL or JavaScript.
+
+An operation needs at least one applicable permissive grant. Matching permissive expressions are ORed, and restrictive expressions are ANDed. No applicable grant means denial.
+
+## Ownership example
+
+For a table with `owner_id`, compare the column to the server-supplied authenticated subject:
+
+```json
+{"op":"eq","left":{"column":"owner_id"},"right":{"claim":"sub"}}
+```
+
+Create separate select, insert, update and delete policies. Include `authenticated` in the role list. For inserts and updates use the ownership expression as the write check as well.
+
+## Available expressions
+
+Boolean expressions support `and`, `or`, `not`, `true` and `false`. Comparisons support `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `in` and `isNull`. Operands reference validated columns, verified `sub`/`role` claims or scalar values.
+
+Relationship-existence expressions support `{"op":"exists","relationship":"APPROVED_NAME","where":{"op":"true"}}` for registered, exposed relationships. They apply the related table's select policies as well as the `where` expression. Unapproved relationships, cycles and excessive nesting are rejected. See [relationships and reviewed RPC](/docs/database/relationships-rpc) for setup and limits.
+
+## Read and write semantics
+
+Reads apply policies before counts and pagination. Updates check both the old row and the actual updated row; an ownership change cannot escape the new-row check. Atomic batches roll back if any prospective row is denied. Returned rows require select permission.
+
+## Test identities
+
+Use Studio's policy tester with a simulated user ID and application role. It executes the policy-filtered query without creating an unrestricted token. Then verify with real application users: two users should see separate rows, counts and realtime events.
+
+## Realtime permissions
+
+Events are reevaluated with current identity and policy. A deletion or row leaving visibility delivers only its key to an identity that could read the old image. A user who could not read that row receives no event.

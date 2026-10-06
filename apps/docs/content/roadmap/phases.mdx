@@ -1,0 +1,21 @@
+export const frontmatter = {"title": "Feature roadmap", "description": "See P1 and P2 capabilities without confusing them with shipped features.", "section": "Roadmap", "slug": "roadmap/phases", "order": 100};
+
+# Feature roadmap
+
+## P0 foundation
+
+Organizations, projects, primary databases, migrations, protected REST access, application auth, row events, basic S3 storage, SDKs, CLI, audit records and backups form the foundation. The repository verification report tracks whether each release gate has passed.
+
+## P1 developer platform
+
+Planned work includes GraphQL with REST policy parity, magic links/OTP, more certified social providers, database webhooks, presence/broadcast channels, resumable uploads, transforms and general snapshot branching. Approved relationship-existence policies are already implemented in P0.
+
+Vector search, provider-neutral AI, permission-aware ingestion, isolated Bun functions and hosted OAuth MCP require additional native/runtime certification. They are not available simply because their navigation item exists.
+
+## P2 advanced operations
+
+SSO, OAuth identity-provider behavior, replicas, CDN integration, analytics buckets, regional placement, RAG workflows, Deno functions and Terraform follow separate authorization and recovery gates.
+
+## Architecture baseline
+
+Read the [complete development specification](/docs/reference/development-spec) for platform design, requested capabilities, phased contracts and threat-model requirements. It is a baseline specification, not a claim that every phase is implemented.

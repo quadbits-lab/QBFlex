@@ -1,0 +1,6 @@
+interface:
+  display_name: "QB Flex Development"
+  short_description: "Build, secure and operate QB Flex applications"
+  default_prompt: "Use $qbflex-skills to develop and validate this QB Flex application or platform change."
+policy:
+  allow_implicit_invocation: true

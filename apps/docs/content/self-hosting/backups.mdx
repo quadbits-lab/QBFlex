@@ -1,0 +1,44 @@
+export const frontmatter = {"title": "Backups and restore", "description": "Create encrypted snapshots and rehearse recovery.", "section": "Operations", "slug": "self-hosting/backups", "order": 62};
+
+# Backups and restore
+
+## Consistent snapshots
+
+Snapshots are created through the database owner using SQLite `VACUUM INTO`, then encrypted using AES-256-GCM and recorded with a checksum and schema version. Never copy only a live main SQLite file while committed changes remain in the WAL.
+
+Manual snapshots are available in Studio and the CLI. The maintenance worker requests scheduled backups. Retention is configurable; the default is seven days.
+
+## Isolated restore
+
+Restore decrypts and verifies the checksum, writes a new branch database and runs integrity/foreign-key checks. Active sessions, verification challenges and stored OAuth access/refresh tokens are excluded. Restored application users remain in the isolated database and must establish new sessions.
+
+Validate expected table data, policies and migrations before cutover. The restored branch has its own authentication identity and routing.
+
+## Production cutover
+
+The cutover endpoint requires the project owner role and an explicit project-slug confirmation. It creates a rollback backup, closes the old primary owner and changes the primary alias. Existing requests and sockets must be reconciled against the changed branch.
+
+The previous primary is retired and refuses public reads and writes. Restore the rollback snapshot into another isolated branch to reverse the cutover. Do not assume that alias switching merges data.
+
+## Object bytes and control metadata
+
+Branch snapshots do not back up S3 object bytes. The worker separately creates encrypted, checksummed control catalog snapshots under `backups/control` with the same daily/weekly retention. Protect the master key and copy archives off the node; configure object-store versioning/backups separately.
+
+Control recovery is offline. Stop the API/worker, preserve all referenced project database files and verify the archive before replacement. The local ownership lock prevents restoration over a running API. The command checks integrity, foreign keys, applied control migrations and referenced branch files, creates an encrypted rollback checkpoint, excludes platform sessions and revokes all restored project/management credentials. Reissue keys after recovery.
+
+```sh
+bun run qb backup control-create --data-dir .data
+bun run qb backup control-restore --data-dir .data --file CONTROL_ARCHIVE --confirm-local-control-restore
+```
+
+Inject the original `QB_MASTER_KEY` for production recovery. A catalog archive does not include project databases or object bytes; coordinate their recovery to a compatible checkpoint.
+
+## Recovery drill
+
+Create representative data, take a snapshot, alter the data, restore into another branch and compare results. Repeat after a process restart and verify secrets/session behavior. Publish measured RPO/RTO only after a reference-dataset drill passes.
+
+## Retention and cancellation
+
+Maintenance keeps the daily window (`QB_BACKUP_RETENTION_DAYS`, default 7) and one newest checkpoint per week (`QB_BACKUP_RETENTION_WEEKS`, default 4). Preserve encrypted snapshots and the master key on separate storage for disaster recovery. A local backup volume is not off-site redundancy.
+
+Project provisioning can be cancelled through `POST /management/v1/operations/{id}/cancel` while its status is `requested`. Running or completed operations return `OPERATION_NOT_CANCELLABLE`; cancellation never rolls back a committed database operation.

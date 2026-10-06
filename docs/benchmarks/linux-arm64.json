@@ -1,0 +1,41 @@
+{
+  "benchmark": "QB Flex indexed owner policy / FULL+WAL",
+  "environment": {
+    "bun": "1.4.2",
+    "platform": "linux",
+    "arch": "arm64",
+    "cpu": "unknown",
+    "cpuQuota": "400000 100000",
+    "memoryLimit": "8589934592",
+    "filesystemType": "794c7630"
+  },
+  "dataset": 1000000,
+  "seedMs": 884.0040000000001,
+  "reads": {
+    "requestedRate": 100,
+    "requests": 1000,
+    "failures": 0,
+    "seconds": 9.992478338000002,
+    "p50Ms": 2.620542000000569,
+    "p95Ms": 4.291917000000467,
+    "maxMs": 117.1807080000001
+  },
+  "writes": {
+    "requestedRate": 25,
+    "requests": 100,
+    "failures": 0,
+    "seconds": 3.967640918000001,
+    "p50Ms": 6.186374999999316,
+    "p95Ms": 8.969124999999622,
+    "maxMs": 13.901832999999897
+  },
+  "realtime": {
+    "events": 100,
+    "missing": 0,
+    "p95Ms": 250.17945900000086,
+    "maxMs": 254.50970899999993,
+    "measurement": "request start to authorized SDK event; includes commit time"
+  },
+  "backupMs": 1393.4994180000012,
+  "restoreMs": 1820.3109170000025
+}

@@ -1,0 +1,32 @@
+export const frontmatter = {"title": "Client SDKs", "description": "Choose React hooks or a framework-independent JavaScript client.", "section": "Client SDK", "slug": "sdk/overview", "order": 40};
+
+# Client SDKs
+
+The two SDK packages share the same transport, authentication and authorization semantics. Choose the React package for component-level state and caching, or the framework-independent package for direct calls.
+
+| Application | Packages | Guide |
+| --- | --- | --- |
+| React 19 | `@qb-flex/client`, `@qb-flex/react` | [React quickstart](/docs/sdk/react/quickstart) |
+| Vanilla JavaScript | `@qb-flex/client` | [JavaScript quickstart](/docs/sdk/vanilla/quickstart) |
+
+## Package availability
+
+SDK artifacts are built and packed locally. They are not yet published to the npm registry. Workspace examples import the local packages. External applications can install the generated tarballs from `dist/packages`.
+
+```sh
+bun run sdk:pack
+```
+
+## Client configuration
+
+Provide an API URL, project ID, branch alias/ID and publishable key. Set an exact application origin in project settings. Create one browser client for the application. SSR applications must create a separate client and query cache per request.
+
+## Error handling
+
+Methods return successful data envelopes and throw `QBError` for failures. Inspect its code, status and retryable fields. Validation, policy denials and conflicts should be corrected by the application; repeatedly retrying them does not help.
+
+## Shared lifecycle
+
+Subscriptions expose explicit cleanup. Session refresh is single-flight. Safe reads and explicitly idempotent writes receive bounded retries. Requests support timeout and AbortSignal cancellation.
+
+React Native, offline writes, GraphQL, functions and AI SDK modules are deferred. Browser compatibility is the initial supported target.

@@ -1,0 +1,56 @@
+# Always combine with compose.yml. Set the required secrets and public domains first.
+services:
+  api:
+    environment:
+      NODE_ENV: production
+      QB_PUBLIC_URL: https://${QB_API_DOMAIN:?set QB_API_DOMAIN}
+      QB_STUDIO_URL: https://${QB_STUDIO_DOMAIN:?set QB_STUDIO_DOMAIN}
+      QB_ALLOWED_ORIGINS: https://${QB_STUDIO_DOMAIN},${QB_APP_ORIGINS:?set exact QB_APP_ORIGINS}
+      QB_MASTER_KEY: ${QB_MASTER_KEY:?set a protected master encryption key}
+      QB_BOOTSTRAP_TOKEN: ${QB_BOOTSTRAP_TOKEN:?set a first-owner bootstrap token}
+      QB_WORKER_TOKEN: ${QB_WORKER_TOKEN:?set a private worker token}
+      QB_REQUIRE_ADMIN_MFA: 'true'
+      QB_S3_ACCESS_KEY: ${QB_S3_ACCESS_KEY:?set S3 credentials}
+      QB_S3_SECRET_KEY: ${QB_S3_SECRET_KEY:?set S3 credentials}
+      QB_SMTP_HOST: ${QB_SMTP_HOST:?set SMTP server}
+      QB_SMTP_PORT: ${QB_SMTP_PORT:-587}
+      QB_SMTP_USER: ${QB_SMTP_USER:-}
+      QB_SMTP_PASSWORD: ${QB_SMTP_PASSWORD:-}
+    security_opt: ['no-new-privileges:true']
+    cap_drop: [ALL]
+  storage-init:
+    environment:
+      QB_S3_ACCESS_KEY: ${QB_S3_ACCESS_KEY}
+      QB_S3_SECRET_KEY: ${QB_S3_SECRET_KEY}
+  worker:
+    environment:
+      QB_WORKER_TOKEN: ${QB_WORKER_TOKEN}
+    security_opt: ['no-new-privileges:true']
+    cap_drop: [ALL]
+  studio:
+    build:
+      args:
+        VITE_API_URL: https://${QB_API_DOMAIN}
+        VITE_DOCS_URL: https://${QB_DOCS_DOMAIN:?set QB_DOCS_DOMAIN}
+        VITE_STUDIO_URL: https://${QB_STUDIO_DOMAIN}
+        QB_DOCS_URL: https://${QB_DOCS_DOMAIN}
+  docs:
+    build:
+      args:
+        VITE_API_URL: https://${QB_API_DOMAIN}
+        VITE_DOCS_URL: https://${QB_DOCS_DOMAIN}
+        VITE_STUDIO_URL: https://${QB_STUDIO_DOMAIN}
+        QB_DOCS_URL: https://${QB_DOCS_DOMAIN}
+  gateway:
+    image: caddy@sha256:1a81ac3d1a49b2b385a5bfafb8bd39fb40fa1d717461d825ee0d65df91a6e97b
+    profiles: [selfhost]
+    environment:
+      QB_API_DOMAIN: ${QB_API_DOMAIN}
+      QB_STUDIO_DOMAIN: ${QB_STUDIO_DOMAIN}
+      QB_DOCS_DOMAIN: ${QB_DOCS_DOMAIN}
+    ports: ['80:80', '443:443']
+    volumes: ['./infra/Caddyfile:/etc/caddy/Caddyfile:ro', 'gateway:/data']
+    depends_on: [api, studio, docs]
+    restart: unless-stopped
+volumes:
+  gateway:
