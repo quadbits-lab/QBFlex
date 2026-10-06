@@ -121,31 +121,44 @@ try {
     )
   ).data.id;
   await page.setViewportSize({ width: 1440, height: 960 });
-  await page.goto('http://localhost:3030');
+  await page.goto('http://localhost:3030/sign-in');
   await page.getByLabel('Email', { exact: true }).fill('owner@example.com');
   await page.getByLabel('Password', { exact: true }).fill('owner-password-12345');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Project overview', exact: true })).toBeVisible();
-  await page.screenshot({ path: join(artifacts, 'studio-desktop.png'), fullPage: true });
+  await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible();
+  await expect(page.getByText('Build your backend', { exact: true })).toBeVisible();
+  await page.keyboard.press('Control+k');
+  await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  const sidebar = page.getByRole('complementary', { name: 'Primary navigation' });
+  await sidebar.getByRole('link', { name: 'Database', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'New table', exact: true })).toBeVisible();
+  // Schema visualizer: canvas nodes + details sheet
+  await sidebar.getByRole('link', { name: 'Schema', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Schema Visualizer', exact: true })).toBeVisible();
+  const tableNode = page.locator('.react-flow [role="group"]', { hasText: 'tasks' }).first();
+  await tableNode.click();
+  await expect(
+    page
+      .getByRole('dialog')
+      .getByText('Private table')
+      .or(page.getByText('Exposed through REST'))
+      .first(),
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+  await sidebar.getByRole('link', { name: 'Storage', exact: true }).click();
+  await page.getByRole('button', { name: /attachments/ }).click();
+  await expect(page.getByText('Objects').first()).toBeVisible();
+  // Mobile shell + drawer
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: 'Toggle navigation' }).click();
+  await page.getByRole('button', { name: 'Toggle mobile navigation' }).click();
   await expect(page.getByRole('dialog', { name: 'Studio navigation' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: 'Studio navigation' })).toHaveCount(0);
+  // Responsive metric grid on mobile
+  await page.goto('http://localhost:3030/overview');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.setViewportSize({ width: 1440, height: 960 });
-  await page
-    .locator('.studio-sidebar nav')
-    .getByRole('button', { name: 'Database', exact: true })
-    .click();
-  await expect(page.getByRole('button', { name: 'New table', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Schema', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'API exposure' })).toBeVisible();
-  await page
-    .locator('.studio-sidebar nav')
-    .getByRole('button', { name: 'Storage', exact: true })
-    .click();
-  await page.getByRole('button', { name: /attachments/ }).click();
-  await expect(page.getByRole('heading', { name: 'Objects', exact: true })).toBeVisible();
   for (const [kind, port] of [
     ['react', 7617],
     ['vanilla', 7618],

@@ -1,21 +1,197 @@
+/**
+ * QB Flex shared UI kit.
+ *
+ * Legacy components keep their exact public signatures for backward
+ * compatibility; Modal/Drawer now delegate to the shadcn dialog primitive and
+ * the theme is fully tokenized (see theme.css). New console-shell components
+ * (Button/Input/Card/Select/…) follow the shadcn "new-york" style.
+ */
+export { cn } from './lib/utils';
+export { Button as ShadcnButton, buttonVariants } from './components/ui/button';
+export { Input } from './components/ui/input';
+export { Label } from './components/ui/label';
+export {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from './components/ui/card';
+export { Badge as ShadcnBadge, badgeVariants } from './components/ui/badge';
+export { Alert, AlertTitle, AlertDescription, alertVariants } from './components/ui/alert';
+export { Skeleton } from './components/ui/skeleton';
+export { Separator } from './components/ui/separator';
+export { Switch } from './components/ui/switch';
+export { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './components/ui/tooltip';
+export {
+  Dialog,
+  DialogPortal,
+  DialogOverlay,
+  DialogClose,
+  DialogTrigger,
+  DialogTitle,
+  DialogDescription,
+  DialogContent,
+} from './components/ui/dialog';
+export {
+  Sheet,
+  SheetTrigger,
+  SheetClose,
+  SheetContent,
+  SheetTitle,
+  SheetDescription,
+} from './components/ui/sheet';
+export {
+  Select,
+  SelectGroup,
+  SelectValue,
+  SelectTrigger,
+  SelectContent,
+  SelectLabel,
+  SelectItem,
+} from './components/ui/select';
+export {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuGroup,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+} from './components/ui/dropdown-menu';
+export {
+  Table,
+  TableHeader,
+  TableBody,
+  TableFooter,
+  TableHead,
+  TableRow,
+  TableCell,
+} from './components/ui/table';
+export { Toaster, toast, notifyError } from './components/ui/sonner';
+export {
+  Cropper,
+  CropperDescription,
+  CropperImage,
+  CropperCropArea,
+  type CropArea,
+} from './components/ui/cropper';
+export {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandSeparator,
+  CommandDialog,
+} from './components/ui/command';
+export { WorkflowCanvas } from './components/workflow-canvas';
+// Charts stay on `@qb-flex/ui/charts` so SSR pages that only need shell
+// primitives do not load @visx (extensionless ESM breaks Node's resolver).
+export { Checkbox } from './components/ui/checkbox';
+export { Textarea } from './components/ui/textarea';
+export { Spinner } from './components/ui/spinner';
+export {
+  Empty as ShadcnEmpty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from './components/ui/empty';
+export {
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FieldDescription,
+  FieldError,
+  FieldSet,
+  FieldLegend,
+} from './components/ui/field';
+export {
+  InputGroup,
+  InputGroupInput,
+  InputGroupTextarea,
+  InputGroupAddon,
+} from './components/ui/input-group';
+export {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from './components/ui/alert-dialog';
+
+// ---------------------------------------------------------------------------
+// Legacy shared components — signatures preserved (docs + existing consumers).
+// ---------------------------------------------------------------------------
 import { useState, useRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
-import { X, LoaderCircle } from 'lucide-react';
-import { cva } from 'class-variance-authority';
-import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-export const cn = (...inputs: Parameters<typeof clsx>) => twMerge(clsx(inputs));
-const buttonVariants = cva('button', {
-  variants: {
-    variant: {
-      primary: 'button-primary',
-      secondary: 'button-secondary',
-      ghost: 'button-ghost',
-      danger: 'button-danger',
-    },
-  },
-  defaultVariants: { variant: 'primary' },
-});
+import { X, LoaderCircle, Info, CircleAlert, CircleCheck } from 'lucide-react';
+import { Alert, AlertDescription } from './components/ui/alert';
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from './components/ui/sheet';
+import { Spinner } from './components/ui/spinner';
+import { Button as ShadcnButton } from './components/ui/button';
+import { Badge as ShadcnBadge } from './components/ui/badge';
+import {
+  Empty as ShadcnEmpty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+} from './components/ui/empty';
+import {
+  Dialog as ShadcnDialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+  DialogClose,
+} from './components/ui/dialog';
+export function LegacyButton({
+  variant = 'primary',
+  className,
+  onClick,
+  disabled,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+}) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+  return (
+    <>
+      <ShadcnButton
+        variant={variant}
+        className={className}
+        disabled={disabled || pending}
+        onClick={
+          onClick
+            ? async (event) => {
+                setError('');
+                setPending(true);
+                try {
+                  await onClick(event);
+                } catch (clickError) {
+                  setError(clickError instanceof Error ? clickError.message : 'Action failed');
+                } finally {
+                  setPending(false);
+                }
+              }
+            : undefined
+        }
+        {...props}
+      />
+      {error && <Notice kind="error">{error}</Notice>}
+    </>
+  );
+}
 export function Button({
   variant,
   className,
@@ -24,37 +200,11 @@ export function Button({
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
 }) {
-  const [pending, setPending] = useState(false),
-    [error, setError] = useState('');
-  return (
-    <>
-      <button
-        className={cn(buttonVariants({ variant }), className)}
-        {...props}
-        disabled={props.disabled || pending}
-        onClick={
-          onClick
-            ? async (event) => {
-                setError('');
-                setPending(true);
-                try {
-                  await onClick(event);
-                } catch (error) {
-                  setError(error instanceof Error ? error.message : 'Action failed');
-                } finally {
-                  setPending(false);
-                }
-              }
-            : undefined
-        }
-      />
-      {error && <Notice kind="error">{error}</Notice>}
-    </>
-  );
+  return <LegacyButton variant={variant} className={className} onClick={onClick} {...props} />;
 }
-export function Brand({ label = 'Studio' }: { label?: string }) {
+export function Brand({ label = 'Studio', href = '/' }: { label?: string; href?: string }) {
   return (
-    <a className="brand" href="/" aria-label={`QB Flex ${label} home`}>
+    <a className="brand" href={href} aria-label={`QB Flex ${label} home`}>
       <img className="logo-dark" src="/brand/logo-dark.webp" alt="QB Flex" />
       <img className="logo-light" src="/brand/logo-light.webp" alt="QB Flex" />
       <span className="brand-label">{label}</span>
@@ -73,9 +223,27 @@ export function AppFooter() {
     </footer>
   );
 }
-export function Badge({ children }: { children: ReactNode }) {
+export function LegacyBadge({ children }: { children: ReactNode }) {
   return <span className="badge">{children}</span>;
 }
+export function Badge({
+  children,
+  variant,
+  ...props
+}: Omit<React.ComponentProps<'span'>, 'variant'> & {
+  variant?: 'default' | 'secondary' | 'outline' | 'success' | 'warning' | 'destructive';
+}) {
+  return (
+    <ShadcnBadge variant={variant ?? 'outline'} {...props}>
+      {children}
+    </ShadcnBadge>
+  );
+}
+const noticeIcon = {
+  info: Info,
+  error: CircleAlert,
+  success: CircleCheck,
+} as const;
 export function Notice({
   children,
   kind = 'info',
@@ -83,25 +251,36 @@ export function Notice({
   children: ReactNode;
   kind?: 'info' | 'error' | 'success';
 }) {
+  const Icon = noticeIcon[kind];
   return (
-    <div role={kind === 'error' ? 'alert' : 'status'} className={`notice notice-${kind}`}>
-      {children}
-    </div>
+    <Alert
+      variant={kind === 'error' ? 'destructive' : 'default'}
+      role={kind === 'error' ? 'alert' : 'status'}
+    >
+      <Icon aria-hidden="true" />
+      <AlertDescription>{children}</AlertDescription>
+    </Alert>
   );
 }
 export function Loading() {
   return (
-    <div className="loading">
-      <LoaderCircle className="spin" size={18} /> Loading…
+    <div
+      role="status"
+      className="flex items-center justify-center gap-2 p-6 text-sm text-muted-foreground"
+    >
+      <Spinner aria-hidden="true" />
+      Loading…
     </div>
   );
 }
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="empty">
-      <h3>{title}</h3>
-      {children && <p>{children}</p>}
-    </div>
+    <ShadcnEmpty>
+      <EmptyHeader>
+        <EmptyTitle>{title}</EmptyTitle>
+        {children && <EmptyDescription>{children}</EmptyDescription>}
+      </EmptyHeader>
+    </ShadcnEmpty>
   );
 }
 export function Modal({
@@ -119,33 +298,27 @@ export function Modal({
 }) {
   const returnFocus = useRef<HTMLElement | null>(null);
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="modal-overlay" />
-        <Dialog.Content
-          className="modal"
-          onOpenAutoFocus={() => {
-            returnFocus.current = document.activeElement as HTMLElement;
-          }}
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            returnFocus.current?.focus();
-          }}
-        >
-          <Dialog.Title>{title}</Dialog.Title>
-          <Dialog.Description>
-            {description ?? 'Configure the selected resource.'}
-          </Dialog.Description>
-          {children}
-          <Dialog.Close className="modal-close" aria-label="Close dialog">
-            <X size={18} />
-          </Dialog.Close>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <ShadcnDialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        onOpenAutoFocus={() => {
+          returnFocus.current = document.activeElement as HTMLElement;
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          returnFocus.current?.focus();
+        }}
+      >
+        <DialogTitle>{title}</DialogTitle>
+        {description !== undefined ? (
+          <DialogDescription>{description}</DialogDescription>
+        ) : (
+          <DialogDescription className="sr-only">{title}</DialogDescription>
+        )}
+        {children}
+      </DialogContent>
+    </ShadcnDialog>
   );
 }
-
 export function Drawer({
   open,
   onOpenChange,
@@ -159,27 +332,22 @@ export function Drawer({
 }) {
   const returnFocus = useRef<HTMLElement | null>(null);
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="modal-overlay" />
-        <Dialog.Content
-          className="drawer"
-          onOpenAutoFocus={() => {
-            returnFocus.current = document.activeElement as HTMLElement;
-          }}
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            returnFocus.current?.focus();
-          }}
-        >
-          <Dialog.Title>{title}</Dialog.Title>
-          <Dialog.Description className="sr-only">Choose a section to navigate.</Dialog.Description>
-          {children}
-          <Dialog.Close className="modal-close" aria-label="Close navigation">
-            <X size={18} />
-          </Dialog.Close>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="left"
+        className="w-80 max-w-[90vw] overflow-y-auto"
+        onOpenAutoFocus={() => {
+          returnFocus.current = document.activeElement as HTMLElement;
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          returnFocus.current?.focus();
+        }}
+      >
+        <SheetTitle>{title}</SheetTitle>
+        <SheetDescription className="sr-only">Choose a section to navigate.</SheetDescription>
+        {children}
+      </SheetContent>
+    </Sheet>
   );
 }

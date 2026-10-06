@@ -1,3 +1,2 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { Studio } from '../studio';
-export const Route = createFileRoute('/')({ component: Studio });
+import { createFileRoute, Navigate } from '@tanstack/react-router';
+export const Route = createFileRoute('/')({ component: () => <Navigate to="/overview" replace /> });

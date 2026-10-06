@@ -4,7 +4,7 @@ Use [generated CLI help](generated/cli.md) for exact subcommands and flags. In t
 
 ## Local setup and packages
 
-Use pinned Bun 1.4.2 and `bun install --frozen-lockfile`. Copy `.env.example` to `.env` only when no user configuration exists, then configure backend dependencies. `docker compose --profile dependencies up -d` supplies local MinIO/Mailpit. `bun run dev` starts Studio 7610, Docs 7611 and API 7612; supporting host ports are MinIO 7613/console 7614, SMTP 7615, Mailpit 7616. React/Vanilla examples use 7617/7618. Internal Compose MinIO/SMTP retain 9000/1025. Do not mix a native `.data` directory with an active Compose database volume.
+Use pinned Bun 1.4.2 and `bun install --frozen-lockfile`. Copy `.env.example` to `.env` only when no user configuration exists, then configure backend dependencies. `docker compose --profile dependencies up -d` supplies local Mailpit. Object storage is any S3-compatible provider you configure (`QB_S3_ENDPOINT`, e.g. RustFS on 127.0.0.1:9000). `bun run dev` starts Studio 7610, Docs 7611 and API 7612; supporting host ports are SMTP 7615, Mailpit 7616. React/Vanilla examples use 7617/7618. Do not mix a native `.data` directory with an active Compose database volume.
 
 The native launcher checks all application ports before starting children and authenticates the API-generated worker credential before launching worker/frontends. If the full local Compose stack owns the ports, use its apps directly or run `docker compose --profile local stop studio docs api worker` before `bun run dev`. This keeps infrastructure and persistent volumes intact. Independent workers require the API to start first with the same `QB_DATA_DIR`, or a matching server-only `QB_WORKER_TOKEN`; never mint a worker credential independently.
 
@@ -16,7 +16,7 @@ Useful actual commands: `qb projects list`, `qb db migrate --file <sql> --id <id
 
 ## Linux deployment and monitoring
 
-Use `docker compose -f compose.yml -f compose.selfhost.yml --profile selfhost build` and `up -d` after setting public domains, exact application origins, master/bootstrap/worker keys, S3 and SMTP credentials. Docs has independent build/start commands and a docs-only profile. Caddy fronts HTTPS domains; 80/443 are public TLS gateway ports, separate from the local 7610 base. One API node owns persistent SQLite disk. Preserve volumes on restart; never use `down -v` as a port-change or deployment step.
+Use `docker compose -f compose.yml -f compose.selfhost.yml --profile selfhost build` and `up -d` after setting public domains, exact application origins, master/bootstrap/worker keys, S3 and email credentials (Resend API key or SMTP). Docs has independent build/start commands and a docs-only profile. Caddy fronts HTTPS domains; 80/443 are public TLS gateway ports, separate from the local 7610 base. One API node owns persistent SQLite disk. Preserve volumes on restart; never use `down -v` as a port-change or deployment step.
 
 Readiness is `/ready`; private metrics are `/internal/metrics` with the worker bearer token on a private network. Gateway internal routes return 404. Inspect request IDs, redacted logs, operation status, disk/WAL usage, owner queue pressure, outbox lag and upload/snapshot failures. Bounded limits return predictable 429/503. Reduce workload and reconcile uncertain writes before retrying. Do not tune beyond measured deployment capacity without a workload-specific benchmark.
 

@@ -20,6 +20,12 @@ interface CheckDatabase {
   };
 }
 let client: QBClient<CheckDatabase> | undefined;
+// Containers cannot use host loopback directly; rewrite a local S3 endpoint to the host gateway.
+const rawEndpoint =
+  process.env.QB_S3_ENDPOINT ?? 'http://127.0.0.1:9000';
+const s3Endpoint = /^https?:\/\/(localhost|127\.0\.0\.1)/.test(rawEndpoint)
+  ? rawEndpoint.replace(/(localhost|127\.0\.0\.1)/, 'host.docker.internal')
+  : rawEndpoint;
 try {
   await docker(['volume', 'create', volume]);
   const reservation = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response() });
@@ -44,16 +50,19 @@ try {
       'QB_MASTER_KEY',
       '-e',
       'QB_SCHEDULED_BACKUPS=false',
+      '--add-host=host.docker.internal:host-gateway',
       '-e',
-      'QB_S3_ENDPOINT=http://minio:9000',
+      `QB_S3_ENDPOINT=${s3Endpoint}`,
       '-e',
-      'QB_S3_REGION=us-east-1',
+      `QB_S3_REGION=${process.env.QB_S3_REGION ?? 'us-east-1'}`,
       '-e',
-      'QB_S3_BUCKET=qb-flex',
+      `QB_S3_BUCKET=${process.env.QB_S3_BUCKET ?? 'qb-flex'}`,
       '-e',
-      'QB_S3_ACCESS_KEY=qbflex-local',
+      `QB_S3_ACCESS_KEY=${process.env.QB_S3_ACCESS_KEY ?? 'qbflex-local'}`,
       '-e',
-      'QB_S3_SECRET_KEY=qbflex-local-development',
+      `QB_S3_SECRET_KEY=${process.env.QB_S3_SECRET_KEY ?? 'qbflex-local-development'}`,
+      '-e',
+      'QB_MAIL_PROVIDER=smtp',
       '-e',
       'QB_SMTP_HOST=mailpit',
       '-e',

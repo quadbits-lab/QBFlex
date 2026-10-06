@@ -14,7 +14,7 @@
   display: flex;
   gap: 28px;
   font-size: 0.875rem;
-  color: var(--secondary);
+  color: var(--muted-foreground);
   height: 100%;
   align-items: center;
 }
@@ -42,7 +42,7 @@
   min-width: 260px;
   border: 1px solid var(--border);
   border-radius: 7px;
-  color: var(--secondary);
+  color: var(--muted-foreground);
   background: var(--surface);
   padding: 8px 11px;
   font-size: 0.8rem;
@@ -58,7 +58,7 @@
 .nav-toggle {
   background: none;
   border: none;
-  color: var(--secondary);
+  color: var(--muted-foreground);
   padding: 7px;
   display: flex;
   align-items: center;
@@ -108,7 +108,7 @@
   gap: 9px;
   font-size: 0.75rem;
   letter-spacing: 0.015em;
-  color: var(--secondary);
+  color: var(--muted-foreground);
   margin: 0 12px 8px;
   font-weight: 600;
 }
@@ -123,7 +123,7 @@
   padding: 7px 12px;
   border-radius: 5px;
   font-size: 0.875rem;
-  color: var(--secondary);
+  color: var(--muted-foreground);
   line-height: 1.4;
 }
 .nav-group a:hover {
@@ -140,7 +140,7 @@
   gap: 12px;
   padding: 22px 12px;
   border-top: 1px solid var(--border);
-  color: var(--secondary);
+  color: var(--muted-foreground);
   align-items: center;
   font-size: 0.8rem;
 }
@@ -157,7 +157,7 @@
   align-items: center;
   gap: 10px;
   font-size: 0.75rem;
-  color: var(--secondary);
+  color: var(--muted-foreground);
   margin-bottom: 36px;
   line-height: 1.5;
 }
@@ -174,7 +174,7 @@
 .prose > p:first-of-type {
   font-size: 1.12rem;
   line-height: 1.8;
-  color: var(--secondary);
+  color: var(--muted-foreground);
   margin-bottom: 36px;
 }
 .prose {
@@ -205,7 +205,7 @@
   margin: 8px 0;
 }
 .prose a {
-  border-bottom: 1px solid var(--secondary);
+  border-bottom: 1px solid var(--muted-foreground);
   color: var(--text);
 }
 .prose a:hover {
@@ -233,10 +233,10 @@
   font-size: 0.85rem;
 }
 .prose blockquote {
-  border-left: 2px solid var(--secondary);
+  border-left: 2px solid var(--muted-foreground);
   margin: 24px 0;
   padding: 5px 20px;
-  color: var(--secondary);
+  color: var(--muted-foreground);
 }
 .code-block {
   position: relative;
@@ -257,7 +257,7 @@
   border: 1px solid var(--border);
   border-radius: 5px;
   background: var(--surface);
-  color: var(--secondary);
+  color: var(--muted-foreground);
   z-index: 1;
 }
 .code-block > button:hover {
@@ -275,7 +275,7 @@
 }
 .article-footer > p {
   font-size: 0.8rem;
-  color: var(--secondary);
+  color: var(--muted-foreground);
 }
 .doc-pagination {
   display: grid;
@@ -306,14 +306,14 @@
 }
 .docs-toc > p {
   font-size: 0.75rem;
-  color: var(--secondary);
+  color: var(--muted-foreground);
   margin-bottom: 15px;
 }
 .docs-toc a {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--secondary);
+  color: var(--muted-foreground);
   margin: 12px 0;
   line-height: 1.5;
 }
@@ -369,7 +369,7 @@
 .eyebrow {
   font-size: 0.75rem;
   letter-spacing: 0.14em;
-  color: var(--secondary);
+  color: var(--muted-foreground);
 }
 @media (min-width: 1550px) {
   .docs-article {
@@ -421,14 +421,17 @@
     display: flex;
   }
   .docs-header .brand img {
-    width: 108px;
+    height: 18px;
+    width: auto;
   }
   .docs-header .brand {
-    gap: 10px;
+    gap: 8px;
+    height: 18px;
   }
   .docs-header .brand .brand-label {
+    height: 18px;
     font-size: 0.65rem;
-    padding-left: 10px;
+    padding-left: 8px;
   }
   .docs-header-actions {
     gap: 8px;

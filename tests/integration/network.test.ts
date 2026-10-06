@@ -85,6 +85,25 @@ test('real network isolation across two users/projects/branches, hidden schema, 
       { 'x-qb-key': a.key, origin: 'http://localhost:9999' },
     );
     expect(r.headers.get('access-control-allow-origin')).toBe('http://localhost:9999');
+    r = await f.response(
+      `/v1/projects/${a.id}/branches/${a.branchId}/data/tasks`,
+      'OPTIONS',
+      undefined,
+      undefined,
+      {
+        'x-qb-key': a.key,
+        origin: 'http://127.0.0.1:9999',
+        'access-control-request-method': 'GET',
+      },
+    );
+    expect(r.status).toBe(204);
+    expect(r.headers.get('access-control-allow-origin')).toBe('http://127.0.0.1:9999');
+    r = await f.response('/setup', 'OPTIONS', undefined, undefined, {
+      origin: 'http://127.0.0.1:7610',
+      'access-control-request-method': 'GET',
+    });
+    expect(r.status).toBe(204);
+    expect(r.headers.get('access-control-allow-origin')).toBe('http://127.0.0.1:7610');
     const secret = (
       await f.call(
         `/management/v1/projects/${a.id}/keys`,

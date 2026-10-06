@@ -139,7 +139,7 @@ async function run(action: string, a: any) {
     case 'objects':
       return engine.db
         .query(
-          "SELECT id,bucket_id,key,owner_id,size,mime,state FROM _qb_objects WHERE bucket_id=? AND (?=1 OR owner_id=?) AND state='ready' ORDER BY id LIMIT 500",
+          "SELECT id,bucket_id,key,owner_id,size,mime,state,created_at FROM _qb_objects WHERE bucket_id=? AND (?=1 OR owner_id=?) AND state='ready' ORDER BY id LIMIT 500",
         )
         .all(a.bucket, Number(!!a.privileged), identity.sub ?? '');
     case 'upload-intent': {

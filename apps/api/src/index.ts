@@ -214,3 +214,4 @@ export async function startService(override?: Parameters<typeof createService>[0
   return { ...service, server, close };
 }
 if (import.meta.main) await startService();
+

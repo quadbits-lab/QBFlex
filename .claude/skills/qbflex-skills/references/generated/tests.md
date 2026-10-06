@@ -63,7 +63,7 @@ SHA-256: `415537cd75cef2c2696a6d72517e2c9edf5b94420cee2c1cd3a596af83694940`
 
 ## tests/integration/email.test.ts
 
-SHA-256: `28b4eaad52deea518b9d3748c34090c1b39bd6147a3bb9f9a25581e661565acb`
+SHA-256: `2794cf52efe6f60ad7284eaac2f07e4e8a8a5335261f612217a35e1f69af187a`
 
 Shared test fixture; scenario names are in its consuming test files.
 
@@ -75,7 +75,7 @@ SHA-256: `0c526e4bb7b5957bfe46472e3f008efd357fe6cbdaa0872d51a720c9287d6a01`
 
 ## tests/integration/network.test.ts
 
-SHA-256: `5af0f64bab24c46e4f8c4d6972891055f079473de16a7312dbb1bbffec0a7014`
+SHA-256: `ef1b897143a96f28f589fe7e0bbf8d06482f8c263351e6e6a675e75329325629`
 
 - real network isolation across two users/projects/branches, hidden schema, CORS, scopes and session revocation
 - real realtime stream respects ownership, resumes after a disconnect and reauthorizes revoked sessions
@@ -108,6 +108,15 @@ SHA-256: `3cd8bbf3ae1d34bdae24d559dd48964e971a93ce59598d4df9034a71ffaac298`
 - OS-managed ownership rejects a live peer and recovers a SIGKILL without stale-lock races
 - out-of-band DDL fails closed until a reviewed migration reconciles it
 - structured logging drops unknown credential and payload fields at runtime
+
+## tests/schema-graph.test.ts
+
+SHA-256: `b085cd13c6533d1e9cfaec483fd372d27630d83ab9d83fe5e669cb69fd90f6e4`
+
+- builds nodes per table and edges per foreign key
+- references to absent tables surface as missing, not edges
+- non-exposed tables still render (policy state is data, not structure)
+- duplicate foreign keys dedupe; relationships become labeled edges
 
 ## tests/sdk-react.test.tsx
 

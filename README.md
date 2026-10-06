@@ -20,18 +20,18 @@ docker compose --profile local stop studio docs api worker
 bun run dev
 ```
 
-MinIO and Mailpit remain running, and database/object volumes are preserved. Native `.data` and the Compose database volume are separate installations; do not copy or invent `worker.token` to connect one installation's worker to another API. For independent worker startup, start the API first with the same `QB_DATA_DIR`, or supply the same server-only `QB_WORKER_TOKEN` to both processes.
+Mailpit remains running, and the database volume is preserved. Native `.data` and the Compose database volume are separate installations; do not copy or invent `worker.token` to connect one installation's worker to another API. For independent worker startup, start the API first with the same `QB_DATA_DIR`, or supply the same server-only `QB_WORKER_TOKEN` to both processes.
 
 - Studio: http://localhost:7610
 - Docs: http://localhost:7611
 - API readiness: http://localhost:7612/ready
 - Mailpit: http://localhost:7616
-- Local MinIO console: http://localhost:7614
 
-Local ports start at **7610**: Studio 7610, Docs 7611, API 7612, MinIO 7613,
-MinIO console 7614, Mailpit SMTP 7615, Mailpit UI 7616, React example 7617 and Vanilla
-example 7618. Container-internal MinIO/SMTP retain their standard ports; the public
-self-hosting gateway uses HTTPS on 443.
+Local ports start at **7610**: Studio 7610, Docs 7611, API 7612,
+Mailpit SMTP 7615, Mailpit UI 7616, React example 7617 and Vanilla
+example 7618. Object storage is any S3-compatible provider you configure
+(`QB_S3_ENDPOINT`, e.g. RustFS on 127.0.0.1:9000); the public self-hosting
+gateway uses HTTPS on 443.
 
 Create your own first owner in Studio using the token in `.data/bootstrap.token`. It is removed after setup. Application users are separate from Studio accounts. No default administrator is seeded. Local master/bootstrap/worker secrets are generated with restricted file permissions. Production requires operator-provided secrets and HTTPS.
 
@@ -88,7 +88,7 @@ The maintenance worker performs expiry cleanup, checkpoints, object cleanup and 
 
 Use persistent local disks for SQLite. One API process owns the data volume through an OS-managed file lock. Do not share live WAL databases across nodes. Project limits, bounded owner queues, query deadlines and realtime connection caps shed overload explicitly.
 
-Linux self-hosting is configured by `compose.selfhost.yml` and `infra/Caddyfile`; supply the required domains, secrets, SMTP and application origins before starting it. Local MinIO is built from checksum-pinned archived upstream source because historical images are unavailable in the tested registries. Certify your production object backend and external identity providers independently.
+Linux self-hosting is configured by `compose.selfhost.yml` and `infra/Caddyfile`; supply the required domains, secrets, email credentials (Resend API key or SMTP) and application origins before starting it. The full production walkthrough — prerequisites, secrets, external S3, backups, upgrades and recovery — is in [docs/deployment.md](docs/deployment.md), with all required variables templated in `.env.production.example`. Object storage is provider-agnostic: any S3-compatible backend (RustFS, MinIO CE, AWS S3, R2) is configured through `QB_S3_*`. Certify your production object backend and external identity providers independently.
 
 ## Verify
 

@@ -8,7 +8,7 @@ Platform organization roles are owner/admin/developer/viewer; they are separate 
 
 A publishable key identifies a project and does not grant row access. Authenticated access still needs applicable policies. Service credentials belong only in trusted server code, with explicit branch/table/method scopes and audited bypass behavior. Browser Origin requests with service keys are rejected. Do not embed a service/management key in VITE_ variables, generated static files, client bundles, URLs or screenshots. The diagnostic helper checks presence and suspicious browser variable names without printing values.
 
-Supply required secrets through protected files or deployment secret storage. Keep master/bootstrap/worker/S3/SMTP/provider credentials out of version control, logs and shell arguments; avoid echoing secret values. CLI secret setting uses an environment variable name, not the literal secret. Never read/print an entire `.env` or master.key while diagnosing missing configuration. Inspect status/presence. Server logs use allowlisted fields; ensure tests catch tokens/passwords/provider responses leaking through errors.
+Supply required secrets through protected files or deployment secret storage. Keep master/bootstrap/worker/S3/email (Resend)/SMTP/provider credentials out of version control, logs and shell arguments; avoid echoing secret values. CLI secret setting uses an environment variable name, not the literal secret. Never read/print an entire `.env` or master.key while diagnosing missing configuration. Inspect status/presence. Server logs use allowlisted fields; ensure tests catch tokens/passwords/provider responses leaking through errors.
 
 ## Data and policy boundaries
 

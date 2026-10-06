@@ -1,6 +1,8 @@
 import { test, expect } from 'bun:test';
 import { fixture } from '../helpers';
 const integration = process.env.QB_INTEGRATION_STORAGE === '1' ? test : test.skip;
+// The test asserts Mailpit delivery; prevent an operator-provided Resend key from hijacking it.
+process.env.QB_MAIL_PROVIDER = 'smtp';
 integration(
   'Mailpit verification and password reset callbacks work without a publishable header and revoke sessions',
   async () => {

@@ -17,6 +17,29 @@ export function openDatabase(path: string, safeIntegers = true) {
     throw new Error('Required SQLite durability settings unavailable');
   return db;
 }
+/** Exact-origin allowlist helper: trim entries and mirror localhost ↔ 127.0.0.1. */
+export function normalizeOrigins(origins: Iterable<string>): string[] {
+  const expanded = new Set<string>();
+  for (const raw of origins) {
+    const origin = raw.trim();
+    if (!origin) continue;
+    expanded.add(origin);
+    try {
+      const url = new URL(origin);
+      if (url.hostname === 'localhost') {
+        url.hostname = '127.0.0.1';
+        expanded.add(url.origin);
+      } else if (url.hostname === '127.0.0.1') {
+        url.hostname = 'localhost';
+        expanded.add(url.origin);
+      }
+    } catch {
+      // Keep the exact configured value only when it is not a valid origin URL.
+    }
+  }
+  return [...expanded];
+}
+
 export function configuration() {
   const dataDir = resolve(process.env.QB_DATA_DIR ?? '.data');
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
@@ -38,10 +61,12 @@ export function configuration() {
     master,
     publicURL,
     studioURL: process.env.QB_STUDIO_URL ?? 'http://localhost:7610',
-    origins: (
-      process.env.QB_ALLOWED_ORIGINS ??
-      'http://localhost:7610,http://localhost:7617,http://localhost:7618'
-    ).split(','),
+    origins: normalizeOrigins(
+      (
+        process.env.QB_ALLOWED_ORIGINS ??
+        'http://localhost:7610,http://localhost:7617,http://localhost:7618'
+      ).split(','),
+    ),
     port: Number(process.env.PORT ?? 7612),
   };
 }

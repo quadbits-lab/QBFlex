@@ -5,14 +5,26 @@ import {
   HeadObjectCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
+import { existsSync } from 'node:fs';
 import { QBError } from '@qb-flex/contracts';
+/**
+ * Inside Docker, loopback cannot reach services published from the host; rewrite a
+ * local S3 endpoint to the host gateway so one QB_S3_ENDPOINT value works natively and
+ * containerized. Native (non-container) processes keep the endpoint unchanged.
+ */
+export function resolveS3Endpoint(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  if (!existsSync('/.dockerenv')) return raw;
+  if (!/^https?:\/\/(localhost|127\.0\.0\.1)/.test(raw)) return raw;
+  return raw.replace(/(localhost|127\.0\.0\.1)/, 'host.docker.internal');
+}
 export class ObjectBackend {
   private client: S3Client;
   private bucket: string;
   constructor() {
     this.bucket = process.env.QB_S3_BUCKET ?? 'qb-flex';
     this.client = new S3Client({
-      endpoint: process.env.QB_S3_ENDPOINT,
+      endpoint: resolveS3Endpoint(process.env.QB_S3_ENDPOINT),
       region: process.env.QB_S3_REGION ?? 'us-east-1',
       forcePathStyle: true,
       credentials: process.env.QB_S3_ACCESS_KEY

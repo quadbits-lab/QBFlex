@@ -10,6 +10,9 @@ import {
   type Filter,
   type RelationsOf,
 } from '@qb-flex/contracts';
+import { createAuthClient } from 'better-auth/client';
+import { twoFactorClient } from 'better-auth/client/plugins';
+import { passkeyClient } from '@better-auth/passkey/client';
 export { QBError } from '@qb-flex/contracts';
 export type { Result, Session, Query } from '@qb-flex/contracts';
 export interface ClientOptions {
@@ -57,6 +60,7 @@ export class QBClient<D = DatabaseShape, R = RPCShape> {
   private disposed = false;
   private epoch = 0;
   private pending = new Set<AbortController>();
+  private betterAuthClient: any | null = null;
   constructor(readonly options: ClientOptions) {
     let url: URL;
     try {
@@ -80,6 +84,29 @@ export class QBClient<D = DatabaseShape, R = RPCShape> {
   }
   getSession() {
     return this.session;
+  }
+  /**
+   * Better-auth client for WebAuthn ceremonies against the branch auth realm.
+   * The custom fetch injects the publishable key plus the current bearer
+   * session on every request, mirroring `request()` header behavior.
+   */
+  private authClient() {
+    if (!this.betterAuthClient) {
+      const client = this;
+      this.betterAuthClient = createAuthClient({
+        baseURL: this.baseURL + '/auth',
+        plugins: [passkeyClient(), twoFactorClient()],
+        fetchOptions: {
+          customFetchImpl: async (input, init) => {
+            const headers = new Headers(init?.headers);
+            headers.set('x-qb-key', client.options.publishableKey);
+            if (client.token) headers.set('authorization', `Bearer ${client.token}`);
+            return await fetch(input, { ...init, headers, credentials: 'include' });
+            },
+        },
+      });
+    }
+    return this.betterAuthClient;
   }
   getIdentityVersion() {
     return this.epoch;
@@ -252,6 +279,62 @@ export class QBClient<D = DatabaseShape, R = RPCShape> {
     signOut: async () => {
       await this.request('/auth/sign-out', 'POST', {}, { auth: true });
       this.setSession(null, null);
+    },
+    passkey: {
+      /** Runs the WebAuthn registration ceremony for the current application user. */
+      enroll: async (opts?: { name?: string }) => {
+        const result = await this.authClient().passkey.addPasskey(opts);
+        if (result.error)
+          throw new QBError('PASSKEY_FAILED', result.error.message ?? 'Passkey registration failed', result.error.status);
+        return result.data as unknown;
+      },
+      list: async () => {
+        const result = await (this.authClient() as any).$fetch('/passkey/list-user-passkeys');
+        if (result.error)
+          throw new QBError('PASSKEY_FAILED', result.error.message ?? 'Unable to list passkeys', result.error.status);
+        return (result.data ?? []) as unknown[];
+      },
+      remove: async (id: string) => {
+        const result = await (this.authClient() as any).$fetch('/passkey/delete-passkey', {
+          method: 'POST',
+          body: { id },
+        });
+        if (result.error)
+          throw new QBError('PASSKEY_FAILED', result.error.message ?? 'Unable to remove passkey', result.error.status);
+      },
+      rename: async (id: string, name: string) => {
+        const result = await (this.authClient() as any).$fetch('/passkey/update-passkey', {
+          method: 'POST',
+          body: { id, name },
+        });
+        if (result.error)
+          throw new QBError('PASSKEY_FAILED', result.error.message ?? 'Unable to rename passkey', result.error.status);
+      },
+      /** Runs the WebAuthn authentication ceremony and adopts the returned session. */
+      signIn: async () => {
+        const result = await this.authClient().signIn.passkey();
+        if (result.error)
+          throw new QBError('PASSKEY_FAILED', result.error.message ?? 'Passkey sign-in failed', result.error.status);
+        const payload = result.data as any;
+        const session = payload?.user
+          ? { user: payload.user, token: payload.token ?? null }
+          : null;
+        this.setSession(session, payload?.token ?? null);
+        return session;
+      },
+    },
+    twoFactor: {
+      /** Returns the TOTP enrollment URI and one-time backup codes. */
+      enable: async (password: string) => {
+        const result = await this.request<any>('/auth/two-factor/enable', 'POST', { password }, { auth: true });
+        return { totpURI: result.totpURI as string, backupCodes: (result.backupCodes ?? []) as string[] };
+      },
+      verify: async (code: string) => {
+        await this.request('/auth/two-factor/verify-totp', 'POST', { code }, { auth: true });
+      },
+      disable: async (password: string) => {
+        await this.request('/auth/two-factor/disable', 'POST', { password }, { auth: true });
+      },
     },
     refreshSession: async (): Promise<Session | null> => {
       if (this.refreshPromise) return this.refreshPromise;

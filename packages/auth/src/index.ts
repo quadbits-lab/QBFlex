@@ -1,9 +1,10 @@
 import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { bearer, twoFactor } from 'better-auth/plugins';
+import { passkey } from '@better-auth/passkey';
 import { getMigrations } from 'better-auth/db/migration';
 import { createHmac, createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import type { Database } from 'bun:sqlite';
-import nodemailer from 'nodemailer';
+import { createMailer } from './email/mailer';
 export const realmSecret = (master: string, realm: string) =>
   createHmac('sha256', master).update(realm).digest('hex');
 export function encryption(master: string) {
@@ -35,22 +36,7 @@ export async function createRealm(
     verifyEmail?: boolean;
   },
 ) {
-  const transport = nodemailer.createTransport({
-    host: process.env.QB_SMTP_HOST ?? '127.0.0.1',
-    port: Number(process.env.QB_SMTP_PORT ?? 1025),
-    secure: process.env.QB_SMTP_SECURE === 'true',
-    ...(process.env.QB_SMTP_USER
-      ? { auth: { user: process.env.QB_SMTP_USER, pass: process.env.QB_SMTP_PASSWORD } }
-      : {}),
-  });
-  const send = async (to: string, subject: string, url: string) => {
-    await transport.sendMail({
-      from: process.env.QB_MAIL_FROM ?? 'QB Flex <hello@localhost>',
-      to,
-      subject,
-      text: `${subject}\n\n${url}`,
-    });
-  };
+  const mailer = createMailer();
   const options = {
     logger: { disabled: true },
     database: db,
@@ -72,19 +58,25 @@ export async function createRealm(
       minPasswordLength: 12,
       revokeSessionsOnPasswordReset: true,
       requireEmailVerification: config.verifyEmail ?? false,
-      sendResetPassword: async ({ user, url }) =>
-        send(user.email, 'Reset your QB Flex password', url),
+      sendResetPassword: async ({ user, url }) => mailer.send(user.email, 'reset-password', url),
     },
     emailVerification: {
       sendOnSignUp: config.verifyEmail ?? false,
-      sendVerificationEmail: async ({ user, url }) => send(user.email, 'Verify your email', url),
+      sendVerificationEmail: async ({ user, url }) => mailer.send(user.email, 'verify-email', url),
     },
     socialProviders: config.providers ?? {},
     plugins: [
       bearer(),
-      ...(config.platform
-        ? [twoFactor({ issuer: 'QB Flex', twoFactorTable: '_qb_auth_two_factor' })]
-        : []),
+      passkey({
+        // The ceremony runs on Studio's origin, which can differ from the API.
+        rpID: new URL(config.platform ? (config.origins[0] ?? config.baseURL) : config.baseURL)
+          .hostname,
+        rpName: 'QB Flex',
+        origin: config.platform ? config.origins : new URL(config.baseURL).origin,
+        // Keep the table in the _qb_auth_* namespace (excluded from schema digests).
+        schema: { passkey: { modelName: '_qb_auth_passkeys' } },
+      }),
+      twoFactor({ issuer: 'QB Flex', twoFactorTable: '_qb_auth_two_factor' }),
     ],
     rateLimit: {
       enabled: true,

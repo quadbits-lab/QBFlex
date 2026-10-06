@@ -19,7 +19,13 @@ import {
   createDecipheriv,
   timingSafeEqual,
 } from 'node:crypto';
-import { configuration, openDatabase, branchPath, BranchOwner } from '@qb-flex/database';
+import {
+  configuration,
+  normalizeOrigins,
+  openDatabase,
+  branchPath,
+  BranchOwner,
+} from '@qb-flex/database';
 import { createRealm, realmSecret, encryption } from '@qb-flex/auth';
 import { QBError, capabilities, routes, type Identity, type Role } from '@qb-flex/contracts';
 import { normalize, cursorCodec } from '@qb-flex/query-engine';
@@ -29,8 +35,10 @@ import { writeControlSnapshot } from '../../../packages/database/src/control-bac
 import { log, Metrics } from '@qb-flex/observability';
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 const now = () => new Date().toISOString();
+
 export async function createService(override?: Partial<ReturnType<typeof configuration>>) {
   const config = { ...configuration(), ...override };
+  config.origins = normalizeOrigins(config.origins);
   const release = acquireLease(config.dataDir);
   try {
     const db = openDatabase(join(config.dataDir, 'control.sqlite'), false);
@@ -39,7 +47,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
       secret: realmSecret(config.master, 'platform'),
       baseURL: config.publicURL,
       basePath: '/platform/auth',
-      origins: [config.studioURL],
+      origins: normalizeOrigins([config.studioURL]),
       platform: true,
     });
     for (const id of ['001-foundation', '002-credentials']) {
@@ -290,7 +298,8 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         throw new QBError('UNAUTHORIZED', 'Valid project key required', 401);
       const settings = cipher.open(p.config);
       const origin = request.headers.get('origin');
-      if (origin && !(settings.origins ?? config.origins).includes(origin))
+      const projectOrigins = normalizeOrigins(settings.origins ?? config.origins);
+      if (origin && !projectOrigins.includes(origin))
         throw new QBError('DENIED', 'Origin not allowed for this project', 403);
       const b = branch(id, bid);
       const o = owner(p, b);
@@ -582,7 +591,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           const project = db.query('SELECT config FROM projects WHERE id=?').get(projectId) as any;
           if (project) {
             const settings = cipher.open(project.config);
-            allowed = settings.origins ?? allowed;
+            allowed = settings.origins ? normalizeOrigins(settings.origins) : allowed;
             requestLimit = settings.quotas?.requestsPerMinute ?? 600;
           }
         }
@@ -596,7 +605,11 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           }
         }
         const length = Number(request.headers.get('content-length') ?? 0);
-        if (length > 65536 && !(request.method === 'PUT' && path.endsWith('/content')))
+        const objectUpload = request.method === 'PUT' && path.endsWith('/content');
+        const avatarUpload = request.method === 'POST' && path === '/platform/avatar';
+        if (avatarUpload && length > 3_276_800)
+          throw new QBError('SIZE_LIMIT', 'Avatar uploads are limited to 3 MiB', 413);
+        if (length > 65536 && !objectUpload && !avatarUpload)
           throw new QBError('SIZE_LIMIT', 'JSON request bodies are limited to 64 KiB', 413);
         if (request.method === 'OPTIONS') {
           set.headers['Access-Control-Allow-Headers'] =
@@ -738,6 +751,93 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         } finally {
           setupBusy = false;
         }
+      })
+      .post('/platform/avatar', async ({ request }) => {
+        const actor = await user(request);
+        if (actor.tokenScope)
+          throw new QBError('TOKEN_SCOPE', 'Use a platform session to update your avatar', 403);
+        const form = await request.formData();
+        const entry = form.get('file');
+        // Bun/FormData may yield File or Blob; reject bare strings.
+        if (!entry || typeof entry === 'string' || typeof (entry as Blob).arrayBuffer !== 'function')
+          throw new QBError('VALIDATION', 'Choose an image file to upload');
+        const file = entry as Blob & { type?: string; name?: string };
+        const mime = String(file.type || '').toLowerCase();
+        const allowed = new Map([
+          ['image/jpeg', 'jpg'],
+          ['image/png', 'png'],
+          ['image/webp', 'webp'],
+          ['image/gif', 'gif'],
+        ]);
+        const ext = allowed.get(mime);
+        if (!ext) throw new QBError('VALIDATION', 'Use a JPEG, PNG, WebP, or GIF image');
+        if (file.size < 1 || file.size > 3_145_728)
+          throw new QBError('VALIDATION', 'Avatar must be between 1 byte and 3 MiB');
+        const bytes = Buffer.from(await file.arrayBuffer());
+        const folder = join(config.dataDir, 'platform-avatars');
+        mkdirSync(folder, { recursive: true, mode: 0o700 });
+        for (const existing of readdirSync(folder)) {
+          if (existing.startsWith(`${actor.id}.`)) unlinkSync(join(folder, existing));
+        }
+        const filename = `${actor.id}.${ext}`;
+        writeFileSync(join(folder, filename), bytes, { mode: 0o600 });
+        const image = `${config.publicURL}/platform/avatars/${actor.id}?v=${Date.now()}`;
+        // Persist on the platform user row directly. Forwarding the multipart
+        // request into Better Auth updateUser corrupts the session body parse.
+        const updated = db
+          .query('UPDATE _qb_auth_users SET image=? WHERE id=?')
+          .run(image, actor.id);
+        if (!updated.changes) {
+          try {
+            unlinkSync(join(folder, filename));
+          } catch {
+            /* best-effort cleanup */
+          }
+          throw new QBError('NOT_FOUND', 'Platform user not found', 404);
+        }
+        audit(actor.id, 'platform.avatar.upload', 'user:' + actor.id, null, request, 'ok');
+        return success({ image }, request);
+      })
+      .delete('/platform/avatar', async ({ request }) => {
+        const actor = await user(request);
+        if (actor.tokenScope)
+          throw new QBError('TOKEN_SCOPE', 'Use a platform session to update your avatar', 403);
+        const folder = join(config.dataDir, 'platform-avatars');
+        if (existsSync(folder)) {
+          for (const existing of readdirSync(folder)) {
+            if (existing.startsWith(`${actor.id}.`)) unlinkSync(join(folder, existing));
+          }
+        }
+        db.query('UPDATE _qb_auth_users SET image=? WHERE id=?').run(null, actor.id);
+        audit(actor.id, 'platform.avatar.delete', 'user:' + actor.id, null, request, 'ok');
+        return success({ image: null }, request);
+      })
+      .get('/platform/avatars/:userId', ({ params, set }) => {
+        const userId = String(params.userId ?? '');
+        if (!/^[a-zA-Z0-9_-]{1,128}$/.test(userId))
+          throw new QBError('NOT_FOUND', 'Avatar not found', 404);
+        const folder = join(config.dataDir, 'platform-avatars');
+        if (!existsSync(folder)) throw new QBError('NOT_FOUND', 'Avatar not found', 404);
+        const match = readdirSync(folder).find((name) => name.startsWith(`${userId}.`));
+        if (!match) throw new QBError('NOT_FOUND', 'Avatar not found', 404);
+        const ext = match.slice(userId.length + 1);
+        const types: Record<string, string> = {
+          jpg: 'image/jpeg',
+          jpeg: 'image/jpeg',
+          png: 'image/png',
+          webp: 'image/webp',
+          gif: 'image/gif',
+        };
+        const type = types[ext];
+        if (!type) throw new QBError('NOT_FOUND', 'Avatar not found', 404);
+        set.headers['content-type'] = type;
+        set.headers['cache-control'] = 'public, max-age=3600';
+        return new Response(readFileSync(join(folder, match)), {
+          headers: {
+            'content-type': type,
+            'cache-control': 'public, max-age=3600',
+          },
+        });
       })
       .all('/platform/auth/*', async ({ request }) => {
         const path = new URL(request.url).pathname;

@@ -1,6 +1,10 @@
 # QB Flex — BaaS Platform Development Specification
 
-Version: 1.0 • Date: 5 October 2026 • Status: proposed implementation baseline
+Specification version: **1.1** • Date: 6 October 2026 • Product version: **0.1.0**
+
+Status: expanded release under development; not a declaration of feature availability.
+
+**Precedence:** Sections 31–37 define the accepted expanded release and supersede conflicting phase assignments in sections 1–30. Earlier sections retain architectural history and deferred product ideas. The release is incomplete until every expanded requirement has passing acceptance evidence. See [implementation status](docs/expanded-release-status.md).
 
 ## 1. Product definition
 
@@ -77,7 +81,7 @@ These are delivery phases, not removal of requested scope. Feature flags and the
 | Auth | Better Auth candidate | Password/session/provider mechanisms with explicit tenant isolation |
 | UI | ShadCN UI, Tailwind | Accessible primitives and theme tokens |
 | UI references | bklit.com, blocks.so, Supabase Library | Selected dashboards, forms and AI UI patterns, adapted to QB branding |
-| Object storage | S3-compatible backend | MinIO/S3/R2-style adapter contract, tested per backend |
+| Object storage | S3-compatible backend | RustFS/S3/R2-style adapter contract, tested per backend |
 | Image pipeline | Sharp candidate | Bounded transforms outside request event loop |
 | Vector search | sqlite-vec candidate | Extension-backed similarity search behind interchangeable adapter |
 | Telemetry | OpenTelemetry + structured logs | Request traces, metrics and job diagnostics |
@@ -647,3 +651,226 @@ Architecture and feature choices above are proposed QB Flex requirements. They a
 - [tus protocol](https://tus.io/protocols/resumable-upload): resumable upload contract to pin during implementation.
 - [MCP specification](https://modelcontextprotocol.io/specification): protocol/authorization contract to pin and verify with target clients.
 
+
+## 31. Expanded release contract (specification 1.1)
+
+### 31.1 Existing, required, deferred
+
+**Existing, source-backed:** organizations/projects, isolated branch identity realms, native SQLite owners, reviewed migrations, default-private exposure and column allowlists, shared CRUD/RPC/realtime policy enforcement, password/TOTP/passkey server plugins, authorized realtime, S3-compatible storage, encrypted local snapshots, CLI, browser/React SDKs, Studio and Docs. Backend/provider configuration and physical ceremonies still require deployment-specific verification. Existing code/tests, not this specification, establish availability.
+
+**Required:** the twelve features in section 32, native SDK and complete push integration in section 33, and all four optional browser WASM integrations in section 34. This is one expanded release. Dependency order does not authorize removing later work or declaring an early foundation complete.
+
+**Deferred:** general branching/merge, resumable multipart, GraphQL, untrusted functions, broad AI/vector services, additional identity providers, distributed ownership, multi-region, and the six WASM candidates listed below. Historic P1/P2 tables do not promote these into this expanded release.
+
+### 31.2 Invariants and shared contracts
+
+- Retain native SQLite, one writable owner per immutable branch, fenced lifecycle, local persistent disks, separate control/application identities, default-private tables and actual shared policy enforcement. Never share writable SQLite files across API instances.
+- Preserve `QB_*`, ports 7610/7611/7612, existing response envelopes, public SDK signatures, routes, quotas, asynchronous operation conventions and legacy archive restore. Additive contracts may not silently change existing behavior.
+- Project/branch resources require membership and existing scoped-management-token checks. Viewer reads; developer configuration where permitted; owner/admin plus existing MFA for production push/credential changes. Application users cannot inherit management privileges.
+- New internal executors authenticate to owner-mediated APIs. They do not mount SQLite or directly mutate databases. The Node push principal can claim/complete only push jobs; the maintenance principal cannot mint application sessions.
+- Durable jobs contain encrypted bounded payloads, transactional submissions/checkpoints, stable deduplication identities, expiring leases with fencing tokens, recorded attempts, bounded retries, dead letters and explicit replay. Expired leases may cause duplicate side effects: receivers must deduplicate stable event IDs. Cancellation stops unsent work, not effects already accepted externally.
+- Proposed management resources: recovery destinations/inventory/drills, findings/acknowledgments, diagnostics, operations summaries, query inspection, reviews, previews, jobs, webhooks, search configuration and notifications. Add typed management helpers; `client.search(...)` remains application-policy-enforced. Exact routes must enter executable contracts when implemented, never as mock-success endpoints.
+- Every section inherits redacted logging, bounded input/concurrency/retention, cancellation, capability reporting, audit requirements and fail-closed authorization. Unknown external delivery is not success.
+
+## 32. Product feature development specifications
+
+### REC-01 Recovery Center
+
+**Purpose/workflows:** extend Backups with encrypted off-node S3-compatible destinations, inventory, configured retention, freshness warnings and scheduled isolated restore drills. A drill validates database integrity, separate object recovery/availability/checksums and independently held master-key availability. Operators provide object-store backup/versioning; QB Flex verifies, not copies, object backups.
+
+**Authorization/API/state:** project-scoped inventory/report reads; admin destination/retention/schedule configuration; owner/admin drill execution. Add management recovery resources/helpers. Archives progress `staging → encrypted → uploading → verified | failed`; drills `queued → restoring → validating → complete | partial | failed | cancelled`. Database-only success cannot become complete when objects or keys are unverified. No primary alias changes.
+
+**Configuration/limits/failure/compatibility:** daily snapshots, seven daily/four weekly checkpoints; reference targets RPO24h/RTO60m require measured installation evidence. Configure S3 endpoint/region/bucket/prefix and encrypted credential references separately from normal object storage. Never upload master keys with archives. Bound streams and scratch disk/concurrency; keep legacy restore. Corruption, insufficient disk, missing key/object/destination produce separate actionable report findings; deletion never removes the last required checkpoint accidentally.
+
+**Acceptance:** encrypted remote round-trip; corruption/missing-key/missing-object failures; stale alerts; retention correctness; restart cleanup; unchanged primary; legacy archive fixtures; measured drill report includes all three recovery dimensions.
+
+### SEC-01 Security Advisor and Policy Simulator
+
+**Purpose/workflows:** findings for missing useful grants, risky exposure/columns, public buckets, aging credentials and admin MFA gaps. Include severity, evidence, remediation and expiring acknowledgments; no automatic changes. Extend existing policy-test endpoint with isolated synthetic fixtures and SELECT/INSERT/UPDATE/DELETE; actual BranchEngine evaluates old-row access and prospective checks.
+
+**Authorization/API/state:** developer simulation and findings reads, admin acknowledgments; synthetic identities only, never minted tokens. Findings `open → acknowledged → expired/reopened | resolved`. Simulation `validating → constructing scratch → evaluating → discarded`. Legacy read-test envelope remains supported without permitting caller-supplied privilege flags.
+
+**Configuration/limits/failure/compatibility:** bounded fixtures, schema and result size; ephemeral isolated database, no copied production rows/sessions or arbitrary SQL. Use current exposure/policy/relationship definitions, parameterized fixtures and engine validation. Unsupported/custom schemas fail explicitly. Simulation failure rolls back/discards all scratch state and cannot modify live data/outbox.
+
+**Acceptance:** two-user old/new-row denial, hidden columns, missing policy, nested relationship policy, rollback and no live outbox writes, privileged-input rejection/stripping, acknowledgment expiry, MFA/public-bucket findings, no synthetic token issuance.
+
+### OPS-01 Operations Dashboard and ALERT-01 operational alerts
+
+**Purpose/workflows:** private latency histograms; owner queue pressure/restarts/timeouts; disk/WAL size; outbox lag; maintenance and transfer failures; backup age; push/webhook/job health. Studio gets authorized summaries, never executor credentials. Default alerts: stale backups, disk pressure, sustained queue saturation, maintenance/delivery-worker failures.
+
+**Authorization/API/state:** management-only summaries/configuration, authenticated internal scrape. Alert `healthy → pending → firing → acknowledged → recovered`; fingerprint deduplication, cooldown and recovery notifications. Channels: Studio, configured existing mail adapter, signed durable webhooks. Acknowledging does not hide continuing failure forever.
+
+**Configuration/limits/failure/compatibility:** bounded route/metric labels and retention, no SQL parameter values, row bodies, tokens or arbitrary user labels. Recipients/destinations must be configured; unavailable channel becomes failed job, not silent success. Do not replace existing metric names; retain old counters and add histograms. Scope shared host metrics separately from project metrics.
+
+**Acceptance:** histogram boundaries/cardinality/redaction; queue/disk/failure thresholds; scoped reads; cooldown/ack/recovery; mail/webhook failure and dead letters; no credentials in Studio.
+
+### STR-01 Bounded streaming transfers and archives
+
+**Purpose/workflows:** replace whole-body buffering and synchronous whole-snapshot encryption with streams, backpressure, cancellation, incremental SHA256 and bounded concurrency. Privately stage snapshot/restores; data is inaccessible until authentication, checksum and integrity validation complete.
+
+**Authorization/API/state:** preserve existing transfer endpoints/identity checks and upload intent states/quotas. Optional expected-checksum metadata is additive. Archives have explicit version, format metadata, authenticated encryption and integrity framing; old archives remain readable. `staging → streaming → authenticating → verified → finalized`, failure/cancel removes private staging. Never report finalized on ambiguous backend outcome.
+
+**Configuration/limits/failure/compatibility:** bounded chunks/memory, per-owner/gateway concurrency, disk/byte budgets and explicit timeouts. Restart sweeper removes abandoned private staging. Legacy clients without checksums work; server still validates actual bytes, MIME/size and duplicate content. Multipart/resumption deferred.
+
+**Acceptance:** large-file peak-memory evidence; slow consumer backpressure; disconnect/cancellation; checksum/MIME/size rejection; concurrency limit; crash cleanup; corrupt authentication tag; legacy restore.
+
+### DOC-01 Deployment Doctor
+
+**Purpose/workflows:** extend existing redacted diagnostic helper and add `qb doctor`. Check runtime/installed-version compatibility, HTTPS/origins, presence of secrets, local disk/ownership/free space, mail/S3 configuration and access, maintenance/executor health, backup destinations and native/push configuration.
+
+**Authorization/API/state:** local readonly inventory by default, configured authorized private probes only. Structured findings with severity/code/remediation and exit status: 0 no blocking errors, 1 blocking errors, 2 invalid invocation. Redact values and credential-bearing URLs. Probe results distinguish unknown/unconfigured/unavailable from healthy.
+
+**Configuration/limits/failure/compatibility:** explicit bounded timeouts; no dotenv/key contents read by the inventory helper. Write probes and test mail/push require separate explicit flags and scoped targets; no automatic network probing or test notifications. Existing detached skill helper remains usable. Never certify provider/device support from configuration presence.
+
+**Acceptance:** no filesystem mutation; secret/path redaction; malformed URL/origin; missing production secrets; offline/timeout; readiness probe no redirects; actionable exit status; old helper compatibility.
+
+### QIN-01 Query Inspector
+
+**Purpose/workflows:** normalized slow-query summaries, owner-executed generated-query plans including policy predicates; schema-based index suggestions and before/after comparison. Never auto-create indexes.
+
+**Authorization/API/state:** developer project/branch inspection, no unrestricted application explain API. Summaries use fingerprints without parameter values. Plans are diagnostic and not stable application wire types. Requests `queued → planned | failed` with bounded owner work.
+
+**Configuration/limits/failure/compatibility:** bounded samples/time/retention; redact sensitive SQL literals. Use native EXPLAIN QUERY PLAN for generated statements, not execute arbitrary supplied SQL. Unsupported plans are explained rather than guessed. [SQLite documentation](https://www.sqlite.org/eqp.html).
+
+**Acceptance:** policy predicates present; no persisted bindings; limit/time bounds; suggestions never mutate schema; plans respect identity/exposure; before/after reproducible fixtures.
+
+### REV-01 Schema Change Review
+
+**Purpose/workflows:** Schema workspace compares schemas/exposure/policies; classifies destructive changes; rehearses supported migrations in an isolated scratch database; compiles generated SDK types against reviewed fixtures. Server rehearsal is authoritative.
+
+**Authorization/API/state:** developer prepare/review, existing audited migration/backup permission for apply. `draft → rehearsed → approved → applied | stale | rejected`. Approval binds base schema version and migration digest; atomic stale check at apply. Existing backup/migration paths apply changes.
+
+**Configuration/limits/failure/compatibility:** no external database access, ATTACH, extension loading or live mutation during rehearsal. Bound scratch size/SQL/runtime. Failed rehearsal leaves live branch untouched. No generic SQL parser alone proves safety.
+
+**Acceptance:** destructive classification, stale approval/digest, unsafe SQL, quota/timeouts, type compatibility, rollback and unchanged live outbox/schema.
+
+### PRE-01 Disposable Preview Environments
+
+**Purpose/workflows:** schema/policy forks with explicitly reviewed synthetic fixtures and fresh identities; create/status/extend/delete, CLI and optional PR metadata. No merge/promotion or production-row anonymization shortcut.
+
+**Authorization/API/state:** project developer creation subject to quotas; admin lifecycle policy. Standard asynchronous operation IDs. `queued → provisioning → ready → expiring → deleting → deleted | failed`. TTL72h, max7days; fenced cleanup/retry.
+
+**Configuration/limits/failure/compatibility:** configured branch/disk quotas. Never copy rows/users/sessions/provider credentials/push registrations/webhook destinations/pending jobs. Metadata and fixtures bind review. Partial failure cleans scratch files/owners; alias remains unchanged.
+
+**Acceptance:** all secret/data exclusions, fresh realms, quota races, TTL/extension bounds, crash cleanup, existing owner fencing and no data merge.
+
+### WHK-01 Durable Webhooks and Job Inbox
+
+**Purpose/workflows:** committed outbox fanout with transactional checkpoints into durable jobs. Inbox exposes lease/attempt/dead-letter metadata and explicit replay. Subscription declares tables/events/columns and scoped integration identity; dispatch revalidates current authorization/projection.
+
+**Authorization/API/state:** developer reads/configuration where scoped, admin secret/destination changes. Jobs `queued → leased → succeeded | retry_wait | dead | cancelled`; expired leases fenced; replay is explicit/audited new attempt lineage. At-least-once, stable event IDs, receiver deduplication. HMAC signs exact bytes with timestamp/event ID; support rotation.
+
+**Configuration/limits/failure/compatibility:** max10 attempts over24h; bounded payload/queue/leases. SSRF protection rejects unsafe schemes, credentials, redirects, private/link-local/metadata IPv4/IPv6 and DNS rebinding; connect only to validated pinned address. Explicit operator internal allowlist is the only override. Revoked identity/changed projection suppresses unauthorized bytes. External timeout may be unknown delivery.
+
+**Acceptance:** durable reopen/crash/expired leases/duplicate submits/dead-letter/replay; exact-byte signatures/rotation; revocation/projection changes; redirect and DNS-rebinding tests including IPv6; partial fanout checkpoint atomicity.
+
+### LAB-01 Local Data Lab
+
+**Purpose/workflows:** independent Studio workspace for explicitly imported CSV/JSON/Parquet/SQLite; schema preview, bounded queries/profiling/export using optional workers. No automatic upload. Local SQL cannot fetch remote URLs or install extensions.
+
+**Authorization/API/state:** browser-local consent, no management secret sent to workers; explicit export/upload remains separate authorized action. `idle → loading → ready → running → ready | cancelled | failed`. Ephemeral default; persistent storage only with consent and visible deletion.
+
+**Configuration/limits/failure/compatibility:** budgets/worker rules in section34; only registered local files. Disable external network/extension functions, not merely hide UI buttons. Unsupported engine/device disables capability; CRUD/login unaffected.
+
+**Acceptance:** malformed/oversized files; SQL remote-access/extension rejection; result/time/memory budgets; cancel/terminate; persistence deletion; no outbound imported data.
+
+### RTD-01 Realtime Debugger
+
+**Purpose/workflows:** existing workspace shows connection lifecycle/reconnects, cursor/replay gaps, resynchronization, latency and subscription diagnostics. Metadata-only default traces.
+
+**Authorization/API/state:** management transport health is not proof of application authorization. Application debug session uses its actual application identity. No credential-bearing URLs or raw protected event capture. Record `connecting/joined/replaying/resync/disconnected` transitions with bounded retention.
+
+**Configuration/limits/failure/compatibility:** bounded trace entries and subscriptions, no row bodies in telemetry. Preserve existing first-frame auth and reconnect semantics. Background native sockets pause and foreground revalidate.
+
+**Acceptance:** replay expiry/gaps, revocation, identity switch, trace redaction/capacity, latency semantics and no management masquerading.
+
+### SEA-01 Permission-aware search
+
+**Purpose/workflows:** explicitly registered FTS5 collections over exposed allowed text columns, private indexes maintained transactionally. Native FTS5 only, no vector fallback.
+
+**Authorization/API/state:** management collection registration/rebuild; typed application `client.search(...)` passes current SELECT policies before projection/counts/paging/snippets. Collections `building → ready → invalidated → rebuilding | unsupported | failed`. Schema/exposure changes invalidate before further reads.
+
+**Configuration/limits/failure/compatibility:** bounded literal-term queries, deterministic cursors, private internal indexes. No vocabulary endpoints or global ranking/corpus statistics. Unsupported FTS5 is explicit. [SQLite FTS5 documentation](https://www.sqlite.org/fts5.html).
+
+**Acceptance:** cross-user hidden rows/counts/snippets/columns; unsupported extension; transaction rollback; rebuild/schema changes; bounded queries and cursor scope.
+
+## 33. Native SDK and push
+
+### NAT-01 Foundation, sessions and native capabilities
+
+Add `@qb-flex/react-native` with asynchronous `createNativeClient`, existing provider/hooks and native hooks, plus optional background/notifications/media entrypoints. Initial certification target: Expo57.0.26, RN0.86.3, React19.2.3, Hermes/New Architecture; bare RN requires Expo modules. These pins are certification targets, not evidence of compatibility.
+
+React stays external; ReactDOM optional; Metro-compatible exports; no eager browser WebAuthn imports. Automatically supply missing URL/secureUUID/abort-composition/UTF8/base64url, preserving valid host implementations. Never emulate DOM or fall back to insecure random. Use Better Auth Expo1.7.7 and coordinated SecureStore cookies/session/token rotation, MFA completion and callback hydration. Support password/verification/reset/TOTP/Google/GitHub plus native passkeys0.4.2. Register app schemes/signing identities/AASA/assetlinks/assertion origins separately from HTTP CORS; preserve RPIDs.
+
+Optional biometric foreground lock is not server MFA. URI transfers include progress/cancellation; media selection/capture/sharing and capability diagnostics request permissions only on explicit actions, never import. Session `unhydrated → signed_out | signed_in | mfa_pending`; foreground lock orthogonal. Revocation/account switch cancels requests/sockets and clears protected state. Acceptance includes coordinated hydration/rotation/MFA/OAuth, no DOM native bundle, association/origin verification, cancelled transfer and real-device opt-in passkey/biometric checks.
+
+### OFF-01 Encrypted offline persistence and BKG-01 background sync
+
+Persistence opt-in; SQLCipher mandatory, keys in SecureStore, no plaintext fallback. Scope API/project/immutable branch/user; explicit immutable branch required; cache TTL24h. Queue only explicit single-row writes, returning tickets rather than successful server responses. Inserts require supplied PK; update/delete require expected server revision. Persist stable idempotency before send; no automatic uncertain retry after23h from first attempt (server retention24h). Conflict pauses until discard/explicit rebase. Auth/RPC/bulk/file queues online-only.
+
+Queue `queued → sending → acknowledged | retry_wait | conflict | needs_review | discarded`; server remains authoritative. Signout wipes protected cache/queues/sessions/subscriptions. Pause background sockets; foreground revalidate/replay/refetch. Atomic lease coordinates foreground/headless; flush≤20operations/20seconds; request15min interval but OS schedules, not a guarantee. Keys available after first unlock for unattended encrypted sync; optional biometric foreground lock does not gate background keys. Acceptance: encrypted restart/no plaintext, scope/account isolation, leases/crashes, idempotency horizon, conflicts/manual rebase, offline expiry, signout and physical-device scheduling opt-in.
+
+### PSH-01 Installation registration/lifecycle
+
+Use expo-notifications permissions/Expo tokens/responses/channels/badges/local notifications. After explicit permission and validated sign-in auto-upsert against server-derived user, never supplied userId. Multiple devices; one current user per scoped installation. Scope project/immutable branch/native app/EAS project/environment/platform. Raw tokens encrypted, listings masked. Reacquire Expo token after native token change and retry registration on connectivity recovery.
+
+`active → opted_out | deregistered | invalid | inactive`; sends exclude age≥30days; daily cleanup deletes token values. Only authenticated foreground check-ins update server `lastSeenAt`, throttled24h; sends/receipts/background do not. Immediate invalidation for DeviceNotRegistered/deleted user/opt-out/deregistration. Online logout deregisters; offline logout retains only installation-revocation credential until acknowledgment, no login/data/register/send rights. Restores/previews never revive registrations/campaigns. Masked lifecycle/campaign history30days. Acceptance: exact30day boundary, rotation/retry, account switch/ownership, encrypted storage, offline revocation rights, restore exclusion, platform/env separation.
+
+### PSH-02 Delivery, API, worker and Studio
+
+Distinct development/staging/production EAS projects and native app IDs; separate iOS/Android Test Lab. Dedicated Node24LTS worker with expo-server-sdk7.2.0, no SQLite mount. APNs/FCM credentials stay in Expo/EAS; Expo access tokens encrypted server-side. Disabled by default; optional Compose service; restricted worker credential and health checks. Configuration contracts `QB_PUSH_ENABLED`, `QB_PUSH_WORKER_TOKEN`, `QB_PUSH_INTERNAL_API_URL` remain proposed until validated implementation exists.
+
+Studio operators/scoped trusted-server sends only; users manage own installations/preferences. Developers test dev/staging; production send and credential changes owner/admin plus existing MFA. `202` campaign ID; drafts/templates, dry-run audience, single installation/user, filtered bulk, UTC schedules, unsent cancellation and explicit failed-recipient retry. Snapshot/deduplicate recipients; recheck current ownership/activity/preferences/environment before each dispatch.
+
+Campaign `draft → scheduled/queued → sending → completed | partially_failed | cancelled`; recipient `pending → accepted → provider_handoff | failed | skipped | unknown`. Never claim delivery/read confirmation.≤5000 installations/campaign;≤100messages/batch; shared≤300messages/sec/EAS project;≤6retry attempts/1h. Receipt check after15min,≤1000IDs/batch, before24h expiry; unknown remains distinguishable. Provider guidance: [Expo delivery](https://docs.expo.dev/push-notifications/sending-notifications/).
+
+Add `/notifications`: Overview, Tokens & Users, Composer, Campaigns, Test Lab, Configuration. Production confirmation, audited token reveal, quotas/receipt timelines/cleanup reports. Typed installation/campaign/receipt SDK/hooks and management preview/send/status/cancel. Default messages use generic text/resource IDs; already handed-off messages cannot be recalled. Acceptance: production MFA/scoped sends, worker role isolation, rate/batch boundaries, replay/ambiguous outcomes, partial failures/receipt expiry, cancellation/schedule/explicit retries, real push only opt-in certification.
+
+## 34. Optional WASM capabilities and portability
+
+All four are required in expanded release, but optional at runtime, lazy-loaded browser workers with pinned self-hosted assets. They never replace native server SQLite or become Hermes dependencies. No secrets enter workers; login/CRUD/normal uploads work when unsupported. Single-thread baseline; do not globally enable isolation headers that break OAuth/embeds.
+
+| ID | Library / capability | Required controls and acceptance |
+| --- | --- | --- |
+| WAS-01 | Official SQLite WASM: local SQL/imported SQLite/schema-only synthetic rehearsal | In-memory default; explicit OPFS consent/delete and documented single-owner limits; server rehearsal authoritative. Unsupported/malformed/oversized/cancel and persistence deletion tests. [Persistence guidance](https://www.sqlite.org/wasm/doc/trunk/persistence.md) |
+| WAS-02 | jSquash resize/WebP before-upload optimization | Opt-in preview before/after; preserve original; approved formats/input/pixel limits; cancel worker; server MIME/size/checksum authoritative. Malformed image/pixel-bomb/original/cancel tests. |
+| WAS-03 | hash-wasm incremental SHA256 | Bounded imported/transfer chunks; optional expected upload checksum verified during server streamed finalization; existing clients/native crypto unchanged. Digest vectors/mismatch/large-file/cancel/legacy tests. |
+| WAS-04 | DuckDB-WASM local CSV/JSON/Parquet profiling/query | Registered local files only; reject remote fetch and extension installation; transactional CRUD unaffected. Remote-SQL rejection, malformed file, query/result/time bounds tests. |
+
+Default one active heavy worker/workspace,100MiB imported-file budget,2MiB result budget,10second query/rehearsal limit. Terminate on cancel/timeout; bound engine memory where supported; browser/device limits remain honest. Consent persistence explicitly and delete files/keys on request. Review wrapper and embedded-code licensing/security. Measure cold start, download bytes, peak memory, processing/cancel time and low-end responsiveness; no unmeasured speed claims.
+
+Deferred candidates/adoption criteria: Tree-sitter only for justified structural editor features; RE2-WASM only for user-regex safety with unsupported syntax rejected; Zstandard after measured compression and versioned bounded decompression; ONNX after optional model budgets/device fallback; Extism after resource/capability/tenant isolation proof; Wasmtime only for separately isolated untrusted function service. Do not install these merely to populate a roadmap.
+
+Compatibility certification targets: LinuxAMD64/ARM64 production containers; macOS native development; Windows via WSL2/Docker. Native Windows experimental. Chromium/Firefox/WebKit desktop plus real mobile-browser smoke checks. Native extension failures explicit. No universal every-device promise.
+
+## 35. Dependencies, deployment and architecture decisions
+
+Implement in dependency order, not separate release completion: (1)spec/contracts/migrations/capability states/traceability; (2)jobs/streaming/metrics/diagnostics/auth extensions; (3)recovery/security/operations/alerts/query inspection; (4)native/offline/background/push; (5)reviews/previews/webhooks/inbox/realtime/search/WASM; (6)Docs/deployment/packaging/compatibility/full verification.
+
+Update ADRs for durable lease fencing, encrypted stream framing, diagnostics privacy, schema-only previews, separate object recovery, native session/offline isolation, Node push executor, SSRF-safe webhook dispatch and optional worker WASM. Deployment instructions must specify private scratch/disk budgets, separate off-node destinations/key custody, push-off default/private executor connectivity, operator-provisioned EAS/association documents and physical-device certification. Existing Docker/env flows remain valid.
+
+## 36. Requirements-to-tests traceability and completion policy
+
+[The implementation ledger](docs/expanded-release-status.md) records concrete test files/evidence and missing gates. An acceptance ID is not passing just because a test filename is proposed. Unit/mocked behavior does not certify external providers or physical devices.
+
+| Requirement | Required acceptance evidence |
+| --- | --- |
+| REC-01 | Off-node/drill/inventory/retention/freshness, corruption/key/object gaps, unchanged alias, legacy restore |
+| SEC-01 | Actual engine fixture isolation and old/prospective policies, findings/ack expiry, privilege input regression |
+| OPS-01 / ALERT-01 | Histograms/label privacy/retention, scoped summaries, threshold/dedup/cooldown/ack/recovery and delivery failures |
+| STR-01 | Memory/backpressure/cancel/checksum/quota/concurrency/crash cleanup, authenticated v2/legacy archives |
+| DOC-01 | Redacted readonly checks/probes/exit codes; no inadvertent email/push/write probes |
+| QIN-01 | Policy query plans without values, bounded summaries and reviewed-only index suggestions |
+| REV-01 / PRE-01 | Stale review/digest, unsafe SQL, type compilation, fixture/secret exclusions, fresh realm, quotas/TTL/fencing |
+| JOB-01 / WHK-01 | Crash/reopen/dedup/expired leases/fenced results/dead letter/replay/checkpoint atomicity; signatures/rotation/auth projection/SSRF DNS/IPv6 |
+| LAB-01 / WAS-01–04 | Local-only inputs/remote SQL rejected/budgets/cancellation/unsupported fallback/persistence deletion/core unaffected; measured budgets |
+| RTD-01 / SEA-01 | Replay/revocation/identity/redaction; no cross-user search counts/snippets/hidden columns; index invalidation |
+| NAT-01 / OFF-01 / BKG-01 | Metro/declarations/legacy browser, coordinated sessions/encrypted restart/scopes/conflicts/idempotency horizon/signout/leases; device opt-in |
+| PSH-01 / PSH-02 | User-derived token ownership/rotation/exact30day/offline logout/environment/MFA/worker limits/receipts/crash/cancel; real push opt-in |
+| COMP-01 | Repository/browser/CLI/Compose/build/SDK-consumer/skill gates, declared OS/architectures/browsers plus opt-in device evidence |
+
+Completion requires every expanded feature and acceptance evidence. Run `bun run typecheck`, `bun run check`, browser/CLI/Compose/packed SDK consumers/build, `skill:refresh`, `skill:check`, and `skill:test` before packaging. Add Firefox/WebKit and declared platform jobs; skipped gates stay explicit. Physical passkey/biometric/background/real push are explicit opt-in certification, not mocks.
+
+## 37. Authorization boundary
+
+This implementation does not authorize external deployment, EAS credential provisioning, store submissions, production notifications, npm publication, automatic recovery cutover, multi-region operation, vector/AI services or integrated object-byte backup. Tests use isolated fixtures. Do not read/log live keys or erase unrelated working-tree changes. Product version remains0.1.0 until a separate authorized release change.

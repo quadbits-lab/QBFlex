@@ -55,8 +55,15 @@ export declare class QBClient<D = DatabaseShape, R = RPCShape> {
     private disposed;
     private epoch;
     private pending;
+    private betterAuthClient;
     constructor(options: ClientOptions);
     getSession(): Session | null;
+    /**
+     * Better-auth client for WebAuthn ceremonies against the branch auth realm.
+     * The custom fetch injects the publishable key plus the current bearer
+     * session on every request, mirroring `request()` header behavior.
+     */
+    private authClient;
     getIdentityVersion(): number;
     getToken(): string | null;
     onAuthStateChange(listener: (session: Session | null) => void): () => void;
@@ -86,6 +93,29 @@ export declare class QBClient<D = DatabaseShape, R = RPCShape> {
             token: any;
         }>;
         signOut: () => Promise<void>;
+        passkey: {
+            /** Runs the WebAuthn registration ceremony for the current application user. */
+            enroll: (opts?: {
+                name?: string;
+            }) => Promise<unknown>;
+            list: () => Promise<unknown[]>;
+            remove: (id: string) => Promise<void>;
+            rename: (id: string, name: string) => Promise<void>;
+            /** Runs the WebAuthn authentication ceremony and adopts the returned session. */
+            signIn: () => Promise<{
+                user: any;
+                token: any;
+            } | null>;
+        };
+        twoFactor: {
+            /** Returns the TOTP enrollment URI and one-time backup codes. */
+            enable: (password: string) => Promise<{
+                totpURI: string;
+                backupCodes: string[];
+            }>;
+            verify: (code: string) => Promise<void>;
+            disable: (password: string) => Promise<void>;
+        };
         refreshSession: () => Promise<Session | null>;
         resetPassword: (email: string, redirectTo: string) => Promise<unknown>;
         updatePassword: (token: string, newPassword: string) => Promise<unknown>;

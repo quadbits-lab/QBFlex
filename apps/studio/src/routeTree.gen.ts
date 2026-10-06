@@ -10,33 +10,215 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ConsoleRouteImport } from './routes/_console'
+import { Route as SetupRouteImport } from './routes/setup'
+import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as ConsoleAiRouteImport } from './routes/_console/ai'
+import { Route as ConsoleApiRouteImport } from './routes/_console/api'
+import { Route as ConsoleAuthRouteImport } from './routes/_console/auth'
+import { Route as ConsoleBackupsRouteImport } from './routes/_console/backups'
+import { Route as ConsoleDatabaseRouteImport } from './routes/_console/database'
+import { Route as ConsoleFunctionsRouteImport } from './routes/_console/functions'
+import { Route as ConsoleLogsRouteImport } from './routes/_console/logs'
+import { Route as ConsoleOverviewRouteImport } from './routes/_console/overview'
+import { Route as ConsoleRealtimeRouteImport } from './routes/_console/realtime'
+import { Route as ConsoleSchemaRouteImport } from './routes/_console/schema'
+import { Route as ConsoleSettingsRouteImport } from './routes/_console/settings'
+import { Route as ConsoleStorageRouteImport } from './routes/_console/storage'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConsoleRoute = ConsoleRouteImport.update({
+  id: '/_console',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignInRoute = SignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConsoleAiRoute = ConsoleAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
+  getParentRoute: () => ConsoleRoute,
+} as any)
+const ConsoleApiRoute = ConsoleApiRouteImport.update({
+  id: '/api',
+  path: '/api',
+  getParentRoute: () => ConsoleRoute,
+} as any)
+const ConsoleAuthRoute = ConsoleAuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => ConsoleRoute,
+} as any)
+const ConsoleBackupsRoute = ConsoleBackupsRouteImport.update({
+  id: '/backups',
+  path: '/backups',
+  getParentRoute: () => ConsoleRoute,
+} as any)
+const ConsoleDatabaseRoute = ConsoleDatabaseRouteImport.update({
+  id: '/database',
+  path: '/database',
+  getParentRoute: () => ConsoleRoute,
+} as any)
+const ConsoleFunctionsRoute = ConsoleFunctionsRouteImport.update({
+  id: '/functions',
+  path: '/functions',
+  getParentRoute: () => ConsoleRoute,
+} as any)
+const ConsoleLogsRoute = ConsoleLogsRouteImport.update({
+  id: '/logs',
+  path: '/logs',
+  getParentRoute: () => ConsoleRoute,
+} as any)
+const ConsoleOverviewRoute = ConsoleOverviewRouteImport.update({
+  id: '/overview',
+  path: '/overview',
+  getParentRoute: () => ConsoleRoute,
+} as any)
+const ConsoleRealtimeRoute = ConsoleRealtimeRouteImport.update({
+  id: '/realtime',
+  path: '/realtime',
+  getParentRoute: () => ConsoleRoute,
+} as any)
+const ConsoleSchemaRoute = ConsoleSchemaRouteImport.update({
+  id: '/schema',
+  path: '/schema',
+  getParentRoute: () => ConsoleRoute,
+} as any)
+const ConsoleSettingsRoute = ConsoleSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => ConsoleRoute,
+} as any)
+const ConsoleStorageRoute = ConsoleStorageRouteImport.update({
+  id: '/storage',
+  path: '/storage',
+  getParentRoute: () => ConsoleRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/setup': typeof SetupRoute
+  '/sign-in': typeof SignInRoute
+  '/ai': typeof ConsoleAiRoute
+  '/api': typeof ConsoleApiRoute
+  '/auth': typeof ConsoleAuthRoute
+  '/backups': typeof ConsoleBackupsRoute
+  '/database': typeof ConsoleDatabaseRoute
+  '/functions': typeof ConsoleFunctionsRoute
+  '/logs': typeof ConsoleLogsRoute
+  '/overview': typeof ConsoleOverviewRoute
+  '/realtime': typeof ConsoleRealtimeRoute
+  '/schema': typeof ConsoleSchemaRoute
+  '/settings': typeof ConsoleSettingsRoute
+  '/storage': typeof ConsoleStorageRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/setup': typeof SetupRoute
+  '/sign-in': typeof SignInRoute
+  '/ai': typeof ConsoleAiRoute
+  '/api': typeof ConsoleApiRoute
+  '/auth': typeof ConsoleAuthRoute
+  '/backups': typeof ConsoleBackupsRoute
+  '/database': typeof ConsoleDatabaseRoute
+  '/functions': typeof ConsoleFunctionsRoute
+  '/logs': typeof ConsoleLogsRoute
+  '/overview': typeof ConsoleOverviewRoute
+  '/realtime': typeof ConsoleRealtimeRoute
+  '/schema': typeof ConsoleSchemaRoute
+  '/settings': typeof ConsoleSettingsRoute
+  '/storage': typeof ConsoleStorageRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_console': typeof ConsoleRouteWithChildren
+  '/setup': typeof SetupRoute
+  '/sign-in': typeof SignInRoute
+  '/_console/ai': typeof ConsoleAiRoute
+  '/_console/api': typeof ConsoleApiRoute
+  '/_console/auth': typeof ConsoleAuthRoute
+  '/_console/backups': typeof ConsoleBackupsRoute
+  '/_console/database': typeof ConsoleDatabaseRoute
+  '/_console/functions': typeof ConsoleFunctionsRoute
+  '/_console/logs': typeof ConsoleLogsRoute
+  '/_console/overview': typeof ConsoleOverviewRoute
+  '/_console/realtime': typeof ConsoleRealtimeRoute
+  '/_console/schema': typeof ConsoleSchemaRoute
+  '/_console/settings': typeof ConsoleSettingsRoute
+  '/_console/storage': typeof ConsoleStorageRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/setup'
+    | '/sign-in'
+    | '/ai'
+    | '/api'
+    | '/auth'
+    | '/backups'
+    | '/database'
+    | '/functions'
+    | '/logs'
+    | '/overview'
+    | '/realtime'
+    | '/schema'
+    | '/settings'
+    | '/storage'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/setup'
+    | '/sign-in'
+    | '/ai'
+    | '/api'
+    | '/auth'
+    | '/backups'
+    | '/database'
+    | '/functions'
+    | '/logs'
+    | '/overview'
+    | '/realtime'
+    | '/schema'
+    | '/settings'
+    | '/storage'
+  id:
+    | '__root__'
+    | '/'
+    | '/_console'
+    | '/setup'
+    | '/sign-in'
+    | '/_console/ai'
+    | '/_console/api'
+    | '/_console/auth'
+    | '/_console/backups'
+    | '/_console/database'
+    | '/_console/functions'
+    | '/_console/logs'
+    | '/_console/overview'
+    | '/_console/realtime'
+    | '/_console/schema'
+    | '/_console/settings'
+    | '/_console/storage'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ConsoleRoute: typeof ConsoleRouteWithChildren
+  SetupRoute: typeof SetupRoute
+  SignInRoute: typeof SignInRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +230,152 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_console': {
+      id: '/_console'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof ConsoleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-in': {
+      id: '/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_console/ai': {
+      id: '/_console/ai'
+      path: '/ai'
+      fullPath: '/ai'
+      preLoaderRoute: typeof ConsoleAiRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
+    '/_console/api': {
+      id: '/_console/api'
+      path: '/api'
+      fullPath: '/api'
+      preLoaderRoute: typeof ConsoleApiRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
+    '/_console/auth': {
+      id: '/_console/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof ConsoleAuthRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
+    '/_console/backups': {
+      id: '/_console/backups'
+      path: '/backups'
+      fullPath: '/backups'
+      preLoaderRoute: typeof ConsoleBackupsRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
+    '/_console/database': {
+      id: '/_console/database'
+      path: '/database'
+      fullPath: '/database'
+      preLoaderRoute: typeof ConsoleDatabaseRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
+    '/_console/functions': {
+      id: '/_console/functions'
+      path: '/functions'
+      fullPath: '/functions'
+      preLoaderRoute: typeof ConsoleFunctionsRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
+    '/_console/logs': {
+      id: '/_console/logs'
+      path: '/logs'
+      fullPath: '/logs'
+      preLoaderRoute: typeof ConsoleLogsRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
+    '/_console/overview': {
+      id: '/_console/overview'
+      path: '/overview'
+      fullPath: '/overview'
+      preLoaderRoute: typeof ConsoleOverviewRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
+    '/_console/realtime': {
+      id: '/_console/realtime'
+      path: '/realtime'
+      fullPath: '/realtime'
+      preLoaderRoute: typeof ConsoleRealtimeRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
+    '/_console/schema': {
+      id: '/_console/schema'
+      path: '/schema'
+      fullPath: '/schema'
+      preLoaderRoute: typeof ConsoleSchemaRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
+    '/_console/settings': {
+      id: '/_console/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof ConsoleSettingsRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
+    '/_console/storage': {
+      id: '/_console/storage'
+      path: '/storage'
+      fullPath: '/storage'
+      preLoaderRoute: typeof ConsoleStorageRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
   }
 }
 
+interface ConsoleRouteChildren {
+  ConsoleAiRoute: typeof ConsoleAiRoute
+  ConsoleApiRoute: typeof ConsoleApiRoute
+  ConsoleAuthRoute: typeof ConsoleAuthRoute
+  ConsoleBackupsRoute: typeof ConsoleBackupsRoute
+  ConsoleDatabaseRoute: typeof ConsoleDatabaseRoute
+  ConsoleFunctionsRoute: typeof ConsoleFunctionsRoute
+  ConsoleLogsRoute: typeof ConsoleLogsRoute
+  ConsoleOverviewRoute: typeof ConsoleOverviewRoute
+  ConsoleRealtimeRoute: typeof ConsoleRealtimeRoute
+  ConsoleSchemaRoute: typeof ConsoleSchemaRoute
+  ConsoleSettingsRoute: typeof ConsoleSettingsRoute
+  ConsoleStorageRoute: typeof ConsoleStorageRoute
+}
+
+const ConsoleRouteChildren: ConsoleRouteChildren = {
+  ConsoleAiRoute: ConsoleAiRoute,
+  ConsoleApiRoute: ConsoleApiRoute,
+  ConsoleAuthRoute: ConsoleAuthRoute,
+  ConsoleBackupsRoute: ConsoleBackupsRoute,
+  ConsoleDatabaseRoute: ConsoleDatabaseRoute,
+  ConsoleFunctionsRoute: ConsoleFunctionsRoute,
+  ConsoleLogsRoute: ConsoleLogsRoute,
+  ConsoleOverviewRoute: ConsoleOverviewRoute,
+  ConsoleRealtimeRoute: ConsoleRealtimeRoute,
+  ConsoleSchemaRoute: ConsoleSchemaRoute,
+  ConsoleSettingsRoute: ConsoleSettingsRoute,
+  ConsoleStorageRoute: ConsoleStorageRoute,
+}
+
+const ConsoleRouteWithChildren =
+  ConsoleRoute._addFileChildren(ConsoleRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ConsoleRoute: ConsoleRouteWithChildren,
+  SetupRoute: SetupRoute,
+  SignInRoute: SignInRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

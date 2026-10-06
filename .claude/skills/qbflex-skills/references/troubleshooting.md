@@ -5,6 +5,7 @@ Start with `scripts/diagnose.mjs --directory <target>`. It is read-only and reda
 | Symptom | Check and next action |
 | --- | --- |
 | Missing configuration | Check presence of URL/project/branch/publishable key; inspect safe `qb.json` fields and installed versions. Supply only the missing configuration; don't replace an existing `.env`. |
+| Studio `API unavailable: Failed to fetch` | Confirm the API is listening, then check browser Origin against `QB_ALLOWED_ORIGINS`. `localhost` and `127.0.0.1` are different origins; local allowlists mirror both automatically. Retry after the API reloads. |
 | Native startup port conflict / missing worker token | Check whether the full local Compose profile already owns 7610–7612. Use that stack or stop only `studio docs api worker` before `bun run dev`; preserve volumes. The launcher requires its API's credential, not a different installation's readiness response. For an independent worker, start the API first with the same `QB_DATA_DIR` or configure matching server-only `QB_WORKER_TOKEN` values. Never fabricate or log the token. See `tests/dev-startup.test.ts`. |
 | 401 / wrong realm or branch | Confirm project/immutable branch, correct key, application vs platform session, audience and revocation. Sign in in the correct realm; don't substitute a service key into a browser. |
 | Empty rows/count | Confirm exposure/column allowlist and applicable SELECT policies with the actual identity. Default denial is expected; verify the new-row ownership check separately. |
@@ -16,7 +17,7 @@ Start with `scripts/diagnose.mjs --directory <target>`. It is read-only and reda
 | QUEUE_FULL / OWNER_UNAVAILABLE / quota | Inspect private metrics, disk/WAL, pending operations and bounded limits; shed workload and back off. Restart only within authorization and preserve persistent data. |
 | Missing QBProvider | Wrap all hooks in QBProvider with a stable client; hooks cannot run in a disconnected component tree. For SSR use a client/cache per request. |
 | Stale protected UI | Forward query signals, use complete explicit keys/invalidation, clear derived state on identity change and unsubscribe duplicate effects. Test Strict Mode and reconnect. |
-| OAuth / email failure | Verify provider/SMTP presence, exact callback/reset origins, credential validity and delivery errors without logging values. Missing external configuration is not a platform authorization bypass. |
+| OAuth / email failure | Verify provider (Resend API key) or SMTP presence, exact callback/reset origins, credential validity and delivery errors without logging values. Missing external configuration is not a platform authorization bypass. |
 | STORAGE_UNCONFIGURED / incomplete upload | Configure S3 endpoint/bucket/region and credentials, inspect intent status/size/MIME rules, then supported reconciliation. Incomplete metadata remains unreadable. Restore object bytes separately from SQLite. |
 | Encrypted restore fails | Verify archive checksum/schema and original master key custody; restore isolated first. Catalog archives do not contain branch files or S3 bytes. Don't overwrite the active owner or fabricate a new key. |
 
