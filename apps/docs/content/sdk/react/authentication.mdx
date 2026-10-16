@@ -51,3 +51,7 @@ Do not keep copies of protected query data in unrelated global state. Clear appl
 ## Server rendering
 
 Create clients and QueryClient instances per request. Do not reuse a module-global authenticated client on a server. Hooks do not read browser APIs during server rendering; session loading occurs after initialization. Advanced request-session hydration requires an explicit integration rather than assuming browser cookies exist on the server.
+
+## Passkeys and TOTP
+
+Use the provider's shared client for `auth.passkey` and `auth.twoFactor`, then refresh its session to update the hook. Do not invent passkey methods on `useQBAuth`; its actions retain their existing signatures. Catch `MFA_REQUIRED` from password sign-in, collect a TOTP code, verify it through the client and refresh before enabling protected queries. See [browser passkeys and MFA](/docs/authentication/passkeys-mfa).

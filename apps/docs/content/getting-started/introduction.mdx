@@ -2,7 +2,7 @@ export const frontmatter = {"title": "Build your backend. Keep control.", "descr
 
 # Build your backend. Keep control.
 
-QB Flex gives your application a SQLite database, an authorized REST API, authentication, realtime events and object storage. Studio manages these services; your application connects through a publishable key and its own user sessions.
+QB Flex gives your application a PGlite database, an authorized REST API, authentication, realtime events and object storage. Studio manages these services; your application connects through a publishable key and its own user sessions.
 
 ## Start here
 
@@ -14,11 +14,11 @@ QB Flex gives your application a SQLite database, an authorized REST API, authen
 
 **Studio** is the authenticated workspace for project developers. **API** owns management and application endpoints. **Docs** is this independently deployable documentation site. A background worker requests scheduled maintenance through an authenticated internal endpoint.
 
-An organization owns projects. Each project owns an isolated primary branch. A branch has a separate SQLite file and authentication realm. Organization roles and application user identities are different permissions.
+An organization owns projects. Each project owns an isolated primary branch. A branch has a separate PGlite directory and authentication realm. Organization roles and application user identities are different permissions.
 
 ## What is available
 
-The initial implementation covers ordinary-table REST CRUD, application policies, email/password authentication, database row subscriptions, basic S3 storage and backup/restore. Read the [compatibility reference](/docs/reference/compatibility) before deployment.
+The implementation covers ordinary-table REST CRUD, application policies, password auth with browser passkey/TOTP adapters, row subscriptions, S3-compatible storage and encrypted backup/restore. Read [what changed](/docs/getting-started/updates), the [expanded-release status](/docs/roadmap/expanded-release) and [compatibility](/docs/reference/compatibility) before deployment. Experimental foundations are not complete delivery/native/WASM services.
 
 GraphQL, vector search, functions, hosted MCP, general branching and replicas are roadmap capabilities. They are not required to use the core backend.
 

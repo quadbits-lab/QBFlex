@@ -2,9 +2,11 @@ export const frontmatter = {"title": "Write and test access policies", "descript
 
 # Write and test access policies
 
+The experimental [Security Advisor](/docs/studio/security-advisor) highlights missing/unreachable grants and risky exposure. Its findings never replace the actual policy-test engine or automatically change grants. [Webhook subscriptions](/docs/studio/webhooks) also revalidate current SELECT policies and column projections before dispatch.
+
 ## Policy model
 
-QB Flex implements row policies in its application layer. Direct filesystem access to SQLite is trusted access and bypasses these checks. Policies are restricted JSON expressions rather than arbitrary SQL or JavaScript.
+QB Flex implements row policies in its application layer. Direct filesystem access to PGlite is trusted access and bypasses these checks. Policies are restricted JSON expressions rather than arbitrary SQL or JavaScript.
 
 An operation needs at least one applicable permissive grant. Matching permissive expressions are ORed, and restrictive expressions are ANDed. No applicable grant means denial.
 
@@ -16,7 +18,7 @@ For a table with `owner_id`, compare the column to the server-supplied authentic
 {"op":"eq","left":{"column":"owner_id"},"right":{"claim":"sub"}}
 ```
 
-Create separate select, insert, update and delete policies. Include `authenticated` in the role list. For inserts and updates use the ownership expression as the write check as well.
+Create separate select, insert, update and delete policies. Include `authenticated` in the role list for all signed-in users, or a custom [application role](/docs/authentication/roles) name for narrower grants. A policy matches when its role list intersects the credential class (`anonymous` / `authenticated` / `service`) or the user's assigned custom roles. For inserts and updates use the ownership expression as the write check as well.
 
 ## Available expressions
 
@@ -30,8 +32,37 @@ Reads apply policies before counts and pagination. Updates check both the old ro
 
 ## Test identities
 
-Use Studio's policy tester with a simulated user ID and application role. It executes the policy-filtered query without creating an unrestricted token. Then verify with real application users: two users should see separate rows, counts and realtime events.
+Use Studio's policy tester with a simulated user ID and role (system or custom). It executes the policy-filtered query without creating an unrestricted token. Then verify with real application users: two users should see separate rows, counts and realtime events.
 
 ## Realtime permissions
 
 Events are reevaluated with current identity and policy. A deletion or row leaving visibility delivers only its key to an identity that could read the old image. A user who could not read that row receives no event.
+
+## Isolated synthetic write simulation
+
+Developer-authorized `POST /management/v1/projects/PROJECT_ID/branches/BRANCH_ID/policies/test` accepts `operation` (`select`, `insert`, `update`, `delete`), `table`, synthetic `identity`, optional `fixtures` mapping table names to row arrays, `query`, mutation `input`, row `key` and `revision`. Only explicitly supplied fixtures enter an ephemeral in-memory database; production rows, sessions and jobs do not. The real engine evaluates exposure, old-row access and prospective-row checks; scratch writes never commit to production.
+
+The response's `data` contains `allowed`, `oldRowAccess`, `prospectiveRowCheck`, result rows and optional error. Null checks mean not applicable/not reached, not a grant. Returned rows still require select access. Owner bounds:100tables/1,000fixture rows/1MiB total input; the HTTP JSON limit remains64KiB. This simulator does not prove unsupported/custom schemas safe and does not mint user tokens.
+
+Requests without `operation` or `fixtures` keep the previous policy-filtered read response. Service/privileged request flags never bypass policies. Security Advisor scans/acknowledgments are a separate expanded requirement not yet available.
+
+### Try an ownership-change rejection
+
+As a developer with management authorization, POST this JSON to the existing policy-test endpoint after creating/exposing `tasks` with ownership SELECT/UPDATE policies and a prospective ownership check:
+
+```json
+{
+  "table": "tasks",
+  "operation": "update",
+  "identity": { "sub": "alice", "role": "authenticated" },
+  "fixtures": {
+    "tasks": [{ "id": "fixture-task", "owner_id": "alice", "title": "Synthetic", "completed": 0 }]
+  },
+  "key": "fixture-task",
+  "input": { "owner_id": "bob" }
+}
+```
+
+With those policies, old-row access passes but the prospective row fails. Inspect `data.allowed`, `data.oldRowAccess`, `data.prospectiveRowCheck` and the safe error; never infer a grant from a null check. Repeat with a valid update and another synthetic subject. Fixtures must satisfy the real table constraints, including required/default columns and foreign keys. This request uses no production row contents and creates no application session.
+
+Studio's existing identity tester uses the legacy filtered-read path. Advanced write simulation currently uses the management endpoint; a dedicated Advisor UI is not present.

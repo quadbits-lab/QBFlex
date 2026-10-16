@@ -9,7 +9,7 @@ function Component() {
     <div className="grid grid-cols-1 gap-5">
       <WorkspaceHeader
         view="Backups"
-        hint="Encrypted snapshots, validated restores and primary cutover."
+        hint="Automatic schedules, off-node destinations, inventory and isolated restore drills."
         project={project}
         branchName={state.branch === 'primary' ? 'main' : (branch?.name ?? 'main')}
       />

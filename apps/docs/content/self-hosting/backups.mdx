@@ -4,13 +4,13 @@ export const frontmatter = {"title": "Backups and restore", "description": "Crea
 
 ## Consistent snapshots
 
-Snapshots are created through the database owner using SQLite `VACUUM INTO`, then encrypted using AES-256-GCM and recorded with a checksum and schema version. Never copy only a live main SQLite file while committed changes remain in the WAL.
+Snapshots are created through the database owner using PGlite `dumpDataDir()`, then encrypted using AES-256-GCM and recorded with a checksum and schema version. Use the owner snapshot workflow; copying a live database directory is not a consistent backup.
 
 Manual snapshots are available in Studio and the CLI. The maintenance worker requests scheduled backups. Retention is configurable; the default is seven days.
 
 ## Isolated restore
 
-Restore decrypts and verifies the checksum, writes a new branch database and runs integrity/foreign-key checks. Active sessions, verification challenges and stored OAuth access/refresh tokens are excluded. Restored application users remain in the isolated database and must establish new sessions.
+Restore decrypts and verifies the checksum, loads a snapshot into a new branch database and validates schema, constraints and manifest evidence. Active sessions, verification challenges and stored OAuth access/refresh tokens are excluded. Restored application users remain in the isolated database and must establish new sessions.
 
 Validate expected table data, policies and migrations before cutover. The restored branch has its own authentication identity and routing.
 
@@ -42,3 +42,31 @@ Create representative data, take a snapshot, alter the data, restore into anothe
 Maintenance keeps the daily window (`QB_BACKUP_RETENTION_DAYS`, default 7) and one newest checkpoint per week (`QB_BACKUP_RETENTION_WEEKS`, default 4). Preserve encrypted snapshots and the master key on separate storage for disaster recovery. A local backup volume is not off-site redundancy.
 
 Project provisioning can be cancelled through `POST /management/v1/operations/{id}/cancel` while its status is `requested`. Running or completed operations return `OPERATION_NOT_CANCELLABLE`; cancellation never rolls back a committed database operation.
+
+## Streaming branch archive v2 and compatibility
+
+New branch archives use authenticated `QBFARCH2` framing, AES-256-GCM and an incremental raw SHA-256 manifest digest. Encryption/decryption use bounded streams and private staging rather than reading the whole snapshot into memory. Authentication, expected size and checksum must pass before restored data is registered or exposed. Wrong keys, damaged headers/tags/bytes or digest mismatch fail with `BACKUP_CORRUPT`; failed partial files are cleaned up.
+
+Legacy branch archives remain readable, including their original checksum semantics. Do not rewrite stored checksums by hand. The new format is not promised readable by older API versions; preserve a validated compatible restore runtime during upgrades. Control-catalog snapshots now also use streamed v2 framing with an authenticated control-kind marker, creation time and raw SHA-256 digest. Legacy encrypted JSON/base64 control archives remain readable through a bounded decoder.
+
+Backup/restore shares a two-operation concurrency bound and a 120-second stream deadline. Archive validation has a size bound of at least 1 GiB or the configured database-write quota, whichever is larger. This is a bound, not a certified restore-time target. Snapshot schema version comes from the captured database, not a concurrently changed live branch.
+
+Restores remove durable jobs as well as sessions/challenges/provider tokens. Neither old pending deliveries nor push registrations/campaigns should be revived. Object bytes and master-key custody remain separate responsibilities. Restart cleanup removes recognized abandoned temporary artifacts only under exclusive data-volume ownership; never manually sweep arbitrary live database files.
+
+## Recovery Center status
+
+Automated encrypted off-node destinations, freshness alerts, scheduled isolated restore drills and separate database/object/key reports remain required by specification 1.1. Today's manual restore is not the complete Recovery Center. The daily snapshot/seven-daily/four-weekly defaults and reference RPO 24 hours/RTO 60 minutes are planning defaults/measurement targets, not universal guarantees. See [expanded release status](/docs/roadmap/expanded-release).
+
+## Streamed offline control recovery
+
+`qb backup control-create` and `control-restore` keep their existing command names, data directory and explicit restore-confirmation flag. They wait for streams before returning. Create retains `path` and raw 64-character SHA-256 `checksum`, adding `format: 2` and snapshot byte `size`. Restore retains its original result flags/rollback path and adds the source format.
+
+New control archives authenticate kind, creation time, size, checksum and PGlite engine/version inside the v2 header. Physical datadir snapshots require the pinned compatible PGlite runtime. Legacy SQLite archives produced by QB Flex remain readable through the validated offline converter, which blocks incompatible schemas or values. Legacy archive envelopes remain readable without buffering their entire encrypted JSON/base64 envelope. Control archives are not interchangeable with branch archives, even with a matching key. The original master key remains mandatory and is never stored alongside archives.
+
+Control snapshots permit one active write per catalog, default to a 1 GiB plaintext limit and have a 120-second streaming deadline. Disk checks budget private staging plus encryption/rollback headroom. Temporary directories use mode 0700 and plaintext/archive files use 0600. Authentication/checksum and native integrity/foreign-key/migration/dependency checks precede replacement. Missing branch files or bad archives fail without replacing the catalog.
+
+Control recovery excludes platform sessions/challenges/provider tokens and revokes project/management credentials as before. Branch files and their identities are a separate recovery asset; coordinate compatible branch snapshots rather than assuming the control archive contains them. The replacement and its directory are fsynced, and an encrypted rollback is created before replacement. Only exact recognized abandoned control staging is removed under the exclusive volume lease; final archives and operator files are preserved. Graceful API shutdown waits for in-flight maintenance/control streams before closing the catalog and releasing ownership.
+
+PGlite `dumpDataDir()`, integrity checks and checkpointing remain native synchronous operations. The streaming deadline/cancellation applies to hashing/encryption/decryption, not preemption of a running PGlite call. This is not an off-node Recovery Center or an automated drill/cutover service. New-format archives require a compatible restore runtime; older binaries are not guaranteed to read v2.
+
+Engine conversion preserves live credentials and durable work in a stopped installation. Backup restoration has different semantics: it strips sessions, provider tokens, jobs and webhook subscriptions, and control recovery revokes credentials. See [engine migration](/docs/self-hosting/engine-migration).

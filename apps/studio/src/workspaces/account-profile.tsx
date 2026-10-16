@@ -1,5 +1,6 @@
+import { platformSessionOptions } from '../session';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   Check,
   CloudUpload,
@@ -157,11 +158,7 @@ function PasswordStrength({ value }: { value: string }) {
 }
 
 export function AccountProfilePanel({ organizationId }: { organizationId?: string }) {
-  const cache = useQueryClient();
-  const session = useQuery({
-    queryKey: ['platform-session'],
-    queryFn: () => raw('/platform/auth/get-session'),
-  });
+  const session = useQuery({ ...platformSessionOptions(), refetchOnMount: false });
   const members = useQuery({
     queryKey: ['members', organizationId],
     enabled: !!organizationId,
@@ -172,8 +169,7 @@ export function AccountProfilePanel({ organizationId }: { organizationId?: strin
     queryFn: () => raw('/platform/auth/list-accounts'),
   });
   const user = session.data?.user as
-    | { id: string; name: string; email: string; image?: string | null }
-    | undefined;
+    { id: string; name: string; email: string; image?: string | null } | undefined;
   const membership = (members.data?.data ?? []).find((m: any) => m.user_id === user?.id);
   const input = useRef<HTMLInputElement>(null);
   const [cropSrc, setCropSrc] = useState<string | null>(null);
@@ -219,7 +215,6 @@ export function AccountProfilePanel({ organizationId }: { organizationId?: strin
       if (cropSrc) URL.revokeObjectURL(cropSrc);
       setCropSrc(null);
       setCropOpen(false);
-      await cache.invalidateQueries({ queryKey: ['platform-session'] });
       toast.success('Avatar updated');
     },
   });
@@ -236,19 +231,20 @@ export function AccountProfilePanel({ organizationId }: { organizationId?: strin
       return value.data;
     },
     onSuccess: async () => {
-      await cache.invalidateQueries({ queryKey: ['platform-session'] });
       toast.success('Avatar removed');
     },
   });
 
   const saveProfile = useMutation({
     mutationFn: async () => {
-      const name = [firstName, lastName].map((part) => part.trim()).filter(Boolean).join(' ');
+      const name = [firstName, lastName]
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .join(' ');
       if (!name) throw new Error('Enter a name');
       return raw('/platform/auth/update-user', 'POST', { name });
     },
     onSuccess: async () => {
-      await cache.invalidateQueries({ queryKey: ['platform-session'] });
       toast.success('Profile saved');
     },
   });

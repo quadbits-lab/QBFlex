@@ -1,0 +1,38 @@
+export const frontmatter = {"title": "Application roles", "description": "Branch-scoped RBAC for application users and Database policies.", "section": "Services", "slug": "authentication/roles", "order": 34};
+
+# Application roles
+
+## Scope
+
+Application roles belong to a **branch authentication realm**. They are not platform organization roles (`owner` / `admin` / `developer` / `viewer`). Studio Authentication → Roles manages named roles; Authentication → Users assigns them.
+
+System policy roles remain `anonymous`, `authenticated`, and `service`. Those names are reserved and cannot be created as custom roles.
+
+## Simple named roles
+
+Each role has a lowercase slug (`^[a-z][a-z0-9_]{0,62}$`) and an optional description. Users may hold many roles. There is no permission matrix in Studio—authorization is expressed through Database policies that list role names.
+
+## Identity claims
+
+Signed-in application users resolve to:
+
+- `role`: always `authenticated` (credential class)
+- `roles`: string array of assigned custom role names
+
+Anonymous and service identities use empty `roles`. Banned users do not establish an application session identity.
+
+## Policies
+
+A policy applies when `Policy.roles` intersects `{ identity.role } ∪ identity.roles`. Example: a policy with `roles: ["editor"]` grants only users assigned `editor`. A policy with `roles: ["authenticated"]` still matches every signed-in user, including those with custom roles.
+
+Create or edit policies in Studio Database, selecting system or custom roles. Policy tests can simulate a custom role alongside a subject ID.
+
+## Studio administration
+
+Organization **admin** (or higher) can:
+
+- Create, edit, block, unblock, and delete application users
+- Assign roles and revoke sessions
+- Create, rename, and delete roles
+
+Blocked users have sessions revoked and cannot authenticate until unblocked.

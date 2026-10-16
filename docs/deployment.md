@@ -2,7 +2,7 @@
 
 This guide deploys QB Flex 0.1.0 on a single Linux host with Docker Compose and the
 `compose.selfhost.yml` overlay. Caddy fronts three HTTPS domains and terminates TLS with
-Let's Encrypt; the API owns a persistent SQLite database on a named volume.
+Let's Encrypt; the API owns a persistent PGlite database on a named volume.
 
 Contracts referenced here are verified against QB Flex 0.1.0. If your installed version
 differs, compare the compose files, `infra/Dockerfile` and `.env.production.example`
@@ -10,16 +10,16 @@ against the source before deploying.
 
 ## Architecture
 
-| Service | Image target | Internal port | Notes |
-| --- | --- | --- | --- |
-| gateway (Caddy) | pinned `caddy` digest | 80, 443 public | TLS/ACME; proxies to api, studio, docs; blocks `/internal/*` with 404 |
-| api | `api` | 7612 | Owns the SQLite database volume; readiness at `/ready` |
-| worker | `worker` | — | Background maintenance; shares the database volume read-only |
-| studio | `studio` | 7610 | Admin UI |
-| docs | `docs` | 7611 | Prerendered documentation |
-| storage-init | `storage-init` | — | One-shot bucket provisioning against `QB_S3_ENDPOINT` (`restart: 'no'`) |
+| Service         | Image target          | Internal port  | Notes                                                                   |
+| --------------- | --------------------- | -------------- | ----------------------------------------------------------------------- |
+| gateway (Caddy) | pinned `caddy` digest | 80, 443 public | TLS/ACME; proxies to api, studio, docs; blocks `/internal/*` with 404   |
+| api             | `api`                 | 7612           | Owns the PGlite database volume; readiness at `/ready`                  |
+| worker          | `worker`              | —              | Background maintenance; shares the database volume read-only            |
+| studio          | `studio`              | 7610           | Admin UI                                                                |
+| docs            | `docs`                | 7611           | Prerendered documentation                                               |
+| storage-init    | `storage-init`        | —              | One-shot bucket provisioning against `QB_S3_ENDPOINT` (`restart: 'no'`) |
 
-Volumes: `database` (SQLite + WAL), `gateway` (Caddy certs). Object bytes live in your
+Volumes: `database` (PGlite + WAL), `gateway` (Caddy certs). Object bytes live in your
 S3-compatible provider, not in a Compose volume.
 Resource limits, capability drops and log rotation are preset in `compose.selfhost.yml`.
 
@@ -151,7 +151,7 @@ management credentials in browser code.
    schema-versioned (default retention 7 days / 4 weeks). Restore goes to a new isolated
    branch, then verify integrity, foreign keys, migrations, policies and representative rows.
    Auth users persist; sessions, challenges and OAuth tokens do not. Restored object metadata
-   needs separate recovery. Never copy a live SQLite main file without its WAL.
+   needs separate recovery. Do not copy a live PGlite directory; use owner-created snapshots.
 2. **Object bytes** — S3 bytes are **not** in control archives. Use bucket versioning plus a
    separate object-store backup, and verify bytes, metadata and availability against a
    compatible checkpoint.
@@ -202,3 +202,23 @@ docker compose -f compose.yml -f compose.selfhost.yml --profile selfhost up -d
   the container.
 - `/ready` succeeds over both `https://api.…/ready`; Studio and Docs load through HTTPS with
   valid certificates.
+
+## Expanded-release foundations (not a completed release)
+
+See [status](expanded-release-status.md). Existing production services and ports remain unchanged. No push delivery service is deployed by this change.
+
+- Keep the API data directory on private persistent local storage. Uploads stage under `QB_DATA_DIR/transfers` before S3 PUT, so reserve disk headroom for up to four uploads (each≤100MiB) plus WALs and backups. Staging files0600/directories0700; abandoned recognized staging is swept only under the exclusive volume lease. Streams time out after120seconds.
+- Branch snapshots now write authenticated streamed v2 archives. Retain original master-key custody separately; old branch archives remain restorable. Control backups now also use streamed v2 archives, with authenticated metadata and bounded legacy JSON/base64 recovery. Offline control restore still requires the exclusive volume lease and explicit CLI confirmation. Two backup/restore operations share capacity. Do not cut over without the established explicit workflow.
+- Internal job APIs require private-network access and authentication. The proxy must keep denying `/internal/*`. Existing `QB_WORKER_TOKEN` cannot claim push work. `QB_PUSH_ENABLED` defaultsfalse; settingtrue requires distinct≥32character `QB_PUSH_WORKER_TOKEN`. This only enables a restricted lease principal; it does **not** implement push campaigns or deploy a Node worker. Keep disabled until the full push integration is certified.
+- Run `bun run qb doctor --directory .` for read-only redacted inventory. Add `--probe-url https://your-api.example.com` only to request a bounded readiness GET. Doctor does not send email/push, create objects or inspect key contents. Status0 has no blocking inventory errors,1 has errors,2 is invalid invocation; unknown/unconfigured findings are not certification.
+- Scrape private `qb_http_request_duration_seconds` histograms with the existing worker credential. Labels use declared route templates, not row keys/query strings. The expanded operations dashboard/alerts are not yet available.
+
+Off-node destination verification, restore drills, separate object recovery reports, Node24 push sidecar, EAS/device association provisioning and full compatibility evidence remain required by specification1.1. They are not silently enabled by these foundations.
+
+## Experimental webhook delivery and Security Advisor
+
+The existing worker now polls private registered-branch markers and delivers scoped database webhooks. Configure an active non-bypass service key with immutable branch/table/GET scopes and a current SELECT policy. Studio `/webhooks` shows configuration; `/jobs` shows metadata/attempts/replay. Default egress is public HTTPS; optional `QB_WEBHOOK_INTERNAL_ALLOWLIST` maps exact HTTPS origins to reviewed fixed IPs and must match API/worker. Compose passes the value to both. No wildcard, insecure TLS or known metadata endpoint exception is permitted. Maintain network-level egress controls and receiver event-ID deduplication.
+
+Studio `/security` provides bounded static findings and evidence-bound expiring acknowledgments, never automatic repairs. Additive control migration `003-delivery-security` backfills key-creation metadata only from existing audit provenance and records branch poll markers without destinations or secrets. Review backups before applying upgrades; rolling code back does not imply data-schema downgrade. Branch restores strip subscriptions/jobs/acknowledgments. Full expanded-release certification remains incomplete; see the implementation ledger and Docs webhook/Advisor guides.
+
+PGlite uses independent WASM instances: `QB_MAX_BRANCH_OWNERS` defaults to 4 (range 1–32), and the self-host API memory ceiling defaults to 8 GiB through `QB_API_MEMORY`. Measure actual Linux memory/startup/backup costs before adjusting these defaults. The former SQLite memory budget is not a PGlite capacity result.

@@ -28,7 +28,14 @@ Follow the response's `meta.cursor` with the same projection, filters, ordering,
 
 POST inserts one row or an atomic batch of up to 100 rows. PATCH updates a row by key; DELETE removes it. Supply `Idempotency-Key` to safely reconcile a retried mutation. Reusing the same key with different content returns a conflict.
 
-Tables with a `revision` column support conditional updates through `If-Match`. The server increments revisions and rejects mismatched values.
+Tables with a server-managed `revision` column support conditional PATCH and DELETE through `If-Match`. The server increments revisions on updates and rejects stale values with `CONFLICT` (HTTP 409). Existing calls without a revision remain compatible; do not treat a stale write as an automatic retry.
+
+```ts
+await client.from('tasks').update(task.id, { title }, { revision: task.revision });
+await client.from('tasks').delete(task.id, { revision: task.revision });
+```
+
+These are alternative mutations against a freshly read row, not a sequence using the same revision: after an update, refetch the current revision before deleting.
 
 ## Results and errors
 

@@ -139,7 +139,7 @@ test('a foreign ready API or occupied app port cannot bootstrap the native worke
     expect(run.output).toContain('docker compose --profile local stop studio docs api worker');
     expect(run.output).not.toContain('ENOENT');
     expect(run.output).not.toContain('api.started');
-    expect(existsSync(join(directory, 'control.sqlite'))).toBe(false);
+    expect(existsSync(join(directory, 'control.pglite'))).toBe(false);
     expect(existsSync(join(directory, 'worker.token'))).toBe(false);
     servers[2]!.stop(true);
     await assertDevPortsAvailable(ports);
@@ -171,11 +171,16 @@ test('clean native startup creates private API credentials, runs maintenance and
   let token = '';
   try {
     for (let attempt = 0; attempt < 2; attempt++) {
-      run = launch(directory, ports);
+      run = launch(
+        directory,
+        ports,
+        attempt ? { QB_LOG_FORMAT: 'pretty', NO_COLOR: '1' } : { QB_LOG_FORMAT: 'json' },
+      );
       await waitUntil(async () => {
         if (run!.child.exitCode !== null) throw new Error(run!.output);
         return (
           run!.output.includes('maintenance.completed') &&
+          run!.output.includes(attempt ? 'QB FLEX' : 'development.ready') &&
           (await ready(ports.studio)) &&
           (await ready(ports.docs))
         );
@@ -193,6 +198,12 @@ test('clean native startup creates private API credentials, runs maintenance and
       const setup = await fetch(`http://localhost:${ports.api}/setup`);
       expect((await setup.json()).data.required).toBe(true);
       expect(run.output).not.toContain(token);
+      if (attempt) {
+        expect(run.output).toContain('PGlite 0.5.10');
+        expect(run.output).toContain('http://localhost:' + ports.studio);
+        expect(run.output).not.toContain('VITE v');
+        expect(run.output).not.toContain('\x1b[');
+      }
       expect(run.output).not.toContain('maintenance.failed');
       expect(run.output).not.toContain('ENOENT');
       await stop(run);
@@ -211,7 +222,7 @@ test('failed API initialization stops the launcher without starting worker or fr
   const directory = mkdtempSync(join(tmpdir(), 'qb-dev-failed-'));
   const { ports, servers } = allocate();
   for (const server of servers) server.stop(true);
-  const run = launch(directory, ports, { NODE_ENV: 'production', QB_TEST_DEV_TIMEOUT: '500' });
+  const run = launch(directory, ports, { NODE_ENV: 'production', QB_TEST_DEV_TIMEOUT: '2500' });
   try {
     expect(await run.child.exited).toBe(1);
     await run.drained;

@@ -8,26 +8,32 @@ import { schema, initializeBranch, expose, savePolicy } from '@qb-flex/schema';
 import { openDatabase } from '@qb-flex/database';
 import { BranchEngine } from '../../packages/database/src/engine';
 const ownership = { op: 'eq', left: { column: 'owner_id' }, right: { claim: 'sub' } } as const;
-test('default deny, owner checks, atomic batches, cursor scopes, migration checksums and outbox', () => {
+test('default deny, owner checks, atomic batches, cursor scopes, migration checksums and outbox', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'qb-engine-'));
-  const db = openDatabase(join(dir, 'main.sqlite'));
+  const db = openDatabase(join(dir, 'main.pglite'));
   try {
-    initializeBranch(db);
-    const engine = new BranchEngine(db, 'cursor-test-secret');
-    engine.migration(
+    await initializeBranch(db);
+    const engine = await new BranchEngine(db, 'cursor-test-secret').initialize();
+    await engine.migration(
       '001',
-      'CREATE TABLE tasks(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,title TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1);',
+      'CREATE TABLE tasks(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,title TEXT NOT NULL,revision BIGINT NOT NULL DEFAULT 1);',
       'test',
     );
-    expose(db, 'tasks', true, ['id', 'owner_id', 'title', 'revision']);
+    await expose(db, 'tasks', true, ['id', 'owner_id', 'title', 'revision']);
     const alice = { sub: 'alice', role: 'authenticated' } as const;
     const bob = { sub: 'bob', role: 'authenticated' } as const;
-    expect(engine.read('tasks', {}, alice).data).toEqual([]);
-    expect(() =>
-      engine.mutate('tasks', 'insert', { id: '1', owner_id: 'alice', title: 'Hidden' }, alice),
-    ).toThrow();
+    expect((await engine.read('tasks', {}, alice)).data).toEqual([]);
+    await expect(
+      (async () =>
+        await engine.mutate(
+          'tasks',
+          'insert',
+          { id: '1', owner_id: 'alice', title: 'Hidden' },
+          alice,
+        ))(),
+    ).rejects.toThrow();
     for (const operation of ['select', 'insert', 'update', 'delete'] as const)
-      savePolicy(db, {
+      await savePolicy(db, {
         resource: 'tasks',
         operation,
         roles: ['authenticated'],
@@ -36,7 +42,7 @@ test('default deny, owner checks, atomic batches, cursor scopes, migration check
         using: ownership,
         check: ownership,
       });
-    engine.mutate(
+    await engine.mutate(
       'tasks',
       'insert',
       [
@@ -47,30 +53,35 @@ test('default deny, owner checks, atomic batches, cursor scopes, migration check
       undefined,
       'request-1',
     );
-    expect(engine.read('tasks', {}, alice).data.length).toBe(2);
-    expect(engine.read('tasks', { count: true }, bob).meta.count).toBe(0);
-    expect(() => engine.mutate('tasks', 'update', { owner_id: 'bob' }, alice, '1')).toThrow();
-    expect(engine.read('tasks', {}, alice).data[0].owner_id).toBe('alice');
-    const page = engine.read('tasks', { limit: 1 }, alice);
-    expect(engine.read('tasks', { limit: 1, cursor: page.meta.cursor }, alice).data[0].id).toBe(
-      '2',
-    );
-    expect(() => engine.read('tasks', { limit: 1, cursor: page.meta.cursor }, bob)).toThrow();
-    expect(() =>
-      engine.mutate(
-        'tasks',
-        'insert',
-        [
-          { id: '3', owner_id: 'alice', title: 'C' },
-          { id: '4', owner_id: 'bob', title: 'D' },
-        ],
-        alice,
-      ),
-    ).toThrow();
-    expect(engine.read('tasks', {}, alice).data.length).toBe(2);
-    expect(engine.events(0, bob).events).toEqual([]);
-    expect(engine.events(0, alice).events.length).toBe(2);
-    engine.mutate(
+    expect((await engine.read('tasks', {}, alice)).data.length).toBe(2);
+    expect((await engine.read('tasks', { count: true }, bob)).meta.count).toBe(0);
+    await expect(
+      (async () => await engine.mutate('tasks', 'update', { owner_id: 'bob' }, alice, '1'))(),
+    ).rejects.toThrow();
+    expect((await engine.read('tasks', {}, alice)).data[0].owner_id).toBe('alice');
+    const page = await engine.read('tasks', { limit: 1 }, alice);
+    expect(
+      (await engine.read('tasks', { limit: 1, cursor: page.meta.cursor }, alice)).data[0].id,
+    ).toBe('2');
+    await expect(
+      (async () => await engine.read('tasks', { limit: 1, cursor: page.meta.cursor }, bob))(),
+    ).rejects.toThrow();
+    await expect(
+      (async () =>
+        await engine.mutate(
+          'tasks',
+          'insert',
+          [
+            { id: '3', owner_id: 'alice', title: 'C' },
+            { id: '4', owner_id: 'bob', title: 'D' },
+          ],
+          alice,
+        ))(),
+    ).rejects.toThrow();
+    expect((await engine.read('tasks', {}, alice)).data.length).toBe(2);
+    expect((await engine.events(0, bob)).events).toEqual([]);
+    expect((await engine.events(0, alice)).events.length).toBe(2);
+    await engine.mutate(
       'tasks',
       'insert',
       [
@@ -81,26 +92,33 @@ test('default deny, owner checks, atomic batches, cursor scopes, migration check
       undefined,
       'request-1',
     );
-    expect(engine.read('tasks', {}, alice).data.length).toBe(2);
-    expect(() =>
-      engine.mutate(
-        'tasks',
-        'insert',
-        { id: '9', owner_id: 'alice', title: 'Different' },
-        alice,
-        undefined,
-        'request-1',
-      ),
-    ).toThrow();
-    expect(() =>
-      engine.migration('001', 'CREATE TABLE different(id INTEGER PRIMARY KEY);', 'test'),
-    ).toThrow();
-    expect(() =>
-      engine.migration('002', 'CREATE TABLE broken(id TEXT); invalid SQL', 'test'),
-    ).toThrow();
-    expect(schema(db).some((t) => t.name === 'broken')).toBe(false);
+    expect((await engine.read('tasks', {}, alice)).data.length).toBe(2);
+    await expect(
+      (async () =>
+        await engine.mutate(
+          'tasks',
+          'insert',
+          { id: '9', owner_id: 'alice', title: 'Different' },
+          alice,
+          undefined,
+          'request-1',
+        ))(),
+    ).rejects.toThrow();
+    await expect(
+      (async () =>
+        await engine.migration(
+          '001',
+          'CREATE TABLE different(id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY);',
+          'test',
+        ))(),
+    ).rejects.toThrow();
+    await expect(
+      (async () =>
+        await engine.migration('002', 'CREATE TABLE broken(id TEXT); invalid SQL', 'test'))(),
+    ).rejects.toThrow();
+    expect((await schema(db)).some((t) => t.name === 'broken')).toBe(false);
   } finally {
-    db.close(true);
+    await db.close(true);
     rmSync(dir, { recursive: true, force: true });
   }
 });

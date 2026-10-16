@@ -35,6 +35,11 @@ Studio mounts the shared ShadCN `Toaster` (Sonner) at the root for success,
 error, validation and alert feedback. Prefer `toast` / `notifyError` from
 `@qb-flex/ui` over inline Notice banners for actionable failures.
 
+Routing uses a global preloader (`defaultPendingComponent` + root progress bar)
+and shared HTTP error pages for 400 / 404 / 500 (`defaultErrorComponent` /
+`defaultNotFoundComponent`). Preview routes live at `/error/400`, `/error/404`
+and `/error/500`.
+
 The shared package keeps legacy Button, Modal, Drawer, Notice, Loading and Empty
 signatures. New screens should compose Card, FieldGroup/Field, Tabs, Alert,
 Dialog, Sheet and other primitives. Use `cn` for conditional utility classes.
@@ -66,3 +71,9 @@ Studio/React/Vanilla CRUD and file-transfer workflows. Also run `bun run check`,
 Studio and Docs production builds, and the repository skill freshness checks.
 Automated accessibility checks cover rendered fixture states; they do not replace
 manual assistive-technology testing or validate every possible production dataset.
+
+## Submission freshness and file-action dialogs
+
+Studio's root creates a request-local query client with global successful-mutation refresh. Use `refreshStudioQueries` for successful imperative transfers/submissions; do not add a second per-mutation invalidate callback. It cancels older reads, refetches active views and leaves inactive ones stale for navigation. Failed submissions preserve existing data, and refresh-read failures do not falsely fail or retry an acknowledged write. Arbitrary SDK applications keep explicit control of their own cache behavior.
+
+File action menus are non-modal and hand destructive confirmation over only after menu focus cleanup. The confirmation remains modal, supports Escape and restores focus to its opener on cancellation, or file search when deletion removed the opener. Browser regressions cover keyboard handoff, restored interactivity and automatic row/file refresh. See the current Docs [Studio workflows](../apps/docs/content/studio/workspaces.mdx) and [storage guide](../apps/docs/content/storage/files.mdx).

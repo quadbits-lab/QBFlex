@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { Group } from "@visx/group";
-import { ParentSize } from "@visx/responsive";
-import { arc as arcGenerator } from "@visx/shape";
-import { pie as d3Pie } from "d3-shape";
-import type { Transition } from "motion/react";
+import { Group } from '@visx/group';
+import { ParentSize } from '@visx/responsive';
+import { arc as arcGenerator } from '@visx/shape';
+import { pie as d3Pie } from 'd3-shape';
+import type { Transition } from 'motion/react';
 import {
   Children,
   isValidElement,
@@ -16,15 +16,15 @@ import {
   useMemo,
   useRef,
   useState,
-} from "react";
-import { cn } from "../../lib/utils";
+} from 'react';
+import { cn } from '../../lib/utils';
 import {
   defaultPieColors,
   type PieArcData,
   type PieContextValue,
   type PieData,
   PieProvider,
-} from "./pie-context";
+} from './pie-context';
 
 /** Default hover offset in pixels */
 export const DEFAULT_HOVER_OFFSET = 10;
@@ -94,7 +94,7 @@ function generatePieArcPath(
   startAngle: number,
   endAngle: number,
   cornerRadius: number,
-  padAngle: number
+  padAngle: number,
 ): string {
   const generator = arcGenerator<unknown>({
     innerRadius,
@@ -102,25 +102,25 @@ function generatePieArcPath(
     cornerRadius,
     padAngle,
   });
-  return generator({ startAngle, endAngle } as unknown as null) || "";
+  return generator({ startAngle, endAngle } as unknown as null) || '';
 }
 
 // Helper to check if a child is a PieCenter component
 function isPieCenter(child: ReactNode): boolean {
   return (
     isValidElement(child) &&
-    typeof child.type === "function" &&
-    ((child.type as { displayName?: string }).displayName === "PieCenter" ||
-      (child.type as { name?: string }).name === "PieCenter")
+    typeof child.type === 'function' &&
+    ((child.type as { displayName?: string }).displayName === 'PieCenter' ||
+      (child.type as { name?: string }).name === 'PieCenter')
   );
 }
 
 function isPieSlice(child: ReactNode): boolean {
   return (
     isValidElement(child) &&
-    typeof child.type === "function" &&
-    ((child.type as { displayName?: string }).displayName === "PieSlice" ||
-      (child.type as { name?: string }).name === "PieSlice")
+    typeof child.type === 'function' &&
+    ((child.type as { displayName?: string }).displayName === 'PieSlice' ||
+      (child.type as { name?: string }).name === 'PieSlice')
   );
 }
 
@@ -129,12 +129,12 @@ function isDefsComponent(child: ReactElement): boolean {
   const displayName =
     (child.type as { displayName?: string })?.displayName ||
     (child.type as { name?: string })?.name ||
-    "";
+    '';
   return (
-    displayName.includes("Gradient") ||
-    displayName.includes("Pattern") ||
-    displayName === "LinearGradient" ||
-    displayName === "RadialGradient"
+    displayName.includes('Gradient') ||
+    displayName.includes('Pattern') ||
+    displayName === 'LinearGradient' ||
+    displayName === 'RadialGradient'
   );
 }
 
@@ -166,9 +166,7 @@ const PieChartCore = memo(function PieChartCore({
   enterStaggerScale,
   geometryScrubbing,
 }: PieChartInnerProps) {
-  const [internalHoveredIndex, setInternalHoveredIndex] = useState<
-    number | null
-  >(null);
+  const [internalHoveredIndex, setInternalHoveredIndex] = useState<number | null>(null);
   const [animationKey] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -183,7 +181,7 @@ const PieChartCore = memo(function PieChartCore({
         setInternalHoveredIndex(index);
       }
     },
-    [isControlled, onHoverChange]
+    [isControlled, onHoverChange],
   );
 
   // Use the smaller dimension to ensure the chart fits
@@ -196,10 +194,7 @@ const PieChartCore = memo(function PieChartCore({
   const innerRadius = innerRadiusProp;
 
   // Calculate total value
-  const totalValue = useMemo(
-    () => data.reduce((sum, d) => sum + d.value, 0),
-    [data]
-  );
+  const totalValue = useMemo(() => data.reduce((sum, d) => sum + d.value, 0), [data]);
 
   // Get color for a slice index
   const getColor = useCallback(
@@ -210,7 +205,7 @@ const PieChartCore = memo(function PieChartCore({
       }
       return defaultPieColors[index % defaultPieColors.length] as string;
     },
-    [data]
+    [data],
   );
 
   // Get fill for a slice index (supports patterns/gradients)
@@ -224,7 +219,7 @@ const PieChartCore = memo(function PieChartCore({
       // Fall back to color
       return getColor(index);
     },
-    [data, getColor]
+    [data, getColor],
   );
 
   // Compute arcs using d3-shape pie
@@ -259,8 +254,8 @@ const PieChartCore = memo(function PieChartCore({
         arc.startAngle,
         arc.endAngle,
         cornerRadius,
-        arc.padAngle
-      )
+        arc.padAngle,
+      ),
     );
   }, [geometryScrubbing, arcs, innerRadius, outerRadius, cornerRadius]);
 
@@ -361,7 +356,7 @@ const PieChartCore = memo(function PieChartCore({
       getFill,
       geometryScrubbing,
       scrubSlicePaths,
-    ]
+    ],
   );
 
   // Use CSS Grid stacking to layer SVG and HTML content
@@ -371,8 +366,8 @@ const PieChartCore = memo(function PieChartCore({
       <div
         className="grid"
         style={{
-          gridTemplateColumns: "1fr",
-          gridTemplateRows: "1fr",
+          gridTemplateColumns: '1fr',
+          gridTemplateRows: '1fr',
           width: size,
           height: size,
         }}
@@ -381,7 +376,7 @@ const PieChartCore = memo(function PieChartCore({
         <svg
           aria-hidden="true"
           height={size}
-          style={{ gridArea: "1 / 1", contain: "layout style paint" }}
+          style={{ gridArea: '1 / 1', contain: 'layout style paint' }}
           width={size}
         >
           {/* Defs for patterns and gradients */}
@@ -397,7 +392,7 @@ const PieChartCore = memo(function PieChartCore({
                       key={data[index]?.label ?? index}
                       pointerEvents="none"
                     />
-                  ) : null
+                  ) : null,
                 )
               : null}
             {svgChildren}
@@ -408,7 +403,7 @@ const PieChartCore = memo(function PieChartCore({
         {centerChildren.length > 0 && (
           <div
             className="pointer-events-none flex items-center justify-center"
-            style={{ gridArea: "1 / 1" }}
+            style={{ gridArea: '1 / 1' }}
           >
             {centerChildren}
           </div>
@@ -418,10 +413,7 @@ const PieChartCore = memo(function PieChartCore({
   );
 }, pieChartCorePropsEqual);
 
-function pieChartCorePropsEqual(
-  prev: PieChartInnerProps,
-  next: PieChartInnerProps
-): boolean {
+function pieChartCorePropsEqual(prev: PieChartInnerProps, next: PieChartInnerProps): boolean {
   return (
     prev.width === next.width &&
     prev.height === next.height &&
@@ -449,7 +441,7 @@ export function PieChart({
   cornerRadius = 0,
   startAngle = -Math.PI / 2,
   endAngle = (3 * Math.PI) / 2,
-  className = "",
+  className = '',
   hoveredIndex,
   onHoverChange,
   hoverOffset = DEFAULT_HOVER_OFFSET,
@@ -464,7 +456,7 @@ export function PieChart({
   if (fixedSize) {
     return (
       <div
-        className={cn("relative flex items-center justify-center", className)}
+        className={cn('relative flex items-center justify-center', className)}
         ref={containerRef}
         style={{ width: fixedSize, height: fixedSize }}
       >
@@ -493,10 +485,7 @@ export function PieChart({
 
   // Otherwise use ParentSize for responsive sizing
   return (
-    <div
-      className={cn("relative aspect-square w-full", className)}
-      ref={containerRef}
-    >
+    <div className={cn('relative aspect-square w-full', className)} ref={containerRef}>
       <ParentSize debounceTime={10}>
         {({ width, height }) => (
           <PieChartInner
@@ -524,6 +513,6 @@ export function PieChart({
   );
 }
 
-PieChart.displayName = "PieChart";
+PieChart.displayName = 'PieChart';
 
 export default PieChart;

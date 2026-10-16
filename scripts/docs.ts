@@ -13,6 +13,17 @@ const write = (name: string, title: string, description: string, body: string) =
       throw new Error(`Generated docs are stale: ${path}`);
   } else writeFileSync(path, value);
 };
+const specification = readFileSync('qb-flex-development-spec.md', 'utf8');
+const specificationVersion = specification.match(/^Specification version: \*\*([^*]+)\*\*/m)?.[1];
+if (!specificationVersion) throw new Error('Missing development specification version');
+write(
+  'development-spec',
+  'Complete development specification',
+  `Specification ${specificationVersion}: expanded-release requirements, architecture and acceptance traceability; not feature availability.`,
+  specification
+    .replace(/^# .+\n\n/, '')
+    .replaceAll('(docs/expanded-release-status.md)', '(/docs/roadmap/expanded-release)'),
+);
 write(
   'management-api',
   'Management and REST API',
@@ -82,6 +93,12 @@ mkdirSync('apps/docs/src/generated', { recursive: true });
 mkdirSync('apps/docs/public', { recursive: true });
 const json = JSON.stringify(docs, null, 2) + '\n';
 const manifest = 'apps/docs/src/generated/manifest.json';
+const search = JSON.stringify(
+  docs.map(({ slug, title, text, section }) => ({ id: slug, slug, title, text, section })),
+);
+const origin = process.env.QB_DOCS_URL ?? 'http://localhost:7611';
+const sitemap = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${origin}/</loc></url>${docs.map((d) => `<url><loc>${origin}/docs/${d.slug}</loc></url>`).join('')}</urlset>`;
+const robots = `User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`;
 if (process.argv.includes('--check')) {
   if (readFileSync(manifest, 'utf8') !== json) throw new Error('Documentation manifest is stale');
   if (
@@ -89,26 +106,22 @@ if (process.argv.includes('--check')) {
     readFileSync('docs/benchmarks/linux-arm64.json', 'utf8')
   )
     throw new Error('Documentation benchmark asset is stale');
+  for (const [file, expected] of [
+    ['apps/docs/public/search-index.json', search],
+    ['apps/docs/public/sitemap.xml', sitemap],
+    ['apps/docs/public/robots.txt', robots],
+  ]) {
+    if (!existsSync(file!) || readFileSync(file!, 'utf8') !== expected)
+      throw new Error(`Documentation asset is stale: ${file}`);
+  }
 } else {
   writeFileSync(
     'apps/docs/public/benchmark.json',
     readFileSync('docs/benchmarks/linux-arm64.json'),
   );
   writeFileSync(manifest, json);
-  writeFileSync(
-    'apps/docs/public/search-index.json',
-    JSON.stringify(
-      docs.map(({ slug, title, text, section }) => ({ id: slug, slug, title, text, section })),
-    ),
-  );
-  const origin = process.env.QB_DOCS_URL ?? 'http://localhost:7611';
-  writeFileSync(
-    'apps/docs/public/sitemap.xml',
-    `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${origin}/</loc></url>${docs.map((d) => `<url><loc>${origin}/docs/${d.slug}</loc></url>`).join('')}</urlset>`,
-  );
-  writeFileSync(
-    'apps/docs/public/robots.txt',
-    `User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`,
-  );
+  writeFileSync('apps/docs/public/search-index.json', search);
+  writeFileSync('apps/docs/public/sitemap.xml', sitemap);
+  writeFileSync('apps/docs/public/robots.txt', robots);
 }
 console.log(`${docs.length} documentation pages checked.`);

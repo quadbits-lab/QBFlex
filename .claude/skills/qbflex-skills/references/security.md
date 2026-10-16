@@ -4,7 +4,7 @@ Every change must preserve the existing authorization boundary. Read [verificati
 
 ## Identity and credentials
 
-Platform organization roles are owner/admin/developer/viewer; they are separate from application-user claims. Platform sessions and scoped management tokens configure projects; project/branch sessions access application data. Never use one realm's bearer token in another realm. Administrative production writes require MFA; local development configuration is not a production bypass recommendation.
+Platform organization roles are owner/admin/developer/viewer; they are separate from application-user claims. Application users may hold branch-scoped custom role names (`Identity.roles`) in addition to the credential class `anonymous` | `authenticated` | `service`. Database policies match when `Policy.roles` intersects `{identity.role} ∪ identity.roles`. Platform sessions and scoped management tokens configure projects; project/branch sessions access application data. Never use one realm's bearer token in another realm. Administrative production writes require MFA; local development configuration is not a production bypass recommendation.
 
 A publishable key identifies a project and does not grant row access. Authenticated access still needs applicable policies. Service credentials belong only in trusted server code, with explicit branch/table/method scopes and audited bypass behavior. Browser Origin requests with service keys are rejected. Do not embed a service/management key in VITE_ variables, generated static files, client bundles, URLs or screenshots. The diagnostic helper checks presence and suspicious browser variable names without printing values.
 
@@ -20,6 +20,6 @@ Counts and cursors must not reveal another user's hidden rows. Cursors bind iden
 
 Use exact origins including scheme and port, no wildcard credentialed CORS. Validate callback/reset origins and configure Google/GitHub providers explicitly. Private storage authorizes metadata and bytes; public-read buckets are an intentional exposure choice. Uploads enforce size/MIME and finalize verified bytes before download. Recover pending objects via supported reconciliation rather than manually making metadata readable.
 
-SQL console, direct SQLite files and privileged management paths are trusted administrative access; application row policies do not protect against a filesystem operator. Maintain one writable API owner, local disk and least-privilege containers. Keep internal metrics/worker endpoints private and worker-token protected. Apply [backup/master-key custody](operations.md) separately from object-store protection.
+SQL console, direct PGlite files and privileged management paths are trusted administrative access; application row policies do not protect against a filesystem operator. Maintain one writable API owner, local disk and least-privilege containers. Keep internal metrics/worker endpoints private and worker-token protected. Apply [backup/master-key custody](operations.md) separately from object-store protection.
 
 A skill invocation does not grant permission to reset data, revoke unrelated credentials, switch production primary, deploy/publish externally or release npm packages. Prepare and verify within the user's authorized scope; ask only for a concrete otherwise unauthorized irreversible action.

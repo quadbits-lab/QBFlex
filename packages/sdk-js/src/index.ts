@@ -102,7 +102,7 @@ export class QBClient<D = DatabaseShape, R = RPCShape> {
             headers.set('x-qb-key', client.options.publishableKey);
             if (client.token) headers.set('authorization', `Bearer ${client.token}`);
             return await fetch(input, { ...init, headers, credentials: 'include' });
-            },
+          },
         },
       });
     }
@@ -285,13 +285,21 @@ export class QBClient<D = DatabaseShape, R = RPCShape> {
       enroll: async (opts?: { name?: string }) => {
         const result = await this.authClient().passkey.addPasskey(opts);
         if (result.error)
-          throw new QBError('PASSKEY_FAILED', result.error.message ?? 'Passkey registration failed', result.error.status);
+          throw new QBError(
+            'PASSKEY_FAILED',
+            result.error.message ?? 'Passkey registration failed',
+            result.error.status,
+          );
         return result.data as unknown;
       },
       list: async () => {
         const result = await (this.authClient() as any).$fetch('/passkey/list-user-passkeys');
         if (result.error)
-          throw new QBError('PASSKEY_FAILED', result.error.message ?? 'Unable to list passkeys', result.error.status);
+          throw new QBError(
+            'PASSKEY_FAILED',
+            result.error.message ?? 'Unable to list passkeys',
+            result.error.status,
+          );
         return (result.data ?? []) as unknown[];
       },
       remove: async (id: string) => {
@@ -300,7 +308,11 @@ export class QBClient<D = DatabaseShape, R = RPCShape> {
           body: { id },
         });
         if (result.error)
-          throw new QBError('PASSKEY_FAILED', result.error.message ?? 'Unable to remove passkey', result.error.status);
+          throw new QBError(
+            'PASSKEY_FAILED',
+            result.error.message ?? 'Unable to remove passkey',
+            result.error.status,
+          );
       },
       rename: async (id: string, name: string) => {
         const result = await (this.authClient() as any).$fetch('/passkey/update-passkey', {
@@ -308,17 +320,23 @@ export class QBClient<D = DatabaseShape, R = RPCShape> {
           body: { id, name },
         });
         if (result.error)
-          throw new QBError('PASSKEY_FAILED', result.error.message ?? 'Unable to rename passkey', result.error.status);
+          throw new QBError(
+            'PASSKEY_FAILED',
+            result.error.message ?? 'Unable to rename passkey',
+            result.error.status,
+          );
       },
       /** Runs the WebAuthn authentication ceremony and adopts the returned session. */
       signIn: async () => {
         const result = await this.authClient().signIn.passkey();
         if (result.error)
-          throw new QBError('PASSKEY_FAILED', result.error.message ?? 'Passkey sign-in failed', result.error.status);
+          throw new QBError(
+            'PASSKEY_FAILED',
+            result.error.message ?? 'Passkey sign-in failed',
+            result.error.status,
+          );
         const payload = result.data as any;
-        const session = payload?.user
-          ? { user: payload.user, token: payload.token ?? null }
-          : null;
+        const session = payload?.user ? { user: payload.user, token: payload.token ?? null } : null;
         this.setSession(session, payload?.token ?? null);
         return session;
       },
@@ -326,8 +344,16 @@ export class QBClient<D = DatabaseShape, R = RPCShape> {
     twoFactor: {
       /** Returns the TOTP enrollment URI and one-time backup codes. */
       enable: async (password: string) => {
-        const result = await this.request<any>('/auth/two-factor/enable', 'POST', { password }, { auth: true });
-        return { totpURI: result.totpURI as string, backupCodes: (result.backupCodes ?? []) as string[] };
+        const result = await this.request<any>(
+          '/auth/two-factor/enable',
+          'POST',
+          { password },
+          { auth: true },
+        );
+        return {
+          totpURI: result.totpURI as string,
+          backupCodes: (result.backupCodes ?? []) as string[],
+        };
       },
       verify: async (code: string) => {
         await this.request('/auth/two-factor/verify-totp', 'POST', { code }, { auth: true });
@@ -398,11 +424,21 @@ export class QBClient<D = DatabaseShape, R = RPCShape> {
     listBuckets: () => this.request<Result<any[]>>('/storage/buckets'),
     list: (bucket: string) =>
       this.request<Result<any[]>>(`/storage/buckets/${encodeURIComponent(bucket)}/objects`),
-    upload: async (bucket: string, key: string, file: Blob, options: RequestOptions = {}) => {
+    upload: async (
+      bucket: string,
+      key: string,
+      file: Blob,
+      options: RequestOptions & { checksum?: string } = {},
+    ) => {
       const intent = await this.request<Result<{ id: string }>>(
         `/storage/buckets/${encodeURIComponent(bucket)}/objects`,
         'POST',
-        { key, size: file.size, mime: file.type || 'application/octet-stream' },
+        {
+          key,
+          size: file.size,
+          mime: file.type || 'application/octet-stream',
+          ...(options.checksum ? { checksum: options.checksum } : {}),
+        },
         options,
       );
       return this.request<Result<{ id: string; state: string }>>(

@@ -16,7 +16,7 @@ Use `from('tasks').select(['id','title']).eq('completed',0).order('id','asc').li
 
 ## Serialization
 
-Safe SQLite integers are numbers; larger 64-bit integers are decimal strings. Generated integer fields consequently use `number | string`: convert only after checking bounds. BLOBs are base64 strings, JSON columns retain text semantics, booleans are 0/1 and nullable fields use null. CHECK enum constraints appear in generated types. Do not coerce every number/string globally or treat JSON text as an already parsed object.
+Safe PGlite integers are numbers; larger 64-bit integers are decimal strings. Generated integer fields consequently use `number | string`: convert only after checking bounds. BLOBs are base64 strings, JSON columns retain text semantics, booleans are 0/1 and nullable fields use null. CHECK enum constraints appear in generated types. Do not coerce every number/string globally or treat JSON text as an already parsed object.
 
 ## Mutations, revisions and retries
 

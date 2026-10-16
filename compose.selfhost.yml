@@ -33,7 +33,7 @@ services:
       resources:
         limits:
           cpus: '${QB_API_CPUS:-1.0}'
-          memory: ${QB_API_MEMORY:-1g}
+          memory: ${QB_API_MEMORY:-8g}
     logging: *logging
   storage-init:
     environment:

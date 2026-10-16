@@ -133,7 +133,9 @@ export declare class QBClient<D = DatabaseShape, R = RPCShape> {
     storage: {
         listBuckets: () => Promise<Result<any[]>>;
         list: (bucket: string) => Promise<Result<any[]>>;
-        upload: (bucket: string, key: string, file: Blob, options?: RequestOptions) => Promise<Result<{
+        upload: (bucket: string, key: string, file: Blob, options?: RequestOptions & {
+            checksum?: string;
+        }) => Promise<Result<{
             id: string;
             state: string;
         }>>;
@@ -256,7 +258,9 @@ export declare function useQBRealtime(options: ChannelOptions & {
 export declare function useQBStorage(): {
     isPending: boolean;
     error: Error | null;
-    upload: (bucket: string, key: string, file: Blob, options?: import("@qb-flex/client").RequestOptions | undefined) => Promise<import("@qb-flex/contracts").Result<{
+    upload: (bucket: string, key: string, file: Blob, options?: (import("@qb-flex/client").RequestOptions & {
+        checksum?: string;
+    }) | undefined) => Promise<import("@qb-flex/contracts").Result<{
         id: string;
         state: string;
     }>>;

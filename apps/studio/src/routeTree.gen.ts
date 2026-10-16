@@ -19,12 +19,17 @@ import { Route as ConsoleAuthRouteImport } from './routes/_console/auth'
 import { Route as ConsoleBackupsRouteImport } from './routes/_console/backups'
 import { Route as ConsoleDatabaseRouteImport } from './routes/_console/database'
 import { Route as ConsoleFunctionsRouteImport } from './routes/_console/functions'
+import { Route as ConsoleJobsRouteImport } from './routes/_console/jobs'
 import { Route as ConsoleLogsRouteImport } from './routes/_console/logs'
 import { Route as ConsoleOverviewRouteImport } from './routes/_console/overview'
 import { Route as ConsoleRealtimeRouteImport } from './routes/_console/realtime'
 import { Route as ConsoleSchemaRouteImport } from './routes/_console/schema'
+import { Route as ConsoleSecurityRouteImport } from './routes/_console/security'
 import { Route as ConsoleSettingsRouteImport } from './routes/_console/settings'
 import { Route as ConsoleStorageRouteImport } from './routes/_console/storage'
+import { Route as ConsoleWebhooksRouteImport } from './routes/_console/webhooks'
+import { Route as ConsoleWorkspaceRouteImport } from './routes/_console/workspace'
+import { Route as ErrorCodeRouteImport } from './routes/error.$code'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -75,6 +80,11 @@ const ConsoleFunctionsRoute = ConsoleFunctionsRouteImport.update({
   path: '/functions',
   getParentRoute: () => ConsoleRoute,
 } as any)
+const ConsoleJobsRoute = ConsoleJobsRouteImport.update({
+  id: '/jobs',
+  path: '/jobs',
+  getParentRoute: () => ConsoleRoute,
+} as any)
 const ConsoleLogsRoute = ConsoleLogsRouteImport.update({
   id: '/logs',
   path: '/logs',
@@ -95,6 +105,11 @@ const ConsoleSchemaRoute = ConsoleSchemaRouteImport.update({
   path: '/schema',
   getParentRoute: () => ConsoleRoute,
 } as any)
+const ConsoleSecurityRoute = ConsoleSecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
+  getParentRoute: () => ConsoleRoute,
+} as any)
 const ConsoleSettingsRoute = ConsoleSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -104,6 +119,21 @@ const ConsoleStorageRoute = ConsoleStorageRouteImport.update({
   id: '/storage',
   path: '/storage',
   getParentRoute: () => ConsoleRoute,
+} as any)
+const ConsoleWebhooksRoute = ConsoleWebhooksRouteImport.update({
+  id: '/webhooks',
+  path: '/webhooks',
+  getParentRoute: () => ConsoleRoute,
+} as any)
+const ConsoleWorkspaceRoute = ConsoleWorkspaceRouteImport.update({
+  id: '/workspace',
+  path: '/workspace',
+  getParentRoute: () => ConsoleRoute,
+} as any)
+const ErrorCodeRoute = ErrorCodeRouteImport.update({
+  id: '/error/$code',
+  path: '/error/$code',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -116,12 +146,17 @@ export interface FileRoutesByFullPath {
   '/backups': typeof ConsoleBackupsRoute
   '/database': typeof ConsoleDatabaseRoute
   '/functions': typeof ConsoleFunctionsRoute
+  '/jobs': typeof ConsoleJobsRoute
   '/logs': typeof ConsoleLogsRoute
   '/overview': typeof ConsoleOverviewRoute
   '/realtime': typeof ConsoleRealtimeRoute
   '/schema': typeof ConsoleSchemaRoute
+  '/security': typeof ConsoleSecurityRoute
   '/settings': typeof ConsoleSettingsRoute
   '/storage': typeof ConsoleStorageRoute
+  '/webhooks': typeof ConsoleWebhooksRoute
+  '/workspace': typeof ConsoleWorkspaceRoute
+  '/error/$code': typeof ErrorCodeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -133,12 +168,17 @@ export interface FileRoutesByTo {
   '/backups': typeof ConsoleBackupsRoute
   '/database': typeof ConsoleDatabaseRoute
   '/functions': typeof ConsoleFunctionsRoute
+  '/jobs': typeof ConsoleJobsRoute
   '/logs': typeof ConsoleLogsRoute
   '/overview': typeof ConsoleOverviewRoute
   '/realtime': typeof ConsoleRealtimeRoute
   '/schema': typeof ConsoleSchemaRoute
+  '/security': typeof ConsoleSecurityRoute
   '/settings': typeof ConsoleSettingsRoute
   '/storage': typeof ConsoleStorageRoute
+  '/webhooks': typeof ConsoleWebhooksRoute
+  '/workspace': typeof ConsoleWorkspaceRoute
+  '/error/$code': typeof ErrorCodeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -152,12 +192,17 @@ export interface FileRoutesById {
   '/_console/backups': typeof ConsoleBackupsRoute
   '/_console/database': typeof ConsoleDatabaseRoute
   '/_console/functions': typeof ConsoleFunctionsRoute
+  '/_console/jobs': typeof ConsoleJobsRoute
   '/_console/logs': typeof ConsoleLogsRoute
   '/_console/overview': typeof ConsoleOverviewRoute
   '/_console/realtime': typeof ConsoleRealtimeRoute
   '/_console/schema': typeof ConsoleSchemaRoute
+  '/_console/security': typeof ConsoleSecurityRoute
   '/_console/settings': typeof ConsoleSettingsRoute
   '/_console/storage': typeof ConsoleStorageRoute
+  '/_console/webhooks': typeof ConsoleWebhooksRoute
+  '/_console/workspace': typeof ConsoleWorkspaceRoute
+  '/error/$code': typeof ErrorCodeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -171,12 +216,17 @@ export interface FileRouteTypes {
     | '/backups'
     | '/database'
     | '/functions'
+    | '/jobs'
     | '/logs'
     | '/overview'
     | '/realtime'
     | '/schema'
+    | '/security'
     | '/settings'
     | '/storage'
+    | '/webhooks'
+    | '/workspace'
+    | '/error/$code'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -188,12 +238,17 @@ export interface FileRouteTypes {
     | '/backups'
     | '/database'
     | '/functions'
+    | '/jobs'
     | '/logs'
     | '/overview'
     | '/realtime'
     | '/schema'
+    | '/security'
     | '/settings'
     | '/storage'
+    | '/webhooks'
+    | '/workspace'
+    | '/error/$code'
   id:
     | '__root__'
     | '/'
@@ -206,12 +261,17 @@ export interface FileRouteTypes {
     | '/_console/backups'
     | '/_console/database'
     | '/_console/functions'
+    | '/_console/jobs'
     | '/_console/logs'
     | '/_console/overview'
     | '/_console/realtime'
     | '/_console/schema'
+    | '/_console/security'
     | '/_console/settings'
     | '/_console/storage'
+    | '/_console/webhooks'
+    | '/_console/workspace'
+    | '/error/$code'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -219,6 +279,7 @@ export interface RootRouteChildren {
   ConsoleRoute: typeof ConsoleRouteWithChildren
   SetupRoute: typeof SetupRoute
   SignInRoute: typeof SignInRoute
+  ErrorCodeRoute: typeof ErrorCodeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -293,6 +354,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConsoleFunctionsRouteImport
       parentRoute: typeof ConsoleRoute
     }
+    '/_console/jobs': {
+      id: '/_console/jobs'
+      path: '/jobs'
+      fullPath: '/jobs'
+      preLoaderRoute: typeof ConsoleJobsRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
     '/_console/logs': {
       id: '/_console/logs'
       path: '/logs'
@@ -321,6 +389,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConsoleSchemaRouteImport
       parentRoute: typeof ConsoleRoute
     }
+    '/_console/security': {
+      id: '/_console/security'
+      path: '/security'
+      fullPath: '/security'
+      preLoaderRoute: typeof ConsoleSecurityRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
     '/_console/settings': {
       id: '/_console/settings'
       path: '/settings'
@@ -335,6 +410,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConsoleStorageRouteImport
       parentRoute: typeof ConsoleRoute
     }
+    '/_console/webhooks': {
+      id: '/_console/webhooks'
+      path: '/webhooks'
+      fullPath: '/webhooks'
+      preLoaderRoute: typeof ConsoleWebhooksRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
+    '/_console/workspace': {
+      id: '/_console/workspace'
+      path: '/workspace'
+      fullPath: '/workspace'
+      preLoaderRoute: typeof ConsoleWorkspaceRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
+    '/error/$code': {
+      id: '/error/$code'
+      path: '/error/$code'
+      fullPath: '/error/$code'
+      preLoaderRoute: typeof ErrorCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -345,12 +441,16 @@ interface ConsoleRouteChildren {
   ConsoleBackupsRoute: typeof ConsoleBackupsRoute
   ConsoleDatabaseRoute: typeof ConsoleDatabaseRoute
   ConsoleFunctionsRoute: typeof ConsoleFunctionsRoute
+  ConsoleJobsRoute: typeof ConsoleJobsRoute
   ConsoleLogsRoute: typeof ConsoleLogsRoute
   ConsoleOverviewRoute: typeof ConsoleOverviewRoute
   ConsoleRealtimeRoute: typeof ConsoleRealtimeRoute
   ConsoleSchemaRoute: typeof ConsoleSchemaRoute
+  ConsoleSecurityRoute: typeof ConsoleSecurityRoute
   ConsoleSettingsRoute: typeof ConsoleSettingsRoute
   ConsoleStorageRoute: typeof ConsoleStorageRoute
+  ConsoleWebhooksRoute: typeof ConsoleWebhooksRoute
+  ConsoleWorkspaceRoute: typeof ConsoleWorkspaceRoute
 }
 
 const ConsoleRouteChildren: ConsoleRouteChildren = {
@@ -360,12 +460,16 @@ const ConsoleRouteChildren: ConsoleRouteChildren = {
   ConsoleBackupsRoute: ConsoleBackupsRoute,
   ConsoleDatabaseRoute: ConsoleDatabaseRoute,
   ConsoleFunctionsRoute: ConsoleFunctionsRoute,
+  ConsoleJobsRoute: ConsoleJobsRoute,
   ConsoleLogsRoute: ConsoleLogsRoute,
   ConsoleOverviewRoute: ConsoleOverviewRoute,
   ConsoleRealtimeRoute: ConsoleRealtimeRoute,
   ConsoleSchemaRoute: ConsoleSchemaRoute,
+  ConsoleSecurityRoute: ConsoleSecurityRoute,
   ConsoleSettingsRoute: ConsoleSettingsRoute,
   ConsoleStorageRoute: ConsoleStorageRoute,
+  ConsoleWebhooksRoute: ConsoleWebhooksRoute,
+  ConsoleWorkspaceRoute: ConsoleWorkspaceRoute,
 }
 
 const ConsoleRouteWithChildren =
@@ -376,6 +480,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConsoleRoute: ConsoleRouteWithChildren,
   SetupRoute: SetupRoute,
   SignInRoute: SignInRoute,
+  ErrorCodeRoute: ErrorCodeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

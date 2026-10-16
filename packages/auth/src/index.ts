@@ -3,7 +3,8 @@ import { bearer, twoFactor } from 'better-auth/plugins';
 import { passkey } from '@better-auth/passkey';
 import { getMigrations } from 'better-auth/db/migration';
 import { createHmac, createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import type { Database } from 'bun:sqlite';
+import { PGliteDialect } from 'kysely';
+import type { Database } from '../../database/src/connection';
 import { createMailer } from './email/mailer';
 export const realmSecret = (master: string, realm: string) =>
   createHmac('sha256', master).update(realm).digest('hex');
@@ -39,12 +40,18 @@ export async function createRealm(
   const mailer = createMailer();
   const options = {
     logger: { disabled: true },
-    database: db,
+    database: { dialect: new PGliteDialect({ pglite: await db.ready }), type: 'postgres' as const },
     secret: config.secret,
     baseURL: config.baseURL,
     basePath: config.basePath,
     trustedOrigins: config.origins,
-    user: { modelName: '_qb_auth_users' },
+    user: {
+      modelName: '_qb_auth_users',
+      additionalFields: {
+        banned: { type: 'boolean', required: false, defaultValue: false, input: false },
+        banReason: { type: 'string', required: false, input: false },
+      },
+    },
     session: { modelName: '_qb_auth_sessions', cookieCache: { enabled: false } },
     account: { modelName: '_qb_auth_accounts' },
     verification: { modelName: '_qb_auth_verifications' },

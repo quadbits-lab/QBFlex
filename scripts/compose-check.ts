@@ -21,8 +21,7 @@ interface CheckDatabase {
 }
 let client: QBClient<CheckDatabase> | undefined;
 // Containers cannot use host loopback directly; rewrite a local S3 endpoint to the host gateway.
-const rawEndpoint =
-  process.env.QB_S3_ENDPOINT ?? 'http://127.0.0.1:9000';
+const rawEndpoint = process.env.QB_S3_ENDPOINT ?? 'http://127.0.0.1:9000';
 const s3Endpoint = /^https?:\/\/(localhost|127\.0\.0\.1)/.test(rawEndpoint)
   ? rawEndpoint.replace(/(localhost|127\.0\.0\.1)/, 'host.docker.internal')
   : rawEndpoint;

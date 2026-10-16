@@ -34,3 +34,7 @@ Call `storage.remove(objectId)` and invalidate the file-list query after success
 ## Cancellation
 
 Upload/download methods accept a request option containing an AbortSignal. Cancel operations when the user deliberately leaves the transfer flow. Cancellation does not guarantee that remote work did not commit; refresh object state before retrying.
+
+## Upload integrity and limits
+
+The shared upload method accepts optional SHA-256 checksum and AbortSignal options. Server uploads stream through private disk staging before S3 persistence, with size/checksum verification, four-transfer concurrency and a 100 MiB maximum. This does not add resumable or native background uploads. See [storage configuration and integrity examples](/docs/storage/files).

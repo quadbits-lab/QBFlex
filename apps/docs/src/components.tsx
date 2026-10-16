@@ -208,7 +208,7 @@ export function DocsPage({ slug }: { slug: string }) {
             {slug.startsWith('sdk/react/') && <Badge>React 19</Badge>}
             {slug.startsWith('sdk/vanilla/') && <Badge>Browser ESM</Badge>}
           </div>
-          <article className="prose">
+          <article className="prose min-w-0 [overflow-wrap:anywhere]">
             <Suspense fallback={<p className="muted">Loading article…</p>}>
               <doc.Component components={{ pre: CodeBlock, Callout }} />
             </Suspense>

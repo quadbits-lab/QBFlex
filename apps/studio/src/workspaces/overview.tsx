@@ -178,11 +178,9 @@ export function Overview({ project, base }: { project: any; base: string }) {
           </Card>
         ))}
       </div>
-      {[schema.error, branches.error, keys.error, users.error]
-        .filter(Boolean)
-        .map((error, i) => (
-          <ErrorMessage key={i} error={error as Error} />
-        ))}
+      {[schema.error, branches.error, keys.error, users.error].filter(Boolean).map((error, i) => (
+        <ErrorMessage key={i} error={error as Error} />
+      ))}
       <div className="grid grid-cols-1 min-w-0 gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <Card>
           <CardHeader>

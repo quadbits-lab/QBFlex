@@ -1,5 +1,31 @@
 /** Stable browser and service contracts. No runtime or filesystem dependencies. */
 export const API_VERSION = 'v1';
+export { jobKinds } from './jobs';
+export type { JobKind, JobState, JobSummary, JobAttempt } from './jobs';
+export type { WebhookInput, WebhookSummary, WebhookDelivery, WebhookSkip } from './webhooks';
+export type { SecurityFinding, SecurityReport } from './security-advisor';
+export {
+  recoveryIntervals,
+  replicaStates,
+  drillStates,
+  recoveryFindingCodes,
+} from './recovery';
+export type {
+  RecoveryIntervalHours,
+  ReplicaState,
+  DrillState,
+  RecoveryFindingCode,
+  DrillDimensionResult,
+  RecoverySettings,
+  RecoveryDestinationSummary,
+  RecoveryDestinationInput,
+  BackupReplicaSummary,
+  RecoveryInventoryItem,
+  RecoveryFinding,
+  RecoveryInventory,
+  RecoveryDrillReport,
+  RecoveryDrillSummary,
+} from './recovery';
 export type Role = 'owner' | 'admin' | 'developer' | 'viewer';
 export type Operation = 'select' | 'insert' | 'update' | 'delete';
 export type Scalar = string | number | boolean | null;
@@ -25,6 +51,14 @@ export interface Policy {
 export interface Identity {
   sub: string | null;
   role: 'anonymous' | 'authenticated' | 'service';
+  /** Application RBAC role names. Empty/omitted for anonymous, service, or users without assignments. */
+  roles?: string[];
+}
+export const SYSTEM_POLICY_ROLES = ['anonymous', 'authenticated', 'service'] as const;
+export type SystemPolicyRole = (typeof SYSTEM_POLICY_ROLES)[number];
+export const APP_ROLE_NAME = /^[a-z][a-z0-9_]{0,62}$/;
+export function isReservedRoleName(name: string) {
+  return (SYSTEM_POLICY_ROLES as readonly string[]).includes(name);
 }
 export interface Filter {
   column: string;
@@ -140,6 +174,18 @@ export const capabilities = {
   ai: 'planned',
   mcp: 'planned',
   replicas: 'planned',
+  jobs: 'experimental',
+  recoveryCenter: 'experimental',
+  securityAdvisor: 'experimental',
+  operationsDashboard: 'planned',
+  queryInspector: 'planned',
+  schemaReviews: 'planned',
+  previews: 'planned',
+  webhooks: 'experimental',
+  dataLab: 'planned',
+  search: 'planned',
+  nativeSDK: 'planned',
+  push: 'planned',
 } as const;
 export const routes = [
   ['GET', '/health', 'Health operation'],
@@ -147,9 +193,17 @@ export const routes = [
   ['GET', '/setup', 'Setup operation'],
   ['POST', '/setup', 'Setup operation'],
   ['GET/POST', '/platform/auth/*', '* operation'],
+  ['GET', '/platform/avatars/{userId}', 'Read platform avatar'],
+  ['POST', '/platform/avatar', 'Upload platform avatar'],
+  ['DELETE', '/platform/avatar', 'Remove platform avatar'],
   ['GET', '/management/v1/capabilities', 'Feature availability'],
   ['GET', '/management/v1/organizations', 'List organizations'],
   ['POST', '/management/v1/organizations', 'Create organization'],
+  ['GET', '/management/v1/organizations/{id}', 'Read workspace'],
+  ['PATCH', '/management/v1/organizations/{id}', 'Update workspace'],
+  ['POST', '/management/v1/organizations/{id}/archive', 'Archive workspace'],
+  ['POST', '/management/v1/organizations/{id}/unarchive', 'Restore workspace'],
+  ['DELETE', '/management/v1/organizations/{id}', 'Delete workspace'],
   ['GET', '/management/v1/organizations/{id}/members', 'Members operation'],
   ['POST', '/management/v1/organizations/{id}/members', 'Members operation'],
   ['POST', '/management/v1/invitations', 'Invitations operation'],
@@ -158,6 +212,8 @@ export const routes = [
   ['DELETE', '/management/v1/tokens/{token}', 'Token operation'],
   ['GET', '/management/v1/projects', 'List projects'],
   ['POST', '/management/v1/projects', 'Provision project'],
+  ['PATCH', '/management/v1/projects/{id}', 'Update project name and region'],
+  ['DELETE', '/management/v1/projects/{id}', 'Delete project and its artifacts'],
   ['GET', '/management/v1/operations/{id}', 'Operation status'],
   ['POST', '/management/v1/operations/{id}/cancel', 'Cancel before provisioning starts'],
   ['GET', '/management/v1/projects/{id}/branches', 'List branches'],
@@ -177,6 +233,41 @@ export const routes = [
   ['POST', '/management/v1/projects/{id}/branches/{branch}/migrations', 'Apply migration'],
   ['POST', '/management/v1/projects/{id}/branches/{branch}/sql', 'Execute privileged SQL'],
   ['GET', '/management/v1/projects/{id}/branches/{branch}/policies', 'Policies operation'],
+  ['GET', '/management/v1/projects/{id}/branches/{branch}/webhooks', 'Webhook metadata'],
+  ['GET', '/management/v1/projects/{id}/branches/{branch}/security', 'Security Advisor findings'],
+  [
+    'POST',
+    '/management/v1/projects/{id}/branches/{branch}/security/{finding}/acknowledge',
+    'Acknowledge current finding with expiry',
+  ],
+  [
+    'DELETE',
+    '/management/v1/projects/{id}/branches/{branch}/security/{finding}/acknowledge',
+    'Clear finding acknowledgment',
+  ],
+  ['POST', '/management/v1/projects/{id}/branches/{branch}/webhooks', 'Create scoped webhook'],
+  [
+    'POST',
+    '/management/v1/projects/{id}/branches/{branch}/webhooks/{webhook}/state',
+    'Pause, resume or revoke webhook',
+  ],
+  [
+    'POST',
+    '/management/v1/projects/{id}/branches/{branch}/webhooks/{webhook}/rotate',
+    'Rotate webhook signing secret',
+  ],
+  ['GET', '/management/v1/projects/{id}/branches/{branch}/jobs', 'List private job metadata'],
+  ['GET', '/management/v1/projects/{id}/branches/{branch}/jobs/{job}', 'Job attempt history'],
+  [
+    'POST',
+    '/management/v1/projects/{id}/branches/{branch}/jobs/{job}/cancel',
+    'Cancel unsent job work',
+  ],
+  [
+    'POST',
+    '/management/v1/projects/{id}/branches/{branch}/jobs/{job}/replay',
+    'Explicit dead-letter replay',
+  ],
   ['PUT', '/management/v1/projects/{id}/branches/{branch}/policies', 'Save policy'],
   ['POST', '/management/v1/projects/{id}/branches/{branch}/policies/test', 'Test operation'],
   ['PUT', '/management/v1/projects/{id}/branches/{branch}/exposure/{table}', 'Configure exposure'],
@@ -189,14 +280,37 @@ export const routes = [
   ['GET', '/management/v1/projects/{id}/branches/{branch}/rpc', 'Rpc operation'],
   ['GET', '/management/v1/projects/{id}/branches/{branch}/types', 'Types operation'],
   ['GET', '/management/v1/projects/{id}/branches/{branch}/users', 'Users operation'],
+  ['POST', '/management/v1/projects/{id}/branches/{branch}/users', 'Users operation'],
+  ['PATCH', '/management/v1/projects/{id}/branches/{branch}/users/{user}', 'Users operation'],
+  ['DELETE', '/management/v1/projects/{id}/branches/{branch}/users/{user}', 'Users operation'],
+  ['POST', '/management/v1/projects/{id}/branches/{branch}/users/{user}/ban', 'Users operation'],
+  ['DELETE', '/management/v1/projects/{id}/branches/{branch}/users/{user}/ban', 'Users operation'],
+  ['PUT', '/management/v1/projects/{id}/branches/{branch}/users/{user}/roles', 'Users operation'],
   [
     'DELETE',
     '/management/v1/projects/{id}/branches/{branch}/users/{user}/sessions',
     'Sessions operation',
   ],
+  ['GET', '/management/v1/projects/{id}/branches/{branch}/roles', 'Roles operation'],
+  ['POST', '/management/v1/projects/{id}/branches/{branch}/roles', 'Roles operation'],
+  ['PATCH', '/management/v1/projects/{id}/branches/{branch}/roles/{role}', 'Roles operation'],
+  ['DELETE', '/management/v1/projects/{id}/branches/{branch}/roles/{role}', 'Roles operation'],
   ['GET', '/management/v1/projects/{id}/backups', 'Backups operation'],
   ['POST', '/management/v1/projects/{id}/branches/{branch}/backups', 'Backups operation'],
   ['POST', '/management/v1/projects/{id}/backups/{backup}/restore', 'Restore operation'],
+  ['GET', '/management/v1/projects/{id}/recovery', 'Recovery settings'],
+  ['PUT', '/management/v1/projects/{id}/recovery', 'Recovery settings'],
+  ['GET', '/management/v1/projects/{id}/recovery/destinations', 'Recovery destinations'],
+  ['POST', '/management/v1/projects/{id}/recovery/destinations', 'Recovery destinations'],
+  [
+    'POST',
+    '/management/v1/projects/{id}/recovery/destinations/{destination}/state',
+    'Recovery destination state',
+  ],
+  ['GET', '/management/v1/projects/{id}/recovery/inventory', 'Recovery inventory'],
+  ['GET', '/management/v1/projects/{id}/recovery/drills', 'Recovery drills'],
+  ['POST', '/management/v1/projects/{id}/recovery/drills', 'Recovery drills'],
+  ['POST', '/management/v1/projects/{id}/recovery/drills/{drill}/cancel', 'Cancel recovery drill'],
   ['POST', '/management/v1/projects/{id}/branches/{branch}/cutover', 'Cutover operation'],
   ['GET', '/management/v1/audit', 'Audit operation'],
   ['GET', '/management/v1/projects/{id}/branches/{branch}/buckets', 'Buckets operation'],

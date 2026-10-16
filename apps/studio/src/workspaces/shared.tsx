@@ -1,10 +1,9 @@
 import { useEffect, useId, useRef } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { Field, FieldLabel, Textarea, toast } from '@qb-flex/ui';
 import { management } from '../api';
 
 export function useWrite() {
-  const cache = useQueryClient();
   return useMutation({
     mutationFn: async ({
       path,
@@ -17,7 +16,6 @@ export function useWrite() {
       body?: unknown;
       headers?: Record<string, string>;
     }) => management.request(path, method, body, undefined, headers),
-    onSuccess: () => cache.invalidateQueries(),
   });
 }
 

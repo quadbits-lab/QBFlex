@@ -4,7 +4,6 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { fixture } from '../tests/helpers';
-
 const root = process.cwd(),
   directory = mkdtempSync(join(tmpdir(), 'qb-skill-detached-'));
 const processes: ReturnType<typeof Bun.spawn>[] = [];
@@ -229,7 +228,9 @@ try {
     const context = await browser.newContext(),
       app = await context.newPage();
     await context.addInitScript(() => {
-      const state = window as typeof window & { __qbTestSockets: WebSocket[] };
+      const state = window as typeof window & {
+        __qbTestSockets: WebSocket[];
+      };
       state.__qbTestSockets = [];
       const NativeSocket = window.WebSocket;
       window.WebSocket = class extends NativeSocket {
@@ -267,7 +268,9 @@ try {
     // Independent ESM client produces an event; on reconnect snapshot resynchronization preserves it.
     await expect(app.getByText('Realtime: connected', { exact: true })).toBeVisible();
     await app.evaluate(() => {
-      const state = window as typeof window & { __qbTestSockets: WebSocket[] };
+      const state = window as typeof window & {
+        __qbTestSockets: WebSocket[];
+      };
       state.__qbTestSockets.find((socket) => socket.readyState === WebSocket.OPEN)!.close();
     });
     await expect(app.getByText('Realtime: reconnecting', { exact: true })).toBeVisible();
@@ -323,7 +326,9 @@ try {
     await expect
       .poll(() =>
         app.evaluate(() => {
-          const state = window as typeof window & { __qbTestSockets: WebSocket[] };
+          const state = window as typeof window & {
+            __qbTestSockets: WebSocket[];
+          };
           return state.__qbTestSockets.filter((socket) => socket.readyState === WebSocket.OPEN)
             .length;
         }),

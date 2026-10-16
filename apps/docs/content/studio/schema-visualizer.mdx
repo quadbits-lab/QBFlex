@@ -1,0 +1,23 @@
+export const frontmatter = {"title": "Schema Visualizer", "description": "Explore table relationships and exposure in the workflow canvas.", "section": "Studio", "slug": "studio/schema-visualizer", "order": 11};
+
+# Schema Visualizer
+
+## Open the selected branch
+
+Choose the organization, project and branch in the console, then open **Schema** (`/schema`). The approvals-ui-derived workflow canvas uses React Flow to display the branch's schema. It is an inspection tool; moving a node does not change the database.
+
+## Read the graph
+
+Each table card shows its name, column count, types and primary-key markers. Exposure badges distinguish private from exposed tables. Foreign-key edges point to referenced tables. Private tables are still visible to authorized Studio operators; this does not make their rows publicly readable.
+
+Use the legend, minimap, fit and zoom controls to explore the graph. Select a table to inspect all columns, nullability, indexes, exposure/allowed columns and policies in the detail sheet. A table being exposed does not establish a permissive policy grant.
+
+## Keyboard and smaller screens
+
+Tab to a table and use Enter or Space to open details. Escape closes the sheet. Visible focus indicators and labeled controls support keyboard navigation. On small screens use the console's mobile menu and pan/zoom controls rather than relying on hover. Animation respects reduced-motion preferences.
+
+Loading, empty and failed schema requests have separate states. If there are no tables, create one in Database; if a request fails, verify project access and branch availability before retrying.
+
+## What this page does not do
+
+It does not apply migrations, approve schema changes or rehearse them locally. The expanded **Schema Change Review** and SQLite WASM rehearsal are not implemented. Apply reviewed changes through [schema and migrations](/docs/database/schema); test public access with [policies](/docs/database/policies).

@@ -2,30 +2,84 @@ export const frontmatter = {"title": "Use QB Flex Studio", "description": "Manag
 
 # Use QB Flex Studio
 
-## Project navigation
+## Console navigation
 
-The persistent project and branch selectors define the target of each operation. Verify the environment label before SQL, policy changes or restore. Overview shows actual project state and recorded operations; it does not display simulated traffic.
+Studio is a dark-first developer console built with shared Tailwind v4 tokens and shadcn/Radix primitives. Switch to the tokenized light theme using the theme control. Collapse the desktop sidebar or open the mobile menu; sidebar/theme choices persist locally. Docs shares tokens but keeps its documentation layout.
 
-## Database
+Organization, project and branch selectors define the target. Check the environment before SQL, migrations, credential changes or restore. Overview displays real project/schema state, service shortcuts and recorded activity—not simulated traffic or a complete Operations Dashboard.
 
-Use the table list to select a schema object, inspect columns and view data. The grid requests bounded pages from the server. Filter and sort on the server, change visible columns, edit typed values and nulls, export the current page or import a JSON array of up to 100 rows atomically. Column controls affect the presentation; exposure settings define the public API. Studio data access uses organization permissions rather than an application identity.
+Press Command-K (macOS) or Ctrl-K to search navigation/projects. Outside text entry/dialogs, use `g` then `o` for Overview, `w` Workspace, `d` Database, `s` Schema, `a` Authentication, `l` Activity or `t` Settings. Keyboard focus, Escape-to-close dialogs/sheets and reduced-motion styling remain important; exercise critical workflows on your own devices.
 
-The migration editor records a migration ID and SQL. Applied checksums are immutable. Use the policy editor and simulated identity tester to verify user-facing access.
+## Sign-in and protected routes
 
-## Authentication and API
+Studio verifies the platform cookie session before loading a protected workspace. Password, authenticator and passkey sign-in all confirm that the browser can read its session before announcing success. A protected direct link returns to the same local path after sign-in; external URLs and authentication loops are rejected. Session checks bypass HTTP caches, use bounded requests and revalidate on navigation, window focus and once a minute while a workspace is open. API errors display **Connection unavailable** with a retry action instead of redirecting to sign-in.
 
-Authentication lists application users and allows administrators to revoke sessions. Provider settings accept Google/GitHub credentials, exact origins and verification settings. Secret values are encrypted and never returned by configuration reads.
+For local development, Studio aligns an API configured as `localhost` or `127.0.0.1` with the browser's corresponding loopback hostname so HttpOnly cookies remain same-site. Remote API hosts retain their configured URL. Passkeys still require their enrolled RP hostname and browser support; changing hostname does not migrate a passkey. If cookies cannot be established, sign-in reports that condition and remains on the form. Keep production origins, HTTPS and cookie settings consistent. These route guards improve navigation; API authorization remains authoritative.
 
-API shows endpoint paths, publishable keys and generated types. Use application credentials when testing public endpoints.
+First-owner setup creates the owner and then opens sign-in. It does not treat a setup response as a browser session. Signing out cancels pending reads and clears identity-specific cached data. Reload and browser history must recheck the session before rendering protected content.
 
-## Realtime and storage
+## Workspace onboarding and lifecycle
 
-Realtime documents subscription semantics and lets you inspect capability status. Use an actual application identity for event testing. Storage manages buckets and objects with upload, download and confirmed deletion. Studio uses audited organization capabilities; application uploads use the storage SDK and owner permissions.
+When no workspace is selected, Studio shows a full-page onboarding view to choose an existing workspace or create a first workspace. Empty selection is intentional: switching workspace clears the current organization and returns to that screen. Workspaces are organizations in the model, so profile changes and archive/delete act at that workspace level.
 
-## Logs, settings and recovery
+## Workspace details
 
-Audit logs record actor, action and resource without credentials or row payloads. Settings expose organization and project configuration. Backups are created for the selected branch; restore creates another isolated branch before an explicit cutover.
+Open **Workspace** in the sidebar (`/workspace`) to manage the selected organization. A workspace has its own profile image, shown in the workspace selector and on the details page. Owners and admins can rename the workspace and upload a cropped PNG, JPEG, or WebP avatar (up to 1.5 MB).
 
-## Unavailable services
+Archive hides a workspace from normal selection while retaining its projects and data. Restore from onboarding’s archived list or from workspace details. Deleting a workspace is owner-only and requires typing the workspace name. Deletion removes only that workspace’s project databases, project-scoped storage objects, function trees, API keys, secrets, backup rows/files, audit records and job targets. Other workspaces and their objects remain untouched. There is no automatic offline archive of workspace bytes during delete, so keep existing backups where you need recovery.
 
-Functions, AI, general branching and replicas are visibly marked planned. Empty screens explain availability without claiming that an operation succeeded.
+## Workspace map
+
+| Workspace | Route | What is available |
+| --- | --- | --- |
+| Overview | `/overview` | Project summary and service/activity shortcuts. |
+| Workspace | `/workspace` | Workspace profile, avatar, projects, archive and delete. |
+| Database | `/database` | Table creation, schema/data, policies, privileged SQL and migrations. |
+| Schema | `/schema` | [Workflow-canvas visualization](/docs/studio/schema-visualizer) and detail sheet. |
+| Authentication | `/auth` | Branch users, session administration and provider configuration. |
+| API | `/api` | Endpoint/keys/type information. |
+| Realtime | `/realtime` | Current subscription semantics/capabilities, not full trace debugger. |
+| Storage | `/storage` | Logical buckets and authenticated upload/download/delete. |
+| Backups | `/backups` | Snapshot and isolated restore with explicit cutover workflow. |
+| Activity | `/logs` | Audited actions; the route remains backward compatible. |
+| Job Inbox | `/jobs` | Experimental [job metadata/history/cancel/replay](/docs/studio/job-inbox). |
+| Webhooks | `/webhooks` | Experimental [scoped signed database deliveries](/docs/studio/webhooks). |
+| Security | `/security` | Experimental [Advisor findings and acknowledgments](/docs/studio/security-advisor). |
+| Settings | `/settings` | Account/security, organization membership, and **Project** settings (identity, quotas, delete). |
+| Functions; AI & Vectors | `/functions`; `/ai` | Planned-state screens, not executable services. |
+
+Setup and sign-in are outside the authenticated shell (`/setup`, `/sign-in`). The development port remains 7610. No `/notifications` or Data Lab workspace is available yet.
+
+## Database workflow
+
+Select a table; use **New table** to configure columns/keys/defaults/constraints and review generated SQL before creation. Creation defaults private, with a separate explicit exposure toggle; policies must still be configured. Read bounded grid pages, server-filter/sort, choose visible columns, edit typed values/nulls and export the current page. JSON array imports are atomic and capped at 100 rows. Presentation column toggles do not change public exposure. Studio database privileges are organization permissions, not an application identity.
+
+Migrations record immutable IDs/checksums and use the existing audited/backup path. Configure exposure and separate read/write policies; use the legacy simulated-identity read tester. Advanced isolated fixture write tests are available through the [policy-test endpoint](/docs/database/policies), not a complete Advisor UI.
+
+## Authentication, profile and secrets
+
+Manage branch users and revoke sessions with authorized roles. Provider settings include Google/GitHub credentials, exact origins and verification. Secret values are encrypted and are not returned by configuration reads.
+
+Account settings provide profile/security controls, avatar upload/cropping, password changes, TOTP and platform passkey management. Avatar storage requires configured S3. Use [passkeys/MFA](/docs/authentication/passkeys-mfa) and [administrator recovery](/docs/authentication/administrator-mfa); platform identity never proves application access.
+
+## Project settings
+
+Open **Settings → Project** for the selected project. This tab is project-scoped; workspace (organization) profile, archive, and delete live under **Workspace** (`/workspace`).
+
+An organization administrator can rename the project and save its region. Slug and status stay fixed after creation. This release stores the region as `local` and runs the project on this node. Saving another region is rejected and does not move databases, storage, or authentication. Quotas for database size, reserved object storage, and request rate are edited on the same tab. The project list, overview, and shell refresh after a successful save.
+
+### Delete project
+
+**Delete project** permanently removes only that project: branch databases, function trees, storage objects under its prefixes, keys, secrets, backups, and project-scoped catalog and audit rows. Sibling projects and the workspace remain. Confirm by typing the project slug. After deletion, Studio clears the project selection and refreshes lists. Workspace-level deletion under **Workspace** removes the organization and every project it owns; prefer project delete when you intend to keep the workspace.
+
+## Safe operations and errors
+
+### Automatic refresh after submissions
+
+Successful Studio mutation forms automatically refresh active lists, counters, selectors and details before their success callbacks finish. This includes row creation/edit/delete/import, schema/configuration changes, credentials, profile/avatar changes and Job Inbox, webhook and Advisor actions. File uploads/deletions and project/authenticator setup use the same refresh helper after the server acknowledges completion. You do not need to reload the page manually.
+
+Older in-flight reads are cancelled before refreshing so they cannot overwrite post-submission data. Inactive cached workspaces are marked stale and fetch again when opened; disabled queries wait until enabled. Failed submissions do not trigger this refresh or clear existing data. If a subsequent read fails, the acknowledged write is still successful: investigate the read error rather than submit the write again. This is Studio behavior, not a promise that arbitrary SDK applications automatically update their own caches.
+
+Async writes surface success/error feedback; loading skeletons and empty states do not imply an operation succeeded. Destructive controls use explicit confirmations. Audit entries contain actor/action/resource rather than raw credentials or protected rows. Diagnose unavailable branches using [monitoring](/docs/self-hosting/monitoring), and restore through the [backup runbook](/docs/self-hosting/backups).
+
+App-user realtime tests must use that application's identity. Management access is not proof of policy authorization. Functions, AI, general branching, previews, notifications and advanced operations remain accurately marked [planned or incomplete](/docs/roadmap/expanded-release).

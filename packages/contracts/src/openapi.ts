@@ -8,14 +8,14 @@ export function projectOpenAPI(
 ) {
   const column = (c: TableSchema['columns'][number]) => {
     const type = /INT|NUMERIC|DECIMAL/i.test(c.type)
-      ? ['integer', 'string']
+      ? ['BIGINT', 'string']
       : /REAL|FLOAT|DOUBLE|NUMERIC/i.test(c.type)
         ? ['number']
         : ['string'];
     return {
       type: c.nullable ? [...type, 'null'] : type,
       ...(c.enum?.length ? { enum: [...c.enum, ...(c.nullable ? [null] : [])] } : {}),
-      ...(c.type.toUpperCase() === 'BLOB' ? { contentEncoding: 'base64' } : {}),
+      ...(c.type.toUpperCase() === 'BYTEA' ? { contentEncoding: 'base64' } : {}),
     };
   };
   const error = {
@@ -44,9 +44,9 @@ export function projectOpenAPI(
         type: 'object',
         properties: {
           requestId: { type: 'string' },
-          schemaVersion: { type: 'integer' },
+          schemaVersion: { type: 'BIGINT' },
           cursor: { type: 'string' },
-          count: { type: 'integer' },
+          count: { type: 'BIGINT' },
           consistencyToken: { type: 'string' },
         },
       },
@@ -110,7 +110,7 @@ export function projectOpenAPI(
           {
             name: 'limit',
             in: 'query',
-            schema: { type: 'integer', minimum: 1, maximum: 500, default: 50 },
+            schema: { type: 'BIGINT', minimum: 1, maximum: 500, default: 50 },
           },
           { name: 'cursor', in: 'query', schema: { type: 'string' } },
         ],
@@ -129,7 +129,7 @@ export function projectOpenAPI(
                 type: 'object',
                 properties: {
                   columns: { type: 'array', items: { type: 'string', enum: t.allowedColumns } },
-                  limit: { type: 'integer', minimum: 1, maximum: 500 },
+                  limit: { type: 'BIGINT', minimum: 1, maximum: 500 },
                   cursor: { type: 'string' },
                   count: { type: 'boolean' },
                   filters: { type: 'array', maxItems: 30, items: { type: 'object' } },

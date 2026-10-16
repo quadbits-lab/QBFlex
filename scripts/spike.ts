@@ -1,8 +1,8 @@
-import { Database } from 'bun:sqlite';
+import { Database } from '@qb-flex/database';
 import { createRealm } from '@qb-flex/auth';
 import { Elysia } from 'elysia';
 import { createYoga, createSchema } from 'graphql-yoga';
-import * as sqliteVec from 'sqlite-vec';
+
 const db = new Database(':memory:');
 const second = new Database(':memory:');
 const auth = await createRealm(db, {
@@ -44,20 +44,13 @@ const response = await app.handle(
   }),
 );
 if ((await response.json()).data.health !== 'ok') throw new Error('GraphQL mount failed');
-let vector: string;
-try {
-  sqliteVec.load(db);
-  vector = String((db.query('SELECT vec_version() AS version').get() as any).version);
-} catch (error) {
-  vector = `unsupported on this host: ${String(error)}`;
-}
 console.log(
   JSON.stringify(
     {
       bun: Bun.version,
       authIsolation: 'passed',
       graphqlMount: 'passed',
-      sqliteVector: vector,
+      databaseEngine: 'pglite',
       platform: process.platform,
       arch: process.arch,
     },
@@ -65,5 +58,5 @@ console.log(
     2,
   ),
 );
-db.close();
-second.close();
+await db.close();
+await second.close();

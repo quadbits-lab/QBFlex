@@ -1,7 +1,7 @@
 import { createService } from './service';
 import { REALTIME_LIMITS } from '@qb-flex/realtime';
 import { QBError } from '@qb-flex/contracts';
-import { log } from '@qb-flex/observability';
+import { log, printStartup } from '@qb-flex/observability';
 export async function startService(override?: Parameters<typeof createService>[0]) {
   const service = await createService(override);
   type SocketData = {
@@ -213,5 +213,20 @@ export async function startService(override?: Parameters<typeof createService>[0
   process.once('SIGINT', close);
   return { ...service, server, close };
 }
-if (import.meta.main) await startService();
-
+if (import.meta.main) {
+  const began = performance.now();
+  const service = await startService();
+  if (process.env.QB_DEV_LAUNCHER !== '1') {
+    const { dependencies } = await import('../../../package.json');
+    const engineVersion = dependencies['@electric-sql/pglite'];
+    printStartup({
+      mode: 'api',
+      elapsedMs: performance.now() - began,
+      runtime: Bun.version,
+      engineVersion,
+      dataDir: service.config.dataDir,
+      maxOwners: service.config.maxBranchOwners,
+      services: { api: service.config.publicURL },
+    });
+  }
+}

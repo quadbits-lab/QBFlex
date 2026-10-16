@@ -3,7 +3,6 @@ import AxeBuilder from '@axe-core/playwright';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fixture } from '../tests/helpers';
-
 const origin = 'http://localhost:3042';
 const artifacts = resolve('verification-artifacts/studio-revamp');
 mkdirSync(artifacts, { recursive: true });

@@ -1,17 +1,8 @@
-"use client";
+'use client';
 
-import {
-  cloneElement,
-  isValidElement,
-  type ReactElement,
-  useState,
-} from "react";
-import { cn } from "../../../lib/utils";
-import {
-  type LegendItemData,
-  LegendItemProvider,
-  LegendProvider,
-} from "./legend-context";
+import { cloneElement, isValidElement, type ReactElement, useState } from 'react';
+import { cn } from '../../../lib/utils';
+import { type LegendItemData, LegendItemProvider, LegendProvider } from './legend-context';
 
 export interface LegendProps {
   /** Legend items data */
@@ -35,19 +26,15 @@ export function Legend({
   hoveredIndex: controlledHoveredIndex,
   onHoverChange,
   title,
-  titleClassName = "text-sm font-semibold",
-  className = "",
+  titleClassName = 'text-sm font-semibold',
+  className = '',
   children,
 }: LegendProps) {
-  const [internalHoveredIndex, setInternalHoveredIndex] = useState<
-    number | null
-  >(null);
+  const [internalHoveredIndex, setInternalHoveredIndex] = useState<number | null>(null);
 
   // Controlled or uncontrolled hover state
   const isControlled = controlledHoveredIndex !== undefined;
-  const hoveredIndex = isControlled
-    ? controlledHoveredIndex
-    : internalHoveredIndex;
+  const hoveredIndex = isControlled ? controlledHoveredIndex : internalHoveredIndex;
   const setHoveredIndex = (index: number | null) => {
     if (isControlled) {
       onHoverChange?.(index);
@@ -64,18 +51,12 @@ export function Legend({
 
   return (
     <LegendProvider value={contextValue}>
-      <div className={cn("legend-container flex flex-col gap-2", className)}>
-        {title && (
-          <h3 className={cn("mb-1 text-legend-foreground", titleClassName)}>
-            {title}
-          </h3>
-        )}
+      <div className={cn('legend-container flex flex-col gap-2', className)}>
+        {title && <h3 className={cn('mb-1 text-legend-foreground', titleClassName)}>{title}</h3>}
         {items.map((item, index) => {
           const isHovered = hoveredIndex === index;
           const isFaded = hoveredIndex !== null && hoveredIndex !== index;
-          const percentage = item.maxValue
-            ? (item.value / item.maxValue) * 100
-            : 0;
+          const percentage = item.maxValue ? (item.value / item.maxValue) * 100 : 0;
 
           const itemContext = {
             item,
@@ -101,4 +82,4 @@ export function Legend({
   );
 }
 
-Legend.displayName = "Legend";
+Legend.displayName = 'Legend';

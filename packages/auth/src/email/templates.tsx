@@ -114,8 +114,8 @@ function Shell({
           </Text>
           <Hr style={styles.divider} />
           <Text style={styles.footer}>
-            If you did not request this email you can safely ignore it; the link only works with
-            its one-time token.
+            If you did not request this email you can safely ignore it; the link only works with its
+            one-time token.
           </Text>
         </Container>
       </Body>

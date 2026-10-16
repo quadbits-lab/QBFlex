@@ -35,7 +35,7 @@ try {
   const base = `/management/v1/projects/${p.id}/branches/${p.branchId}`;
   await call(base + '/migrations', 'POST', {
     id: '001',
-    sql: `CREATE TABLE tasks(id TEXT PRIMARY KEY NOT NULL DEFAULT(lower(hex(randomblob(16)))),owner_id TEXT NOT NULL,title TEXT NOT NULL,completed INTEGER NOT NULL DEFAULT 0 CHECK(completed IN(0,1)),revision INTEGER NOT NULL DEFAULT 1);CREATE INDEX tasks_owner ON tasks(owner_id);`,
+    sql: `CREATE TABLE tasks(id TEXT PRIMARY KEY NOT NULL DEFAULT(replace(gen_random_uuid()::text,'-','')),owner_id TEXT NOT NULL,title TEXT NOT NULL,completed BIGINT NOT NULL DEFAULT 0 CHECK(completed IN(0,1)),revision BIGINT NOT NULL DEFAULT 1);CREATE INDEX tasks_owner ON tasks(owner_id);`,
   });
   await call(base + '/exposure/tasks', 'PUT', {
     enabled: true,

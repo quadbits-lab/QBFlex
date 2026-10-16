@@ -19,3 +19,7 @@ Enrollment verification rotates the active session. Management tokens are revoke
 Use Better Auth's authenticated backup-code verification endpoint `/platform/auth/two-factor/verify-backup-code` when your authenticator is lost. Treat a recovery code like a password. An operator should revoke compromised management tokens and application sessions, rotate project keys and provider secrets, then examine audit events.
 
 Never change the database's MFA columns to bypass a lost factor. Restore the protected control-plane backup only through an operator-reviewed recovery process.
+
+## Passkeys are an additional method
+
+Studio account settings also enroll, list, rename and delete platform passkeys. Its sign-in page offers **Sign in with passkey**. This does not turn off `QB_REQUIRE_ADMIN_MFA` or replace its TOTP enrollment requirement. Keep a usable recovery method and test the configured Studio RP hostname/origins. See [passkeys and application MFA](/docs/authentication/passkeys-mfa).

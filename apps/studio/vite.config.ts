@@ -2,8 +2,9 @@ import { defineConfig } from 'vite';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import react from '@vitejs/plugin-react';
 import tailwind from '@tailwindcss/vite';
+import { quietClientDisconnectPlugin } from '../../scripts/client-disconnect.ts';
 export default defineConfig({
-  plugins: [tanstackStart(), tailwind(), react()],
+  plugins: [quietClientDisconnectPlugin(), tanstackStart(), tailwind(), react()],
   server: { port: 7610, strictPort: true },
   // @visx ships extensionless ESM imports that Node's native resolver rejects.
   // Bundle them for SSR so chart routes can still render.

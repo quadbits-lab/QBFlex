@@ -1,0 +1,51 @@
+export const frontmatter = {"title": "Passkeys and application MFA", "description": "Enroll browser passkeys and complete application-user TOTP challenges.", "section": "Authentication", "slug": "authentication/passkeys-mfa", "order": 31.1};
+
+# Passkeys and application MFA
+
+## Availability and realm boundaries
+
+Better Auth passkey and two-factor plugins are enabled for platform and application realms. Application credentials belong to an isolated branch; Studio credentials belong to the platform. They are not interchangeable. Browser SDK methods are available; native passkeys, Expo sessions and physical-device certification remain [expanded-release requirements](/docs/roadmap/native-push).
+
+## Enroll and manage a browser passkey
+
+Sign in first. Enrollment must run from a user action in a browser with WebAuthn support and an appropriate secure origin.
+
+```ts
+await client.auth.passkey.enroll({ name: 'Personal laptop' });
+const passkeys = await client.auth.passkey.list();
+console.log(passkeys);
+```
+
+The list currently returns `unknown[]`; validate entries before accessing their fields. `client.auth.passkey.rename(id, name)` updates a credential label and `client.auth.passkey.remove(id)` deletes that credential. Do not delete your last usable method without a recovery path.
+
+```ts
+await client.auth.passkey.signIn();
+await client.auth.refreshSession();
+```
+
+Handle cancellation and `PASSKEY_FAILED` without repeatedly prompting the user. Passkey enrollment/sign-in is interactive, not a background task. Studio offers passkey management in account settings and **Sign in with passkey** on its sign-in screen.
+
+## Origins and relying-party IDs
+
+Platform WebAuthn uses the hostname of the first configured trusted origin (normally Studio) as its RP ID, falling back to the API URL; the configured platform origins are accepted assertion origins. Application WebAuthn uses its realm base URL's hostname and origin. A browser ceremony on an unrelated application domain is not automatically supported just because that domain is on the HTTP origin allowlist.
+
+Keep deployment URLs stable and verify the intended browser ceremony before adoption. Changing the RP hostname does not migrate existing credentials. Native association documents and verified native assertion origins are not implemented yet.
+
+## Enable application-user TOTP
+
+An authenticated user supplies their current password. Present the enrollment URI securely and let them save the one-time backup codes outside the application database.
+
+```ts
+const enrollment = await client.auth.twoFactor.enable(password);
+// Display enrollment.totpURI and backupCodes only to the enrolling user.
+await client.auth.twoFactor.verify('123456'); // Replace with their current authenticator code.
+await client.auth.refreshSession();
+```
+
+Do not log the enrollment URI, codes or passwords. `verify` completes enrollment or an outstanding login challenge; refresh the session afterward. `disable(password)` requires the current password.
+
+## Complete a login challenge
+
+Password sign-in throws `QBError` with code `MFA_REQUIRED` when a TOTP challenge is needed. This is not an authenticated session. Ask for the user's code, call `auth.twoFactor.verify(code)`, then `auth.refreshSession()` before enabling protected queries. The challenge depends on the auth cookie flow, so cross-origin browser cookie restrictions still apply.
+
+React applications use the same client methods; the provider/hook observes refreshed session state. There is no separate React-only passkey implementation. Keep [administrator MFA](/docs/authentication/administrator-mfa) enabled: adding a passkey does not disable `QB_REQUIRE_ADMIN_MFA` or satisfy a TOTP enrollment gate by itself.

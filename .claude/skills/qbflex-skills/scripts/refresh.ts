@@ -111,25 +111,25 @@ try {
   const { openDatabase } = await load('packages/database/src/index.ts');
   const { initializeBranch, expose, registerRPC } = await load('packages/schema/src/index.ts');
   const { BranchEngine } = await load('packages/database/src/engine.ts');
-  const db = openDatabase(join(directory, 'main.sqlite'));
+  const db = openDatabase(join(directory, 'main.pglite'));
   try {
-    initializeBranch(db);
-    const engine = new BranchEngine(db, 'skill-types');
+    await initializeBranch(db);
+    const engine = await new BranchEngine(db, 'skill-types').initialize();
     const prerequisites = JSON.parse(
       readFileSync(join(target, 'assets/examples/prerequisites.json'), 'utf8'),
     );
-    engine.migration(
+    await engine.migration(
       prerequisites.migrationId,
       readFileSync(join(target, 'assets/examples/schema.sql'), 'utf8'),
       'skill-types',
     );
-    expose(db, 'tasks', true, prerequisites.exposure.columns);
-    registerRPC(db, prerequisites.rpc);
-    const types = engine.types();
+    await expose(db, 'tasks', true, prerequisites.exposure.columns);
+    await registerRPC(db, prerequisites.rpc);
+    const types = await engine.types();
     for (const kind of ['react', 'vanilla'])
       put(`assets/examples/${kind}/src/qb-flex.types.ts`, types);
   } finally {
-    db.close(true);
+    await db.close(true);
   }
 } finally {
   rmSync(directory, { recursive: true, force: true });
@@ -147,6 +147,10 @@ const inputs = [
   'scripts/skill.ts',
   'scripts/skill-test.ts',
   'scripts/skill-typecheck.ts',
+  'scripts/pglite-benchmark.ts',
+  ...filesIn(join(source, 'migrations'))
+    .filter((file: string) => file.endsWith('.sql'))
+    .map((file: string) => 'migrations/' + file),
   'apps/docs/content/database/policies.mdx',
   'apps/docs/content/roadmap/phases.mdx',
   ...readdirSync(join(source, 'packages'), { withFileTypes: true })

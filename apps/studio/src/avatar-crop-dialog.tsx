@@ -32,20 +32,8 @@ async function cropToPng(src: string, area: CropArea, outputSize = 512) {
   if (!context) throw new Error('Unable to crop image');
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = 'high';
-  context.drawImage(
-    image,
-    area.x,
-    area.y,
-    area.width,
-    area.height,
-    0,
-    0,
-    outputSize,
-    outputSize,
-  );
-  const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, 'image/png'),
-  );
+  context.drawImage(image, area.x, area.y, area.width, area.height, 0, 0, outputSize, outputSize);
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
   if (!blob) throw new Error('Unable to crop image');
   return blob;
 }

@@ -1,21 +1,11 @@
-import { Database } from 'bun:sqlite';
+import { Database } from './connection';
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { QBError } from '@qb-flex/contracts';
-export function openDatabase(path: string, safeIntegers = true) {
-  mkdirSync(resolve(path, '..'), { recursive: true });
-  const db = new Database(path, { create: true, strict: true, safeIntegers });
-  db.exec(
-    'PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;',
-  );
-  if (
-    (db.query('PRAGMA journal_mode').get() as any).journal_mode !== 'wal' ||
-    Number((db.query('PRAGMA synchronous').get() as any).synchronous) !== 2 ||
-    Number((db.query('PRAGMA foreign_keys').get() as any).foreign_keys) !== 1
-  )
-    throw new Error('Required SQLite durability settings unavailable');
-  return db;
+export { Database, restoreDatabase } from './connection';
+export function openDatabase(path: string, _safeIntegers = true) {
+  return new Database(path);
 }
 /** Exact-origin allowlist helper: trim entries and mirror localhost ↔ 127.0.0.1. */
 export function normalizeOrigins(origins: Iterable<string>): string[] {
@@ -56,7 +46,11 @@ export function configuration() {
   const publicURL = process.env.QB_PUBLIC_URL ?? 'http://localhost:7612';
   if (process.env.NODE_ENV === 'production' && !publicURL.startsWith('https://'))
     throw new Error('Production requires HTTPS QB_PUBLIC_URL');
+  const maxBranchOwners = Number(process.env.QB_MAX_BRANCH_OWNERS ?? 4);
+  if (!Number.isInteger(maxBranchOwners) || maxBranchOwners < 1 || maxBranchOwners > 32)
+    throw new Error('QB_MAX_BRANCH_OWNERS must be an integer from 1 to 32');
   return {
+    maxBranchOwners,
     dataDir,
     master,
     publicURL,
@@ -73,7 +67,7 @@ export function configuration() {
 export function branchPath(dataDir: string, project: string, branch: string) {
   for (const id of [project, branch])
     if (!/^[a-f0-9-]{36}$/.test(id)) throw new QBError('INVALID_ID', 'Invalid resource identifier');
-  return join(dataDir, 'projects', project, 'branches', branch, 'main.sqlite');
+  return join(dataDir, 'projects', project, 'branches', branch, 'main.pglite');
 }
 interface Pending {
   resolve: (data: any) => void;
@@ -85,6 +79,8 @@ export class BranchOwner {
   private pending = new Map<string, Pending>();
   private ready: Promise<void>;
   private closed = false;
+  private retiring = false;
+  private closeTask?: Promise<void>;
   constructor(
     public path: string,
     options: Record<string, unknown>,
@@ -152,7 +148,7 @@ export class BranchOwner {
   }
   async call(action: string, args: any = {}, timeout = 15000): Promise<any> {
     await this.ready;
-    if (this.closed)
+    if (this.closed || (this.retiring && action !== 'close'))
       throw new QBError('OWNER_UNAVAILABLE', 'Database owner unavailable', 503, true);
     if (this.pending.size >= 64) throw new QBError('QUEUE_FULL', 'Branch queue is full', 503, true);
     const id = crypto.randomUUID();
@@ -163,10 +159,17 @@ export class BranchOwner {
     });
   }
   async close() {
-    if (!this.closed) {
-      await this.call('close');
-      this.closed = true;
-      this.worker.terminate();
-    }
+    if (this.closeTask) return this.closeTask;
+    if (this.closed) return;
+    this.retiring = true;
+    this.closeTask = (async () => {
+      try {
+        await this.call('close');
+      } finally {
+        this.closed = true;
+        this.worker.terminate();
+      }
+    })();
+    return this.closeTask;
   }
 }

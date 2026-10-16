@@ -1,10 +1,20 @@
 import { useForm } from '@tanstack/react-form';
 import { useQueryClient } from '@tanstack/react-query';
-import { Field, FieldGroup, FieldLabel, FieldDescription, Input, Spinner, toast, notifyError } from '@qb-flex/ui';
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FieldDescription,
+  Input,
+  Spinner,
+  toast,
+  notifyError,
+} from '@qb-flex/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { Modal, Button } from '@qb-flex/ui';
 import { management } from './api';
 import { useConsole } from './console-context';
+import { refreshStudioQueries } from './query-client';
 
 export function NewProjectDialog({
   open,
@@ -27,7 +37,7 @@ export function NewProjectDialog({
           organizationId: state.organization,
           region: 'local',
         });
-        await cache.invalidateQueries({ queryKey: ['projects'] });
+        await refreshStudioQueries(cache);
         select({ project: result.data.id, branch: 'primary' });
         create.reset();
         toast.success('Project created');

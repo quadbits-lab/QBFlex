@@ -47,3 +47,15 @@ General branch creation, functions, hosted MCP and remote reset are not enabled 
 `qb storage sync --bucket BUCKET_ID --directory ./attachments` adds missing objects from a local directory. Existing and remote-only objects are preserved. Hidden files and symlinks are skipped. Use the explicit object APIs for deletion.
 
 `qb db diff --file expected-schema.json` compares the current introspected schema with your checked-in schema manifest. It reports column differences; it does not invent a migration.
+
+## Deployment Doctor
+
+`bun run qb doctor --directory .` reports structured, redacted readonly inventory. No implicit network probes, writes, email or push. Use `--probe-url https://your-api.example.com` for an explicit bounded readiness GET; values and paths remain redacted. Exit0 means no blocking inventory errors,1 means errors,2 means invalid invocation. Unknown provider/native/recovery checks are not reported as healthy.
+
+See the [Deployment Doctor guide](/docs/self-hosting/doctor) for exact probe restrictions, findings and limitations. Preview environments, push campaign tools and advanced recovery commands are not available simply because specification 1.1 defines them.
+
+## Offline control catalog backups
+
+With the API stopped, `qb backup control-create --data-dir DIRECTORY` writes a streamed encrypted v2 control archive. `qb backup control-restore --data-dir DIRECTORY --file ARCHIVE --confirm-local-control-restore` accepts new and legacy control archives, verifies them and replaces the stopped catalog only after an encrypted rollback checkpoint. Preserve all referenced branch files and the original master key. Restored sessions/credentials do not revive; reissue project/management keys. Both commands wait for streams and hold exclusive volume ownership. See [control recovery and limits](/docs/self-hosting/backups#streamed-offline-control-recovery).
+
+`qb db migrate-engine --from sqlite --to pglite --data-dir SOURCE --output-dir DESTINATION --check` reports compatibility. Omit `--check` to create and validate a separate PGlite installation while preserving the source. Stop writers first; see [engine migration](/docs/self-hosting/engine-migration).

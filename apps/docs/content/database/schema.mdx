@@ -6,7 +6,7 @@ export const frontmatter = {"title": "Schema and migrations", "description": "Un
 
 The generated REST API supports ordinary tables with stable primary keys. Composite keys use a base64url-encoded JSON array in primary-key order. Views, virtual tables and custom-trigger tables are not automatically exposed.
 
-SQLite remains the underlying SQL engine. Studio SQL is a privileged developer operation. Reserved `_qb_*` objects, extension loading, ATTACH and runtime PRAGMA changes are blocked through the console.
+PGlite provides embedded PostgreSQL. Studio and new migrations use PostgreSQL SQL. Studio SQL is a privileged developer operation. Reserved `_qb_*` objects, extensions, filesystem access, role/configuration changes and explicit transaction control are blocked through the console.
 
 ## Exposure
 
@@ -22,7 +22,7 @@ Use forward migrations for corrections. There is no automatic destructive rollba
 
 ## Representation
 
-Booleans use constrained 0/1 integers. Store dates as UTC ISO strings and JSON as validated text. Integers outside JavaScript's safe range are returned as strings. Write these values as signed 64-bit decimal strings. Blob writes and equality filters use canonical base64; JSON columns require valid JSON text. Blob values are base64 encoded in row responses and in authorized realtime projections.
+REST/SDK booleans remain 0/1, including native PostgreSQL BOOLEAN columns. TIMESTAMPTZ values return UTC ISO strings; JSON/JSONB values return JSON text. Legacy converted text timestamps and JSON retain their original representation. PostgreSQL integer, BIGINT, BYTEA and identity columns are supported. Integers outside JavaScript's safe range are returned as strings. Write these values as signed 64-bit decimal strings. Blob writes and equality filters use canonical base64; JSON columns require valid JSON text. Blob values are base64 encoded in row responses and in authorized realtime projections.
 
 ## Generated types
 
@@ -31,3 +31,11 @@ Types describe the exposed schema, nullable values, defaults and generated colum
 ## Out-of-band schema changes
 
 The branch records a fingerprint of user tables, indexes, views and triggers. A schema changed through direct file access returns `SCHEMA_STALE` on public reads, mutations, schema discovery and row subscriptions. Reconcile it with a reviewed forward migration through Studio or CLI. Trusted file access still bypasses application row policies.
+
+## Visual creation and inspection
+
+Database's **New table** dialog configures columns, supported types, keys, defaults, nullability and supported constraints/foreign keys, with SQL preview before applying through the migration path. Creation defaults private; the dialog has an explicit exposure toggle. Exposing a table does not grant row access—add policies separately. The [Schema Visualizer](/docs/studio/schema-visualizer) inspects the topology and detail sheet; it does not apply migrations. Destructive Schema Change Review, approval binding and WASM rehearsal remain [expanded requirements](/docs/roadmap/expanded-release).
+
+## Convert an existing SQLite installation
+
+Use the offline [engine migration workflow](/docs/self-hosting/engine-migration). SQLite SQL is not accepted by the new engine. Applied migration SQL and checksums remain historical evidence; create new forward migrations using PostgreSQL SQL.

@@ -1,0 +1,25 @@
+import { createFileRoute } from '@tanstack/react-router';
+import { useConsole } from '../../console-context';
+import { WorkspaceHeader, NoProject, NoticeBox } from '../../workspace-header';
+import { SecurityWorkspace } from '../../workspaces/security';
+function SecurityRoute() {
+  const { project, base, branch } = useConsole();
+  return (
+    <div className="grid min-w-0 gap-5">
+      <WorkspaceHeader
+        view="Security Advisor"
+        hint="Review exposure, grants, public storage, credential age and administrator MFA."
+        project={project}
+        branchName={branch?.name ?? 'main'}
+      />
+      {!project ? (
+        <NoProject />
+      ) : project.status !== 'ready' ? (
+        <NoticeBox>Project is {project.status}.</NoticeBox>
+      ) : (
+        <SecurityWorkspace key={base} base={base} />
+      )}
+    </div>
+  );
+}
+export const Route = createFileRoute('/_console/security')({ component: SecurityRoute });

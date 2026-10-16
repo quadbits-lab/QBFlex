@@ -1,24 +1,15 @@
-import { createRootRoute, HeadContent, Scripts, Outlet } from '@tanstack/react-router';
-import { Toaster, notifyError } from '@qb-flex/ui';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState } from 'react';
+import { createRootRouteWithContext, HeadContent, Scripts, Outlet } from '@tanstack/react-router';
+import { Toaster } from '@qb-flex/ui';
+import { QueryClientProvider } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 import '@qb-flex/ui/src/theme.css';
 import '../styles.css';
+import { UploadQueueProvider } from '../upload-queue-provider';
+import { RouteErrorPage, RouteNotFoundPage } from '../error-pages';
+import { RoutePreloader, RouteProgressBar } from '../route-preloader';
 
 function Root() {
-  const [client] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: { retry: false, staleTime: 5000 },
-          mutations: {
-            onError: (error) => {
-              notifyError(error);
-            },
-          },
-        },
-      }),
-  );
+  const { queryClient: client } = Route.useRouteContext();
   return (
     <html lang="en">
       <head>
@@ -29,14 +20,17 @@ function Root() {
           Skip to workspace
         </a>
         <QueryClientProvider client={client}>
-          <Outlet />
-          <Toaster
-            position="bottom-right"
-            richColors
-            closeButton
-            duration={4500}
-            visibleToasts={5}
-          />
+          <UploadQueueProvider>
+            <RouteProgressBar />
+            <Outlet />
+            <Toaster
+              position="bottom-left"
+              richColors
+              closeButton
+              duration={4500}
+              visibleToasts={5}
+            />
+          </UploadQueueProvider>
         </QueryClientProvider>
         <Scripts />
       </body>
@@ -44,7 +38,7 @@ function Root() {
   );
 }
 
-export const Route = createRootRoute({
+export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
     meta: [
       { charSet: 'utf-8' },
@@ -54,10 +48,7 @@ export const Route = createRootRoute({
     links: [{ rel: 'icon', href: '/brand/icon.webp' }],
   }),
   component: Root,
-  notFoundComponent: () => (
-    <main id="main" className="mx-auto flex min-h-svh max-w-lg flex-col justify-center gap-4 px-6">
-      <h1>Workspace not found</h1>
-      <a href="/">Open Studio</a>
-    </main>
-  ),
+  pendingComponent: RoutePreloader,
+  errorComponent: RouteErrorPage,
+  notFoundComponent: RouteNotFoundPage,
 });

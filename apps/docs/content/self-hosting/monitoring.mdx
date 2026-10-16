@@ -10,17 +10,27 @@ export const frontmatter = {"title": "Monitoring and troubleshooting", "descript
 
 Structured API errors include request ID, path, status and a stable code. Audit records include actor, organization/project, action and resource. Credential values, passwords and raw row payloads are not logged by default.
 
+### Terminal display
+
+`bun run dev` prints a compact startup panel after the API, Studio and Docs respond. It shows service URLs, Bun/PGlite versions, startup duration, the data directory, active-owner limit and worker cadence. A first-owner token **file path** is shown only while that file exists; token contents remain private. Vite startup banners are suppressed, while frontend warnings/errors remain visible.
+
+`QB_LOG_FORMAT=auto` uses colored, aligned request logs in development terminals and JSON for production or redirected output. Use `QB_LOG_FORMAT=pretty` to choose the human display explicitly, or `QB_LOG_FORMAT=json` for collectors. `NO_COLOR` disables styling; `FORCE_COLOR=1` enables ANSI styling for a compatible renderer. `TERM=dumb` disables color.
+
+Pretty logs include timestamps, HTTP status, method, path, duration and a shortened request ID. JSON retains the full request ID. Successful, fast job polling is quiet in pretty mode; failures and calls taking at least one second remain visible. Set `QB_LOG_INTERNAL=true` to show routine polling too. JSON retains these events regardless. Metrics still record every request. Better Auth response statuses are logged as returned, including rejected sign-ins.
+
+Both formats apply the same field allowlist and strip query strings, reset tokens and terminal controls. Do not log request bodies, cookies or credentials through custom console calls. The development launcher keeps its startup panel through hot reload and stops its children together on Ctrl+C.
+
 ## Branch unavailable
 
 Inspect provisioning status and confirm the persistent disk is mounted and writable. An unavailable or deadline-terminated owner returns a retriable failure. Restarting the API recovers branch handles; reconcile any uncertain mutation with its idempotency key.
 
 ## Busy writers and disk pressure
 
-Requests are bounded by branch queue size and execution deadlines. Monitor database/WAL sizes and available disk. Stop introducing writes before the disk fills, drain work and follow the backup/restore runbook. Do not delete WAL files to reclaim space from a running database.
+Requests are bounded by branch queue size and execution deadlines. Monitor database directory sizes and available disk. Stop introducing writes before the disk fills, drain work and follow the backup/restore runbook. Do not delete WAL files to reclaim space from a running database.
 
 ## Authentication failures
 
-Verify project key, branch, exact browser origin and application session. A platform session cannot be used as an application identity. Check SMTP configuration for reset/verification delivery. Provider configuration alone does not prove a social callback works.
+Verify project key, branch, exact browser origin and application session. A platform session cannot be used as an application identity. Check the selected Resend/SMTP configuration for reset/verification delivery. Provider configuration alone does not prove a social callback works.
 
 ## Storage failures
 
@@ -32,6 +42,20 @@ This is a single-node implementation. Do not horizontally scale writable owners 
 
 ## Maintenance and metrics
 
-`apps/worker` invokes the API's authenticated `/internal/maintenance` endpoint every minute. It removes expired sessions/idempotency entries, checkpoints WALs, retains the outbox for 24 hours, reconciles abandoned upload/deletion records and creates daily primary-branch snapshots. `QB_BACKUP_RETENTION_DAYS` defaults to seven. Local workers read `.data/worker.token`; production injects `QB_WORKER_TOKEN`.
+`apps/worker` invokes the API's authenticated `/internal/maintenance` endpoint every minute. It removes expired sessions/idempotency entries, retains the outbox for 24 hours, reconciles abandoned upload/deletion records and creates daily primary-branch snapshots. `QB_BACKUP_RETENTION_DAYS` defaults to seven. Local workers read `.data/worker.token`; production injects `QB_WORKER_TOKEN`.
 
 Scrape `/internal/metrics` with the worker bearer token from the private network. The gateway returns 404 for internal routes. Prometheus output covers request/error counts, cumulative/max duration, active owners and available disk bytes. Do not interpret these as a complete tracing or performance certification.
+
+## Deployment Doctor foundation
+
+`bun run qb doctor --directory .` runs read-only redacted inventory without network probes or secret-file reads. Explicit `--probe-url https://your-api.example.com` performs a bounded readiness GET and refuses redirects/credential-bearing URLs. Exit0: no blocking inventory errors;1: errors;2: invalid invocation. Unknown/unconfigured findings remain visible. S3/mail/push presence is not connectivity or certification; no email or notification is sent.
+
+The private scrape now includes `qb_http_request_duration_seconds` cumulative latency histograms. Existing counter names remain. Route labels come from declared contracts rather than arbitrary paths, row keys or query values. The full expanded dashboard and alerts remain under development.
+
+### Read the latency histogram
+
+Private Prometheus output adds `qb_http_request_duration_seconds_bucket{route,le}`, `_count` and `_sum`. Buckets are cumulative at 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10 and 30 seconds, plus `+Inf`. Route labels use declared method/path templates; unknown paths aggregate instead of becoming attacker-controlled labels. Existing counters remain compatible.
+
+Expose the scrape only inside the trusted network with the maintenance worker credential. The restricted push principal cannot read metrics or invoke maintenance. Do not embed credentials in URLs, browser examples or telemetry labels. A histogram is not a per-project Operations Dashboard, query tracing or alert service.
+
+See [Deployment Doctor](/docs/self-hosting/doctor) for finding/exit-code interpretation and [Job Inbox](/docs/studio/job-inbox) for experimental private attempt history. Scheduled Studio/email/signed-webhook operational alerts, acknowledgment/deduplication/recovery notifications and advanced owner/outbox/job-health summaries remain under development.

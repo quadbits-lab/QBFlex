@@ -2,7 +2,7 @@ import { cpus, platform, arch } from 'node:os';
 import { readFileSync, statfsSync } from 'node:fs';
 import { fixture } from '../tests/helpers';
 const f = await fixture(),
-  dataset = 1_000_000;
+  dataset = 1000000;
 const readOptional = (path: string) => {
   try {
     return readFileSync(path, 'utf8').trim();
@@ -60,7 +60,7 @@ try {
     'POST',
     {
       id: 'benchmark-seed',
-      sql: `CREATE INDEX tasks_owner_id ON tasks(owner_id,id); WITH RECURSIVE rows(n) AS (VALUES(1) UNION ALL SELECT n+1 FROM rows WHERE n<${dataset}) INSERT INTO tasks(id,owner_id,title) SELECT printf('%010d',n),'${session!.user.id}','Task '||n FROM rows;`,
+      sql: `CREATE INDEX tasks_owner_id ON tasks(owner_id,id); WITH RECURSIVE rows(n) AS (VALUES(1) UNION ALL SELECT n+1 FROM rows WHERE n<${dataset}) INSERT INTO tasks(id,owner_id,title) SELECT lpad(n::text,10,'0'),'${session!.user.id}','Task '||n FROM rows;`,
     },
     f.token,
   );

@@ -67,7 +67,9 @@ export declare function useQBRealtime(options: ChannelOptions & {
 export declare function useQBStorage(): {
     isPending: boolean;
     error: Error | null;
-    upload: (bucket: string, key: string, file: Blob, options?: import("@qb-flex/client").RequestOptions | undefined) => Promise<import("@qb-flex/contracts").Result<{
+    upload: (bucket: string, key: string, file: Blob, options?: (import("@qb-flex/client").RequestOptions & {
+        checksum?: string;
+    }) | undefined) => Promise<import("@qb-flex/contracts").Result<{
         id: string;
         state: string;
     }>>;

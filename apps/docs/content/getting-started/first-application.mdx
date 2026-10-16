@@ -32,4 +32,4 @@ Generate types in Studio API or with `qb types generate`. Create an encrypted ba
 
 ## Verify the workflow
 
-The repository's browser checks run these workflows against the real API. Run `QB_INTEGRATION_STORAGE=1 bun test tests/integration` with the local MinIO dependency ready, then `bun run test:browser`. SDK packages are built and packed locally; no registry release is performed.
+The repository's browser checks run these workflows against the real API. Run `QB_INTEGRATION_STORAGE=1 bun test tests/integration` with an explicitly configured isolated S3-compatible backend and Mailpit ready, then `bun run test:browser`. SDK packages are built and packed locally; no registry release is performed.

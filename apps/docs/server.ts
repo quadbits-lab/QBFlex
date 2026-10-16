@@ -1,4 +1,7 @@
 import { join, resolve } from 'node:path';
+import { ignoreClientDisconnectLogs } from '../../scripts/client-disconnect.ts';
+
+ignoreClientDisconnectLogs();
 const root = resolve(import.meta.dir, 'dist/client');
 const entry = await import('./dist/server/server.js');
 Bun.serve({

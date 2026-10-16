@@ -79,16 +79,18 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
     (b: any) => b.id === state.branch || (state.branch === 'primary' && b.name === 'main'),
   );
   useEffect(() => {
+    if (!restored || !organizations.data) return;
+    // Empty selection is intentional onboarding — do not auto-pick a workspace.
+    // Only clear a persisted id that no longer exists for this account.
     if (
-      restored &&
-      organizations.data &&
-      !organizations.data.data.some((o: any) => o.id === state.organization) &&
-      organizations.data.data[0]
+      state.organization &&
+      !organizations.data.data.some((o: any) => o.id === state.organization)
     )
-      select({ organization: organizations.data.data[0].id });
+      select({ organization: '', project: '', branch: 'primary' });
   }, [organizations.data, restored, state.organization]);
   useEffect(() => {
-    if (restored && !project && relevant[0]) select({ project: relevant[0].id, branch: 'primary' });
+    if (!restored || !state.organization) return;
+    if (!project && relevant[0]) select({ project: relevant[0].id, branch: 'primary' });
   }, [projects.data, state.organization, state.project, restored]);
   useEffect(() => {
     if (

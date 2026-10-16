@@ -5,20 +5,20 @@ import { join } from 'node:path';
 import { openDatabase } from '@qb-flex/database';
 import { initializeBranch, expose, savePolicy } from '@qb-flex/schema';
 import { BranchEngine } from '../../packages/database/src/engine';
-test('typed wire values preserve 64-bit integers, binary keys, JSON, enum metadata and injection strings', () => {
+test('typed wire values preserve 64-bit integers, binary keys, JSON, enum metadata and injection strings', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'qb-wire-')),
-    db = openDatabase(join(directory, 'main.sqlite'));
+    db = openDatabase(join(directory, 'main.pglite'));
   try {
-    initializeBranch(db);
-    const engine = new BranchEngine(db, 'test');
-    engine.migration(
+    await initializeBranch(db);
+    const engine = await new BranchEngine(db, 'test').initialize();
+    await engine.migration(
       '001',
-      "CREATE TABLE documents(id BLOB PRIMARY KEY NOT NULL,amount INTEGER NOT NULL,payload BLOB,metadata JSON,state TEXT NOT NULL CHECK(state IN('todo','done')),title TEXT NOT NULL);",
+      "CREATE TABLE documents(id BYTEA PRIMARY KEY NOT NULL,amount BIGINT NOT NULL,payload BYTEA,metadata JSON,state TEXT NOT NULL CHECK(state IN('todo','done')),title TEXT NOT NULL);",
       'test',
     );
-    expose(db, 'documents', true, ['id', 'amount', 'payload', 'metadata', 'state', 'title']);
+    await expose(db, 'documents', true, ['id', 'amount', 'payload', 'metadata', 'state', 'title']);
     for (const operation of ['select', 'insert', 'update', 'delete'] as const)
-      savePolicy(db, {
+      await savePolicy(db, {
         resource: 'documents',
         operation,
         roles: ['anonymous'],
@@ -36,53 +36,79 @@ test('typed wire values preserve 64-bit integers, binary keys, JSON, enum metada
       state: 'todo',
       title: "'; DROP TABLE documents; --",
     };
-    expect(engine.mutate('documents', 'insert', row, identity).data[0]).toEqual(row);
+    expect((await engine.mutate('documents', 'insert', row, identity)).data[0]).toEqual(row);
     expect(
-      engine.read('documents', { filters: [{ column: 'id', op: 'eq', value: 'AQID' }] }, identity)
-        .data[0],
+      (
+        await engine.read(
+          'documents',
+          { filters: [{ column: 'id', op: 'eq', value: 'AQID' }] },
+          identity,
+        )
+      ).data[0],
     ).toEqual(row);
-    expect(engine.types()).toContain('"todo" | "done"');
-    expect(() =>
-      engine.mutate(
-        'documents',
-        'insert',
-        { ...row, id: 'Bw==', amount: '9223372036854775808' },
-        identity,
-      ),
-    ).toThrow('signed 64-bit');
-    expect(() =>
-      engine.mutate('documents', 'insert', { ...row, id: 'Bw==', payload: 'invalid!' }, identity),
-    ).toThrow('canonical base64');
-    expect(() =>
-      engine.mutate('documents', 'insert', { ...row, id: 'Bw==', metadata: 'invalid' }, identity),
-    ).toThrow('valid JSON');
-    const after = engine.latest();
-    engine.mutate('documents', 'delete', {}, identity, 'AQID');
-    expect(engine.events(after, identity, 'documents').events[0].payload).toEqual({ id: 'AQID' });
-    db.exec("INSERT INTO documents VALUES(x'07',1,zeroblob(400000),'{}','todo','Large');");
-    expect(() => engine.read('documents', {}, identity)).toThrow('Result exceeds');
-    expect(engine.read('documents', { columns: ['id', 'title'] }, identity).data).toEqual([
+    expect(await engine.types()).toContain('"todo" | "done"');
+    await expect(
+      (async () =>
+        await engine.mutate(
+          'documents',
+          'insert',
+          { ...row, id: 'Bw==', amount: '9223372036854775808' },
+          identity,
+        ))(),
+    ).rejects.toThrow('signed 64-bit');
+    await expect(
+      (async () =>
+        await engine.mutate(
+          'documents',
+          'insert',
+          { ...row, id: 'Bw==', payload: 'invalid!' },
+          identity,
+        ))(),
+    ).rejects.toThrow('canonical base64');
+    await expect(
+      (async () =>
+        await engine.mutate(
+          'documents',
+          'insert',
+          { ...row, id: 'Bw==', metadata: 'invalid' },
+          identity,
+        ))(),
+    ).rejects.toThrow('valid JSON');
+    const after = await engine.latest();
+    await engine.mutate('documents', 'delete', {}, identity, 'AQID');
+    expect((await engine.events(after, identity, 'documents')).events[0].payload).toEqual({
+      id: 'AQID',
+    });
+    await db.exec(
+      "INSERT INTO documents VALUES(decode('07','hex'),1,decode(repeat('00',400000),'hex'),'{}','todo','Large');",
+    );
+    await expect((async () => await engine.read('documents', {}, identity))()).rejects.toThrow(
+      'Result exceeds',
+    );
+    expect((await engine.read('documents', { columns: ['id', 'title'] }, identity)).data).toEqual([
       { id: 'Bw==', title: 'Large' },
     ]);
-    expect(() => engine.events(after + 1, identity, 'documents')).toThrow('fetch a fresh snapshot');
+    await expect(
+      (async () => await engine.events(after + 1, identity, 'documents'))(),
+    ).rejects.toThrow('fetch a fresh snapshot');
   } finally {
-    db.close(true);
+    await db.close(true);
     rmSync(directory, { recursive: true, force: true });
   }
 });
-test('permissive policy grants are ORed and restrictive policies remain an AND boundary', () => {
+test('permissive policy grants are ORed and restrictive policies remain an AND boundary', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'qb-policy-')),
-    db = openDatabase(join(directory, 'main.sqlite'));
+    db = openDatabase(join(directory, 'main.pglite'));
   try {
-    initializeBranch(db);
-    const engine = new BranchEngine(db, 'test');
-    engine.migration(
+    await initializeBranch(db);
+    const engine = await new BranchEngine(db, 'test').initialize();
+    await engine.migration(
       '001',
-      'CREATE TABLE tasks(id INTEGER PRIMARY KEY,owner_id TEXT NOT NULL,shared INTEGER NOT NULL,title TEXT NOT NULL);',
+      'CREATE TABLE tasks(id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,owner_id TEXT NOT NULL,shared BIGINT NOT NULL,title TEXT NOT NULL);',
       'test',
     );
-    expose(db, 'tasks', true, ['id', 'owner_id', 'shared', 'title']);
-    db.exec(
+    await expose(db, 'tasks', true, ['id', 'owner_id', 'shared', 'title']);
+    await db.exec(
       "INSERT INTO tasks VALUES(1,'alice',0,'Owned'),(2,'bob',1,'Shared'),(3,'alice',1,'Blocked');",
     );
     const rules = [
@@ -97,7 +123,7 @@ test('permissive policy grants are ORed and restrictive policies remain an AND b
       },
     ];
     for (const rule of rules)
-      savePolicy(db, {
+      await savePolicy(db, {
         resource: 'tasks',
         operation: 'select',
         roles: ['authenticated'],
@@ -106,25 +132,207 @@ test('permissive policy grants are ORed and restrictive policies remain an AND b
         ...rule,
       } as any);
     expect(
-      engine.read('tasks', { count: true }, { sub: 'alice', role: 'authenticated' }).meta.count,
+      (await engine.read('tasks', { count: true }, { sub: 'alice', role: 'authenticated' })).meta
+        .count,
     ).toBe(2);
-    expect(engine.read('tasks', {}, { sub: null, role: 'anonymous' }).data).toEqual([]);
+    expect((await engine.read('tasks', {}, { sub: null, role: 'anonymous' })).data).toEqual([]);
     expect(
-      engine.read(
-        'tasks',
-        { filters: [{ column: 'title', op: 'eq', value: "'; DROP TABLE tasks;--" }] },
-        { sub: 'alice', role: 'authenticated' },
+      (
+        await engine.read(
+          'tasks',
+          { filters: [{ column: 'title', op: 'eq', value: "'; DROP TABLE tasks;--" }] },
+          { sub: 'alice', role: 'authenticated' },
+        )
       ).data,
     ).toEqual([]);
-    expect(() =>
-      engine.read(
-        'tasks',
-        { filters: [{ column: 'title) OR 1=1--', op: 'eq', value: 'x' }] },
-        { sub: 'alice', role: 'authenticated' },
-      ),
-    ).toThrow('Unknown or hidden filter');
+    await expect(
+      (async () =>
+        await engine.read(
+          'tasks',
+          { filters: [{ column: 'title) OR 1=1--', op: 'eq', value: 'x' }] },
+          { sub: 'alice', role: 'authenticated' },
+        ))(),
+    ).rejects.toThrow('Unknown or hidden filter');
   } finally {
-    db.close(true);
+    await db.close(true);
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('native PostgreSQL booleans, timestamps and JSON retain wire types and typed policy comparisons', async () => {
+  const db = openDatabase(':memory:');
+  try {
+    await initializeBranch(db);
+    const engine = await new BranchEngine(db, 'typed-native').initialize();
+    await engine.migration(
+      'native',
+      'CREATE TABLE native_values(id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,enabled boolean NOT NULL,created_at timestamptz NOT NULL DEFAULT current_timestamp,payload jsonb NOT NULL)',
+      'test',
+    );
+    await expose(db, 'native_values', true, ['id', 'enabled', 'created_at', 'payload']);
+    for (const operation of ['select', 'insert'] as const)
+      await engine.savePolicy({
+        resource: 'native_values',
+        operation,
+        roles: ['anonymous'],
+        mode: 'permissive',
+        enabled: true,
+        using: { op: 'eq', left: { column: 'enabled' }, right: { value: true } },
+        check: { op: 'eq', left: { column: 'enabled' }, right: { value: 1 } },
+      });
+    const identity = { sub: null, role: 'anonymous' } as const;
+    const result = await engine.mutate(
+      'native_values',
+      'insert',
+      { enabled: 1, payload: '{"ok":true}' },
+      identity,
+    );
+    expect(result.data[0].enabled).toBe(1);
+    expect(result.data[0].payload).toBe('{"ok":true}');
+    expect(result.data[0].created_at).toMatch(/Z$/);
+    expect(
+      (
+        await engine.read(
+          'native_values',
+          { filters: [{ column: 'enabled', op: 'eq', value: 1 }] },
+          identity,
+        )
+      ).data,
+    ).toEqual(result.data);
+    await expect(
+      engine.mutate('native_values', 'insert', { enabled: 0, payload: '{}' }, identity),
+    ).rejects.toMatchObject({ code: 'DENIED' });
+    expect((await db.query("SELECT '{\"ok\":true}'::jsonb ? 'ok' AS present").get())!.present).toBe(
+      true,
+    );
+  } finally {
+    await db.close();
+  }
+});
+
+test('constant policy comparisons preserve numeric, text, null and identity semantics', async () => {
+  const db = openDatabase(':memory:');
+  try {
+    await initializeBranch(db);
+    const engine = await new BranchEngine(db, 'constant-policy').initialize();
+    await engine.migration(
+      'constants',
+      'CREATE TABLE protected_rows(id text PRIMARY KEY,title text NOT NULL)',
+      'test',
+    );
+    await expose(db, 'protected_rows', true, ['id', 'title']);
+    await engine.mutate(
+      'protected_rows',
+      'insert',
+      { id: 'private', title: 'Protected' },
+      { sub: null, role: 'anonymous' },
+      undefined,
+      undefined,
+      true,
+    );
+    const grant = {
+      id: 'constant-grant',
+      resource: 'protected_rows',
+      operation: 'select',
+      roles: ['anonymous', 'authenticated'],
+      mode: 'permissive',
+      enabled: true,
+      check: { op: 'true' },
+    } as const;
+    async function read(using: any, sub: string | null = null) {
+      await engine.savePolicy({ ...grant, roles: [...grant.roles], using });
+      return (
+        await engine.read('protected_rows', {}, { sub, role: sub ? 'authenticated' : 'anonymous' })
+      ).data;
+    }
+    expect(await read({ op: 'lt', left: { value: 10 }, right: { value: 2 } })).toEqual([]);
+    expect(await read({ op: 'gt', left: { value: 2 }, right: { value: 10 } })).toEqual([]);
+    expect(await read({ op: 'in', left: { value: 1 }, values: ['1'] })).toEqual([]);
+    expect(
+      await read({ op: 'not', arg: { op: 'eq', left: { value: null }, right: { value: null } } }),
+    ).toEqual([]);
+    expect(await read({ op: 'eq', left: { claim: 'sub' }, right: { value: 1 } }, '1')).toEqual([]);
+    expect(await read({ op: 'isNull', arg: { claim: 'sub' } })).toHaveLength(1);
+    expect(await read({ op: 'isNull', arg: { claim: 'sub' } }, 'alice')).toEqual([]);
+    expect(await read({ op: 'lt', left: { value: '10' }, right: { value: '2' } })).toHaveLength(1);
+    expect(await read({ op: 'in', left: { value: 1 }, values: [null, 1] })).toHaveLength(1);
+  } finally {
+    await db.close();
+  }
+});
+
+test('native enum names do not inherit boolean, integer or timestamp coercion', async () => {
+  const db = openDatabase(':memory:');
+  try {
+    await initializeBranch(db);
+    const engine = await new BranchEngine(db, 'enum-types').initialize();
+    await engine.migration(
+      'enums',
+      "CREATE TYPE boolean_status AS ENUM('yes','no');CREATE TYPE print_date AS ENUM('today','tomorrow');CREATE TABLE enum_values(id text PRIMARY KEY,status boolean_status NOT NULL,day print_date NOT NULL)",
+      'test',
+    );
+    await expose(db, 'enum_values', true, ['id', 'status', 'day']);
+    for (const operation of ['select', 'insert'] as const)
+      await engine.savePolicy({
+        resource: 'enum_values',
+        operation,
+        roles: ['anonymous'],
+        mode: 'permissive',
+        enabled: true,
+        using: { op: 'true' },
+        check: { op: 'true' },
+      });
+    const identity = { sub: null, role: 'anonymous' } as const,
+      row = { id: 'one', status: 'yes', day: 'today' };
+    expect((await engine.mutate('enum_values', 'insert', row, identity)).data).toEqual([row]);
+    expect((await engine.read('enum_values', {}, identity)).data).toEqual([row]);
+    expect((await engine.events(0, identity)).events[0]!.payload).toEqual(row);
+    expect(await engine.types()).toContain('"yes" | "no"');
+    await db.exec("ALTER TYPE boolean_status ADD VALUE 'maybe'");
+    await expect(engine.read('enum_values', {}, identity)).rejects.toMatchObject({
+      code: 'SCHEMA_STALE',
+    });
+  } finally {
+    await db.close();
+  }
+});
+
+test('PostgreSQL console permits UPDATE and ON CONFLICT while fencing protected statements and objects', async () => {
+  const db = openDatabase(':memory:');
+  try {
+    await initializeBranch(db);
+    const engine = await new BranchEngine(db, 'sql-guard').initialize();
+    await engine.migration(
+      'allowed',
+      `CREATE TABLE console_rows(id text PRIMARY KEY,value text,"reset" text);
+      INSERT INTO console_rows VALUES('one','SET ROLE _qb_auth_users query_to_xml','literal');
+      /* outer /* nested */ comment */ UPDATE console_rows SET value='updated';
+      INSERT INTO console_rows(id,value) VALUES('one','upserted') ON CONFLICT(id) DO UPDATE SET value=excluded.value;
+      SELECT $body$;COMMIT;pg_read_file$body$;`,
+      'test',
+    );
+    expect((await db.query('SELECT value FROM console_rows').get())!.value).toBe('upserted');
+    for (const sql of [
+      'SET ROLE postgres',
+      'RESET ROLE',
+      'END',
+      'ABORT',
+      'START TRANSACTION',
+      'DO $$BEGIN PERFORM 1; END$$',
+      'CREATE OR REPLACE FUNCTION forbidden() RETURNS int LANGUAGE sql AS $$SELECT 1$$',
+      'CREATE OR REPLACE PROCEDURE forbidden() LANGUAGE sql AS $$SELECT 1$$',
+      'SELECT * FROM "_qb_auth_users"',
+      `SELECT "pg_read_file"('file')`,
+      `SELECT query_to_xml('_q'||'b_auth_users',true,false,'')`,
+      `SELECT set_config('search_path','public',false)`,
+      `UPDATE console_rows SET value='changed'; /* nested /* x */ x */ RESET ROLE`,
+    ]) {
+      await expect(engine.migration('denied', sql, 'test')).rejects.toMatchObject({
+        code: 'UNSAFE_SQL',
+      });
+    }
+    expect((await db.query('SELECT value FROM console_rows').get())!.value).toBe('upserted');
+  } finally {
+    await db.close();
   }
 });

@@ -10,15 +10,78 @@ import {
   registerRelationship,
   registerRPC,
 } from '@qb-flex/schema';
-import { createRealm } from '@qb-flex/auth';
-import { QBError, type Identity } from '@qb-flex/contracts';
+import { createRealm, encryption, realmSecret } from '@qb-flex/auth';
+import { DurableJobs } from './jobs';
+import { Webhooks } from './webhooks';
+import { SecurityAdvisor } from './security-advisor';
+import { simulatePolicy } from './policy-simulator';
+import { APP_ROLE_NAME, isReservedRoleName, QBError, type Identity } from '@qb-flex/contracts';
 import { createHash } from 'node:crypto';
 let engine: BranchEngine;
+let jobs: DurableJobs;
+let webhooks: Webhooks;
+let advisor: SecurityAdvisor;
 let auth: Awaited<ReturnType<typeof createRealm>>;
 let serial = Promise.resolve();
+async function loadUserRoles(userId: string) {
+  return (
+    (await engine.db
+      .query(
+        'SELECT r.name FROM _qb_user_roles ur JOIN _qb_roles r ON r.id=ur.role_id WHERE ur.user_id=? ORDER BY r.name',
+      )
+      .all(userId)) as { name: string }[]
+  ).map((r) => r.name);
+}
+async function requireUser(userId: string) {
+  const user = (await engine.db
+    .query(
+      'SELECT id,email,name,"emailVerified","createdAt",banned,"banReason" FROM _qb_auth_users WHERE id=?',
+    )
+    .get(userId)) as any;
+  if (!user) throw new QBError('NOT_FOUND', 'Application user not found', 404);
+  return user;
+}
+async function resolveRoleIds(names: string[]) {
+  if (!Array.isArray(names)) throw new QBError('VALIDATION', 'roles must be an array');
+  const unique = [...new Set(names.map((n) => String(n)))];
+  if (!unique.length) return [] as string[];
+  for (const name of unique) {
+    if (!APP_ROLE_NAME.test(name) || isReservedRoleName(name))
+      throw new QBError('VALIDATION', 'Invalid role name: ' + name);
+  }
+  const rows: { id: string; name: string }[] = [];
+  for (const name of unique) {
+    const row = (await engine.db.query('SELECT id,name FROM _qb_roles WHERE name=?').get(name)) as {
+      id: string;
+      name: string;
+    } | null;
+    if (!row) throw new QBError('VALIDATION', 'Unknown role: ' + name);
+    rows.push(row);
+  }
+  return rows.map((r) => r.id);
+}
+async function setUserRoles(userId: string, roleNames: string[]) {
+  const roleIds = await resolveRoleIds(roleNames);
+  await engine.db.query('DELETE FROM _qb_user_roles WHERE user_id=?').run(userId);
+  for (const roleId of roleIds)
+    await engine.db.query('INSERT INTO _qb_user_roles VALUES(?,?)').run(userId, roleId);
+  return loadUserRoles(userId);
+}
+async function userPayload(user: any) {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    emailVerified: !!user.emailVerified,
+    createdAt: user.createdAt,
+    banned: !!user.banned,
+    banReason: user.banReason ?? null,
+    roles: await loadUserRoles(user.id),
+  };
+}
 async function run(action: string, a: any) {
   if (action === 'close') {
-    engine.db.close(true);
+    await engine.db.close(true);
     return true;
   }
   if (action === 'auth') {
@@ -37,51 +100,99 @@ async function run(action: string, a: any) {
   }
   if (action === 'identity') {
     const session = await auth.api.getSession({ headers: new Headers(a.headers) });
-    return session ? { sub: session.user.id, role: 'authenticated' } : null;
+    if (!session) return null;
+    const banned = !!(session.user as { banned?: boolean }).banned;
+    if (banned) return null;
+    return {
+      sub: session.user.id,
+      role: 'authenticated' as const,
+      roles: await loadUserRoles(session.user.id),
+    };
   }
-  const identity: Identity = a.identity ?? { sub: null, role: 'anonymous' };
+  await engine.refresh();
+  const identity: Identity = a.identity ?? { sub: null, role: 'anonymous', roles: [] };
+  if (!identity.roles) identity.roles = [];
   switch (action) {
+    case 'policy-simulate':
+      return await simulatePolicy(engine, a);
+    case 'security-scan':
+      return await advisor.scan(a.additional);
+    case 'security-acknowledge':
+      return await advisor.acknowledge(a.id, a.expiresAt, a.actor, a.additional);
+    case 'security-clear':
+      return await advisor.clear(a.id);
+    case 'jobs-submit':
+      return await jobs.submit(a);
+    case 'jobs-list':
+      return await jobs.list(a);
+    case 'jobs-get':
+      return { ...(await jobs.get(a.id)), history: await jobs.attempts(a.id) };
+    case 'jobs-claim':
+      return await jobs.claim(a.kinds, a.leaseMs);
+    case 'jobs-finish':
+      return await jobs.finish(a.id, a.leaseToken, a.result, a.kinds);
+    case 'jobs-cancel':
+      return await jobs.cancel(a.id);
+    case 'jobs-replay':
+      return await jobs.replay(a.id, a.idempotencyKey);
+    case 'webhooks-list':
+      return await webhooks.list();
+    case 'webhooks-create':
+      return await webhooks.create(a);
+    case 'webhooks-state':
+      return await webhooks.state(a.id, a.state);
+    case 'webhooks-rotate':
+      return await webhooks.rotate(a.id);
+    case 'webhooks-produce':
+      return await webhooks.produce();
+    case 'webhooks-reference':
+      return await webhooks.reference(a.id, a.leaseToken);
+    case 'webhooks-prepare':
+      return await webhooks.prepare(a.id, a.leaseToken, a.serviceKeyId);
     case 'schema':
-      if (!a.privileged) engine.assertSchema();
+      if (!a.privileged) await engine.assertSchema();
       return {
-        tables: schema(engine.db)
-          .filter((t) => a.privileged || t.exposed)
-          .map((t) =>
-            a.privileged
-              ? t
-              : {
-                  ...t,
-                  columns: t.columns.filter((c) => t.allowedColumns.includes(c.name)),
-                  indexes: [],
-                  foreignKeys: [],
-                  relationships: t.relationships?.filter((r) =>
-                    schema(engine.db).some((t) => t.exposed && t.name === r.target),
-                  ),
-                },
+        tables: await Promise.all(
+          await Promise.all(
+            (await schema(engine.db))
+              .filter((t) => a.privileged || t.exposed)
+              .map(async (t) =>
+                a.privileged
+                  ? t
+                  : {
+                      ...t,
+                      columns: t.columns.filter((c) => t.allowedColumns.includes(c.name)),
+                      indexes: [],
+                      foreignKeys: [],
+                      relationships: t.relationships?.filter(
+                        (r) => engine.table(r.target, false)?.exposed,
+                      ),
+                    },
+              ),
           ),
-        schemaVersion: schemaVersion(engine.db),
+        ),
+        schemaVersion: await schemaVersion(engine.db),
       };
     case 'policies':
-      return policies(engine.db);
+      return await policies(engine.db);
     case 'policy':
-      return engine.savePolicy(a.policy);
+      return await engine.savePolicy(a.policy);
     case 'relationship':
-      return registerRelationship(engine.db, a.relationship);
+      return await registerRelationship(engine.db, a.relationship);
     case 'rpc-register':
-      return registerRPC(engine.db, a.operation);
+      return await registerRPC(engine.db, a.operation);
     case 'rpc-list':
-      return engine.db
-        .query('SELECT definition FROM _qb_rpc')
-        .all()
-        .map((r: any) => JSON.parse(r.definition));
+      return (await engine.db.query('SELECT definition FROM _qb_rpc').all()).map((r: any) =>
+        JSON.parse(r.definition),
+      );
     case 'rpc':
-      return engine.rpc(a.name, a.args, identity, a.idempotency);
+      return await engine.rpc(a.name, a.args, identity, a.idempotency);
     case 'expose':
-      return expose(engine.db, a.table, a.enabled, a.columns);
+      return await expose(engine.db, a.table, a.enabled, a.columns);
     case 'read':
-      return engine.read(a.table, a.query, identity, a.privileged);
+      return await engine.read(a.table, a.query, identity, a.privileged);
     case 'mutate':
-      return engine.mutate(
+      return await engine.mutate(
         a.table,
         a.method,
         a.input,
@@ -92,35 +203,212 @@ async function run(action: string, a: any) {
         a.revision,
       );
     case 'migration':
-      return engine.migration(a.id, a.sql, a.author);
+      return await engine.migration(a.id, a.sql, a.author);
     case 'migrations':
-      return engine.db
+      return await engine.db
         .query('SELECT id,checksum,author,applied_at FROM _qb_migrations ORDER BY applied_at')
         .all();
     case 'sql':
       engine.safeSQL(a.sql);
       if (/^\s*(select|with)\b/i.test(a.sql))
-        return engine.db.query(`SELECT * FROM (${a.sql.trim().replace(/;$/, '')}) LIMIT 500`).all();
-      else return engine.migration(crypto.randomUUID(), a.sql, a.author);
+        return await engine.db
+          .query(`SELECT * FROM (${a.sql.trim().replace(/;$/, '')}) LIMIT 500`)
+          .all();
+      else return await engine.migration(crypto.randomUUID(), a.sql, a.author);
     case 'types':
-      return engine.types();
+      return await engine.types();
     case 'snapshot':
-      return engine.snapshot(a.path);
+      return await engine.snapshot(a.path);
     case 'events':
-      return engine.events(a.after, identity, a.table);
+      return await engine.events(a.after, identity, a.table);
     case 'latest':
-      return engine.latest();
-    case 'users':
-      return engine.db
+      return await engine.latest();
+    case 'users': {
+      const rows = (await engine.db
         .query(
-          'SELECT id,email,name,emailVerified,createdAt FROM _qb_auth_users ORDER BY createdAt DESC LIMIT 500',
+          'SELECT id,email,name,"emailVerified","createdAt",banned,"banReason" FROM _qb_auth_users ORDER BY "createdAt" DESC LIMIT 500',
         )
-        .all();
+        .all()) as any[];
+      return await Promise.all(rows.map((u) => userPayload(u)));
+    }
+    case 'user-create': {
+      const email = String(a.email ?? '')
+        .trim()
+        .toLowerCase();
+      const password = String(a.password ?? '');
+      const name = String(a.name ?? '').trim() || email.split('@')[0] || 'User';
+      if (!email || !password) throw new QBError('VALIDATION', 'Email and password are required');
+      if (password.length < 12)
+        throw new QBError('VALIDATION', 'Password must be at least 12 characters');
+      let created: { user?: { id: string } };
+      try {
+        created = (await auth.api.signUpEmail({
+          body: { email, password, name },
+          headers: new Headers(),
+        })) as { user?: { id: string } };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to create user';
+        if (/already|exists|unique/i.test(message))
+          throw new QBError('CONFLICT', 'An application user with this email already exists', 409);
+        throw new QBError('VALIDATION', message);
+      }
+      const userId =
+        created?.user?.id ??
+        ((await engine.db.query('SELECT id FROM _qb_auth_users WHERE email=?').get(email)) as any)
+          ?.id;
+      if (!userId) throw new QBError('DATABASE_ERROR', 'Failed to create application user');
+      await engine.db.query('DELETE FROM _qb_auth_sessions WHERE "userId"=?').run(userId);
+      if (a.emailVerified === true)
+        await engine.db
+          .query('UPDATE _qb_auth_users SET "emailVerified"=TRUE WHERE id=?')
+          .run(userId);
+      if (Array.isArray(a.roles) && a.roles.length) await setUserRoles(userId, a.roles);
+      return userPayload(await requireUser(userId));
+    }
+    case 'user-update': {
+      const user = await requireUser(a.userId);
+      const updates: string[] = [];
+      const values: unknown[] = [];
+      if (a.name !== undefined) {
+        const name = String(a.name ?? '').trim();
+        if (!name) throw new QBError('VALIDATION', 'Name is required');
+        updates.push('name=?');
+        values.push(name);
+      }
+      if (a.email !== undefined) {
+        const email = String(a.email ?? '')
+          .trim()
+          .toLowerCase();
+        if (!email.includes('@')) throw new QBError('VALIDATION', 'Invalid email');
+        updates.push('email=?');
+        values.push(email);
+      }
+      if (a.emailVerified !== undefined) {
+        updates.push('"emailVerified"=?');
+        values.push(!!a.emailVerified);
+      }
+      if (!updates.length) throw new QBError('VALIDATION', 'No user fields to update');
+      values.push(user.id);
+      await engine.db
+        .query(`UPDATE _qb_auth_users SET ${updates.join(',')} WHERE id=?`)
+        .run(...values);
+      return userPayload(await requireUser(user.id));
+    }
+    case 'user-delete': {
+      await requireUser(a.userId);
+      await engine.db.query('DELETE FROM _qb_user_roles WHERE user_id=?').run(a.userId);
+      await engine.db.query('DELETE FROM _qb_auth_sessions WHERE "userId"=?').run(a.userId);
+      await engine.db.query('DELETE FROM _qb_auth_accounts WHERE "userId"=?').run(a.userId);
+      try {
+        await engine.db.query('DELETE FROM _qb_auth_passkeys WHERE "userId"=?').run(a.userId);
+      } catch {
+        /* optional table */
+      }
+      try {
+        await engine.db.query('DELETE FROM _qb_auth_two_factor WHERE "userId"=?').run(a.userId);
+      } catch {
+        /* optional table */
+      }
+      await engine.db.query('DELETE FROM _qb_auth_users WHERE id=?').run(a.userId);
+      return { deleted: true };
+    }
+    case 'user-ban': {
+      await requireUser(a.userId);
+      const reason = a.reason != null ? String(a.reason).slice(0, 500) : null;
+      await engine.db
+        .query('UPDATE _qb_auth_users SET banned=TRUE,"banReason"=? WHERE id=?')
+        .run(reason, a.userId);
+      await engine.db.query('DELETE FROM _qb_auth_sessions WHERE "userId"=?').run(a.userId);
+      return userPayload(await requireUser(a.userId));
+    }
+    case 'user-unban': {
+      await requireUser(a.userId);
+      await engine.db
+        .query('UPDATE _qb_auth_users SET banned=FALSE,"banReason"=NULL WHERE id=?')
+        .run(a.userId);
+      return userPayload(await requireUser(a.userId));
+    }
+    case 'user-roles': {
+      await requireUser(a.userId);
+      const roles = await setUserRoles(a.userId, a.roles ?? []);
+      return { id: a.userId, roles };
+    }
+    case 'roles': {
+      const rows = (await engine.db
+        .query(
+          `SELECT r.id,r.name,r.description,r.created_at,
+            (SELECT COUNT(*)::int FROM _qb_user_roles ur WHERE ur.role_id=r.id) AS members
+           FROM _qb_roles r ORDER BY r.name`,
+        )
+        .all()) as any[];
+      return rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        description: r.description ?? '',
+        createdAt: r.created_at,
+        members: Number(r.members ?? 0),
+      }));
+    }
+    case 'role-create': {
+      const name = String(a.name ?? '')
+        .trim()
+        .toLowerCase();
+      const description = String(a.description ?? '').slice(0, 500);
+      if (!APP_ROLE_NAME.test(name) || isReservedRoleName(name))
+        throw new QBError('VALIDATION', 'Invalid role name');
+      const id = crypto.randomUUID();
+      const createdAt = new Date().toISOString();
+      try {
+        await engine.db
+          .query('INSERT INTO _qb_roles VALUES(?,?,?,?)')
+          .run(id, name, description, createdAt);
+      } catch {
+        throw new QBError('CONFLICT', 'Role already exists', 409);
+      }
+      return { id, name, description, createdAt, members: 0 };
+    }
+    case 'role-update': {
+      const role = (await engine.db
+        .query('SELECT id,name,description,created_at FROM _qb_roles WHERE id=?')
+        .get(a.roleId)) as any;
+      if (!role) throw new QBError('NOT_FOUND', 'Role not found', 404);
+      let name = role.name;
+      let description = role.description ?? '';
+      if (a.name !== undefined) {
+        name = String(a.name).trim().toLowerCase();
+        if (!APP_ROLE_NAME.test(name) || isReservedRoleName(name))
+          throw new QBError('VALIDATION', 'Invalid role name');
+      }
+      if (a.description !== undefined) description = String(a.description).slice(0, 500);
+      try {
+        await engine.db
+          .query('UPDATE _qb_roles SET name=?,description=? WHERE id=?')
+          .run(name, description, role.id);
+      } catch {
+        throw new QBError('CONFLICT', 'Role name already exists', 409);
+      }
+      const members = Number(
+        (
+          (await engine.db
+            .query('SELECT COUNT(*)::int AS n FROM _qb_user_roles WHERE role_id=?')
+            .get(role.id)) as any
+        )?.n ?? 0,
+      );
+      return { id: role.id, name, description, createdAt: role.created_at, members };
+    }
+    case 'role-delete': {
+      const role = (await engine.db
+        .query('SELECT id FROM _qb_roles WHERE id=?')
+        .get(a.roleId)) as any;
+      if (!role) throw new QBError('NOT_FOUND', 'Role not found', 404);
+      await engine.db.query('DELETE FROM _qb_roles WHERE id=?').run(a.roleId);
+      return { deleted: true };
+    }
     case 'revoke':
-      engine.db.query('DELETE FROM _qb_auth_sessions WHERE userId=?').run(a.userId);
+      await engine.db.query('DELETE FROM _qb_auth_sessions WHERE "userId"=?').run(a.userId);
       return true;
     case 'buckets':
-      return engine.db.query('SELECT * FROM _qb_buckets').all();
+      return await engine.db.query('SELECT * FROM _qb_buckets').all();
     case 'bucket-create': {
       const id = crypto.randomUUID();
       if (
@@ -131,20 +419,31 @@ async function run(action: string, a: any) {
         a.maxSize > 104857600
       )
         throw new QBError('VALIDATION', 'Invalid bucket configuration');
-      engine.db
+      await engine.db
         .query('INSERT INTO _qb_buckets VALUES(?,?,?,?,?)')
         .run(id, a.name, a.visibility, a.maxSize, JSON.stringify(a.mimeRules ?? []));
       return { id };
     }
     case 'objects':
-      return engine.db
+      return await engine.db
         .query(
           "SELECT id,bucket_id,key,owner_id,size,mime,state,created_at FROM _qb_objects WHERE bucket_id=? AND (?=1 OR owner_id=?) AND state='ready' ORDER BY id LIMIT 500",
         )
         .all(a.bucket, Number(!!a.privileged), identity.sub ?? '');
     case 'upload-intent': {
+      if (
+        a.checksum !== undefined &&
+        (typeof a.checksum !== 'string' || !/^[a-f0-9]{64}$/.test(a.checksum))
+      )
+        throw new QBError('VALIDATION', 'Expected checksum must be lowercase SHA-256');
       const digest = createHash('sha256')
-        .update(JSON.stringify([a.bucket, a.key, a.size, a.mime]))
+        .update(
+          JSON.stringify(
+            a.checksum === undefined
+              ? [a.bucket, a.key, a.size, a.mime]
+              : [a.bucket, a.key, a.size, a.mime, a.checksum],
+          ),
+        )
         .digest('hex');
       if (a.idempotency && (typeof a.idempotency !== 'string' || a.idempotency.length > 128))
         throw new QBError('VALIDATION', 'Idempotency keys must be at most 128 characters');
@@ -154,27 +453,29 @@ async function run(action: string, a: any) {
             .digest('hex')
         : null;
       if (scope) {
-        const prior = engine.db
+        const prior = (await engine.db
           .query('SELECT hash,response FROM _qb_idempotency WHERE scope=?')
-          .get(scope) as any;
+          .get(scope)) as any;
         if (prior) {
           if (prior.hash !== digest)
             throw new QBError('IDEMPOTENCY_CONFLICT', 'Key reused with different content', 409);
           return JSON.parse(prior.response);
         }
       }
-      const bucket = engine.db.query('SELECT * FROM _qb_buckets WHERE id=?').get(a.bucket) as any;
+      const bucket = (await engine.db
+        .query('SELECT * FROM _qb_buckets WHERE id=?')
+        .get(a.bucket)) as any;
       if (!bucket) throw new QBError('NOT_FOUND', 'Bucket not available', 404);
       if (!identity.sub) throw new QBError('UNAUTHORIZED', 'Sign in to upload', 401);
       if (!Number.isInteger(a.size) || a.size < 0 || a.size > Number(bucket.max_size))
         throw new QBError('SIZE_LIMIT', 'Upload exceeds bucket limit', 413);
       const used = Number(
         (
-          engine.db
+          (await engine.db
             .query(
               "SELECT COALESCE(SUM(size),0) AS used FROM _qb_objects WHERE state NOT IN('deleted','unavailable')",
             )
-            .get() as any
+            .get()) as any
         ).used,
       );
       if (used + a.size > (a.maxStorageBytes ?? 1073741824))
@@ -198,11 +499,11 @@ async function run(action: string, a: any) {
         throw new QBError('VALIDATION', 'Invalid object key');
       const id = crypto.randomUUID();
       const result = { id, size: a.size, mime: a.mime };
-      return engine.db
-        .transaction(() => {
-          engine.db
+      return await engine.db
+        .transaction(async (tx) => {
+          await tx
             .query(
-              'INSERT INTO _qb_objects(id,bucket_id,key,owner_id,size,mime,state,created_at) VALUES(?,?,?,?,?,?,?,?)',
+              'INSERT INTO _qb_objects(id,bucket_id,key,owner_id,size,mime,state,created_at,expected_sha) VALUES(?,?,?,?,?,?,?,?,?)',
             )
             .run(
               id,
@@ -213,9 +514,10 @@ async function run(action: string, a: any) {
               a.mime,
               'pending',
               new Date().toISOString(),
+              a.checksum ?? null,
             );
           if (scope)
-            engine.db
+            await tx
               .query('INSERT INTO _qb_idempotency VALUES(?,?,?,?)')
               .run(scope, digest, JSON.stringify(result), new Date().toISOString());
           return result;
@@ -223,11 +525,11 @@ async function run(action: string, a: any) {
         .immediate();
     }
     case 'object': {
-      const object = engine.db
+      const object = (await engine.db
         .query(
           'SELECT o.*,b.visibility FROM _qb_objects o JOIN _qb_buckets b ON b.id=o.bucket_id WHERE o.id=?',
         )
-        .get(a.id) as any;
+        .get(a.id)) as any;
       if (
         !object ||
         (!a.privileged &&
@@ -238,7 +540,7 @@ async function run(action: string, a: any) {
       return object;
     }
     case 'upload-claim': {
-      const result = engine.db
+      const result = await engine.db
         .query(
           "UPDATE _qb_objects SET state='uploading' WHERE id=? AND state IN('pending','failed')",
         )
@@ -248,43 +550,54 @@ async function run(action: string, a: any) {
       return true;
     }
     case 'object-state':
-      engine.db
+      await engine.db
         .query(
           'UPDATE _qb_objects SET state=?,etag=?,content_sha=COALESCE(?,content_sha) WHERE id=?',
         )
         .run(a.state, a.etag ?? null, a.contentSha ?? null, a.id);
       return true;
+    case 'purge-storage-keys':
+      return await engine.db
+        .query(
+          "SELECT id,bucket_id,key,state FROM _qb_objects WHERE state != 'deleting' ORDER BY bucket_id,id",
+        )
+        .all();
     case 'object-maintenance':
-      return engine.db
+      return await engine.db
         .query(
           "SELECT id FROM _qb_objects WHERE state='deleting' OR (state IN('pending','uploading','failed') AND created_at<?) LIMIT 100",
         )
         .all(new Date(Date.now() - 86400000).toISOString());
     case 'cleanup':
       {
+        await jobs.cleanup();
         const cutoff = new Date(Date.now() - 86400000).toISOString();
         const last = Number(
           (
-            engine.db
+            (await engine.db
               .query('SELECT MAX(seq) AS seq FROM _qb_outbox WHERE created_at<?')
-              .get(cutoff) as any
+              .get(cutoff)) as any
           ).seq ?? 0,
         );
         if (last) {
-          engine.db
+          await engine.db
             .query(
               "INSERT INTO _qb_meta VALUES('outbox_floor',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
             )
             .run(String(last));
-          engine.db.query('DELETE FROM _qb_outbox WHERE seq<=?').run(last);
+          await engine.db.query('DELETE FROM _qb_outbox WHERE seq<=?').run(last);
         }
-        engine.db.exec('PRAGMA wal_checkpoint(PASSIVE)');
+        await engine.db.exec('');
       }
-      engine.db
+      await engine.db
         .query('DELETE FROM _qb_idempotency WHERE created_at<?')
         .run(new Date(Date.now() - 86400000).toISOString());
-      engine.db.query('DELETE FROM _qb_auth_verifications WHERE expiresAt<?').run(Date.now());
-      engine.db.query('DELETE FROM _qb_auth_sessions WHERE expiresAt<?').run(Date.now());
+      await engine.db
+        .query('DELETE FROM _qb_auth_verifications WHERE "expiresAt"<?')
+        .run(new Date().toISOString());
+      await engine.db
+        .query('DELETE FROM _qb_auth_sessions WHERE "expiresAt"<?')
+        .run(new Date().toISOString());
       return true;
     default:
       throw new QBError('NOT_FOUND', 'Owner action unavailable', 404);
@@ -296,9 +609,23 @@ self.onmessage = (e) => {
     if (message.init) {
       try {
         const db = openDatabase(message.init.path);
-        initializeBranch(db);
-        engine = new BranchEngine(db, message.init.secret);
-        auth = await createRealm(openDatabase(message.init.path, false), message.init.auth);
+        await initializeBranch(db);
+        engine = await new BranchEngine(db, message.init.secret).initialize();
+        jobs = await new DurableJobs(
+          db,
+          encryption(realmSecret(message.init.secret, 'jobs')),
+        ).initialize();
+        webhooks = await new Webhooks(
+          engine,
+          jobs,
+          encryption(realmSecret(message.init.secret, 'webhooks')),
+          message.init.branchId,
+        ).initialize();
+        advisor = await new SecurityAdvisor(engine).initialize();
+        auth = await createRealm(db, message.init.auth);
+        // initdb's temporary WASM heap is large and is not accounted for by JS heap pressure.
+        // Release initialization garbage before admitting this owner to the bounded pool.
+        Bun.gc(true);
         self.postMessage({ ready: true });
       } catch (error) {
         self.postMessage({ startupError: error instanceof Error ? error.stack : String(error) });
@@ -309,12 +636,20 @@ self.onmessage = (e) => {
       self.postMessage({ id: message.id, result: await run(message.action, message.args) });
     } catch (error) {
       if (!(error instanceof QBError) && error instanceof Error) {
-        if (/UNIQUE constraint failed/i.test(error.message))
+        const message = error.message;
+        const sqlState = (error as Error & { code?: string }).code;
+        if (sqlState === '23505' || /duplicate key value violates unique constraint/i.test(message))
           error = new QBError('CONFLICT', 'A unique value already exists', 409);
-        else if (/constraint failed/i.test(error.message))
-          error = new QBError('VALIDATION', 'Row violates the schema constraints');
-        else if (/database is locked|SQLITE_BUSY/.test(error.message))
+        else if (sqlState && /^(22|23|42)/.test(sqlState))
+          error = new QBError('VALIDATION', 'Database constraint or input validation failed');
+        else if (/could not obtain lock|deadlock detected|lock timeout/.test(message))
           error = new QBError('OWNER_BUSY', 'Database writer is busy', 503, true);
+        else if (
+          /syntax error|already exists|relation .* does not exist|column .* does not exist|unterminated/i.test(
+            message,
+          )
+        )
+          error = new QBError('VALIDATION', message);
       }
       self.postMessage({
         id: message.id,

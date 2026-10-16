@@ -9,7 +9,7 @@ function Component() {
     <div className="grid grid-cols-1 gap-5">
       <WorkspaceHeader
         view="Authentication"
-        hint="Application users, providers and verification settings."
+        hint="Users, application roles, providers and verification settings."
         project={project}
         branchName={state.branch === 'primary' ? 'main' : (branch?.name ?? 'main')}
       />

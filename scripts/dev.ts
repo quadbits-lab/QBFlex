@@ -1,10 +1,16 @@
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { log, printStartup } from '@qb-flex/observability';
+import { dependencies } from '../package.json';
+const engineVersion = dependencies['@electric-sql/pglite'];
 import { readWorkerToken } from '../apps/worker/src/token';
-
 const root = resolve(import.meta.dir, '..');
-type Ports = { studio: number; docs: number; api: number };
-
+type Ports = {
+  studio: number;
+  docs: number;
+  api: number;
+};
 export async function assertDevPortsAvailable(ports: Ports) {
   const probes: ReturnType<typeof createServer>[] = [];
   try {
@@ -45,10 +51,14 @@ export async function assertDevPortsAvailable(ports: Ports) {
     );
   }
 }
-
 export async function runDevelopment(
-  options: { ports?: Ports; environment?: NodeJS.ProcessEnv; startupTimeoutMs?: number } = {},
+  options: {
+    ports?: Ports;
+    environment?: NodeJS.ProcessEnv;
+    startupTimeoutMs?: number;
+  } = {},
 ) {
+  const began = performance.now();
   const input = options.environment ?? process.env;
   const ports = options.ports ?? { studio: 7610, docs: 7611, api: Number(input.PORT ?? 7612) };
   const apiURL = `http://localhost:${ports.api}`;
@@ -56,6 +66,7 @@ export async function runDevelopment(
   const docsURL = `http://localhost:${ports.docs}`;
   const environment = {
     ...input,
+    QB_DEV_LAUNCHER: '1',
     QB_DATA_DIR: resolve(root, input.QB_DATA_DIR ?? '.data'),
     PORT: String(ports.api),
     QB_INTERNAL_API_URL: apiURL,
@@ -65,7 +76,10 @@ export async function runDevelopment(
     VITE_DOCS_URL: input.VITE_DOCS_URL ?? docsURL,
     VITE_STUDIO_URL: input.VITE_STUDIO_URL ?? studioURL,
   };
-  const children: { name: string; process: ReturnType<typeof Bun.spawn> }[] = [];
+  const children: {
+    name: string;
+    process: ReturnType<typeof Bun.spawn>;
+  }[] = [];
   let stopped = false;
   const start = (name: string, args: string[], cwd = root) => {
     const process = Bun.spawn(args, {
@@ -88,7 +102,8 @@ export async function runDevelopment(
     // Check all listeners before creating local secrets or launching any children.
     await assertDevPortsAvailable(ports);
     if (stopped) return;
-    const api = start('API', ['bun', '--watch', 'apps/api/src/index.ts']);
+    log({ action: 'development.starting' });
+    const api = start('API', ['bun', '--no-clear-screen', '--watch', 'apps/api/src/index.ts']);
     const deadline = Date.now() + (options.startupTimeoutMs ?? 30000);
     let ready = false;
     while (Date.now() < deadline && !stopped) {
@@ -123,12 +138,49 @@ export async function runDevelopment(
     for (const app of ['studio', 'docs'] as const)
       start(
         app,
-        ['bun', 'run', 'dev', '--port', String(ports[app]), '--strictPort'],
+        [
+          'bun',
+          'run',
+          '--silent',
+          'dev',
+          '--port',
+          String(ports[app]),
+          '--strictPort',
+          '--clearScreen',
+          'false',
+          '--logLevel',
+          'warn',
+        ],
         resolve(root, 'apps', app),
       );
-    console.log(
-      `Studio: ${studioURL}\nDocs: ${docsURL}\nAPI: ${apiURL}\nFirst-owner setup token: ${resolve(environment.QB_DATA_DIR, 'bootstrap.token')} (keep private)`,
+    // Show "ready" only after both frontends respond, not merely after spawning them.
+    await Promise.all(
+      [studioURL, docsURL].map(async (address) => {
+        while (Date.now() < deadline && !stopped) {
+          const failed = children.find((child) => child.process.exitCode !== null);
+          if (failed) throw new Error(`${failed.name} exited during startup.`);
+          try {
+            const response = await fetch(address, { signal: AbortSignal.timeout(1000) });
+            await response.body?.cancel();
+            if (response.ok) return;
+          } catch {}
+          await Bun.sleep(100);
+        }
+        if (!stopped) throw new Error(`Frontend did not become ready: ${address}`);
+      }),
     );
+    if (stopped) return;
+    const bootstrapTokenFile = resolve(environment.QB_DATA_DIR, 'bootstrap.token');
+    printStartup({
+      mode: 'development',
+      elapsedMs: performance.now() - began,
+      runtime: Bun.version,
+      engineVersion,
+      dataDir: environment.QB_DATA_DIR,
+      maxOwners: Number(input.QB_MAX_BRANCH_OWNERS ?? 4),
+      services: { studio: studioURL, docs: docsURL, api: apiURL },
+      ...(existsSync(bootstrapTokenFile) ? { bootstrapTokenFile } : {}),
+    });
     const result = await Promise.race(
       children.map(async (child) => ({ name: child.name, code: await child.process.exited })),
     );
@@ -148,7 +200,6 @@ export async function runDevelopment(
     process.removeListener('SIGTERM', close);
   }
 }
-
 if (import.meta.main) {
   try {
     await runDevelopment();

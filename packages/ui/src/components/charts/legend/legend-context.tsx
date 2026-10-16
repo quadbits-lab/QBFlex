@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { createContext, useContext } from "react";
+import { createContext, useContext } from 'react';
 
 // CSS variable references for legend theming
 export const legendCssVars = {
-  background: "var(--legend)",
-  foreground: "var(--legend-foreground)",
-  muted: "var(--legend-muted)",
-  mutedForeground: "var(--legend-muted-foreground)",
-  track: "var(--legend-track)",
+  background: 'var(--legend)',
+  foreground: 'var(--legend-foreground)',
+  muted: 'var(--legend-muted)',
+  mutedForeground: 'var(--legend-muted-foreground)',
+  track: 'var(--legend-track)',
 };
 
 export interface LegendItemData {
@@ -54,9 +54,7 @@ export function LegendProvider({
   children: React.ReactNode;
   value: LegendContextValue;
 }) {
-  return (
-    <LegendContext.Provider value={value}>{children}</LegendContext.Provider>
-  );
+  return <LegendContext.Provider value={value}>{children}</LegendContext.Provider>;
 }
 
 export function LegendItemProvider({
@@ -66,17 +64,13 @@ export function LegendItemProvider({
   children: React.ReactNode;
   value: LegendItemContextValue;
 }) {
-  return (
-    <LegendItemContext.Provider value={value}>
-      {children}
-    </LegendItemContext.Provider>
-  );
+  return <LegendItemContext.Provider value={value}>{children}</LegendItemContext.Provider>;
 }
 
 export function useLegend(): LegendContextValue {
   const context = useContext(LegendContext);
   if (!context) {
-    throw new Error("useLegend must be used within a <Legend> component.");
+    throw new Error('useLegend must be used within a <Legend> component.');
   }
   return context;
 }
@@ -84,9 +78,7 @@ export function useLegend(): LegendContextValue {
 export function useLegendItem(): LegendItemContextValue {
   const context = useContext(LegendItemContext);
   if (!context) {
-    throw new Error(
-      "useLegendItem must be used within a <LegendItem> component."
-    );
+    throw new Error('useLegendItem must be used within a <LegendItem> component.');
   }
   return context;
 }

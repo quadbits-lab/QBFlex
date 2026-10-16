@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { Progress } from "@base-ui/react/progress";
-import { cn } from "../../../lib/utils";
-import { useLegendItem } from "./legend-context";
+import { Progress } from '@base-ui/react/progress';
+import { cn } from '../../../lib/utils';
+import { useLegendItem } from './legend-context';
 
 export interface LegendProgressProps {
   /** Track class name */
@@ -14,9 +14,9 @@ export interface LegendProgressProps {
 }
 
 export function LegendProgress({
-  trackClassName = "",
-  indicatorClassName = "",
-  height = "h-1.5",
+  trackClassName = '',
+  indicatorClassName = '',
+  height = 'h-1.5',
 }: LegendProgressProps) {
   const { item } = useLegendItem();
 
@@ -29,16 +29,13 @@ export function LegendProgress({
     <Progress.Root max={item.maxValue} value={item.value}>
       <Progress.Track
         className={cn(
-          "w-full overflow-hidden rounded-full bg-legend-track",
+          'w-full overflow-hidden rounded-full bg-legend-track',
           height,
-          trackClassName
+          trackClassName,
         )}
       >
         <Progress.Indicator
-          className={cn(
-            "h-full rounded-full transition-all duration-500",
-            indicatorClassName
-          )}
+          className={cn('h-full rounded-full transition-all duration-500', indicatorClassName)}
           style={{ backgroundColor: item.color }}
         />
       </Progress.Track>
@@ -46,4 +43,4 @@ export function LegendProgress({
   );
 }
 
-LegendProgress.displayName = "LegendProgress";
+LegendProgress.displayName = 'LegendProgress';

@@ -6,13 +6,15 @@ export const normalize = (value: unknown): unknown =>
     ? value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER)
       ? String(value)
       : Number(value)
-    : value instanceof Uint8Array
-      ? Buffer.from(value).toString('base64')
-      : Array.isArray(value)
-        ? value.map(normalize)
-        : value && typeof value === 'object'
-          ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, normalize(v)]))
-          : value;
+    : value instanceof Date
+      ? value.toISOString()
+      : value instanceof Uint8Array
+        ? Buffer.from(value).toString('base64')
+        : Array.isArray(value)
+          ? value.map(normalize)
+          : value && typeof value === 'object'
+            ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, normalize(v)]))
+            : value;
 export const sqlValue = (value: unknown) => {
   if (value !== null && !['string', 'number', 'boolean'].includes(typeof value))
     throw new QBError('VALIDATION', 'Only scalar values are accepted');
@@ -20,11 +22,12 @@ export const sqlValue = (value: unknown) => {
     throw new QBError('VALIDATION', 'Invalid number');
   return typeof value === 'boolean' ? Number(value) : value;
 };
-/** Bind the wire representation using the declared SQLite column affinity. */
+/** Bind the wire representation using the declared PostgreSQL column type. */
 export function columnValue(column: TableSchema['columns'][number], value: unknown): unknown {
   const scalar = sqlValue(value),
     kind = column.type.toUpperCase();
   if (scalar === null) return null;
+  if (column.enum?.length) return scalar;
   if (/INT/.test(kind)) {
     if (typeof scalar === 'number' && Number.isSafeInteger(scalar)) return scalar;
     if (typeof scalar === 'string' && /^-?\d+$/.test(scalar)) {
@@ -36,15 +39,15 @@ export function columnValue(column: TableSchema['columns'][number], value: unkno
       'Integer columns require a safe integer or signed 64-bit decimal string',
     );
   }
-  if (kind === 'BLOB') {
+  if (kind === 'BYTEA') {
     if (typeof scalar === 'string') {
       const bytes = Buffer.from(scalar, 'base64');
       if (bytes.toString('base64') === scalar) return bytes;
     }
-    throw new QBError('VALIDATION', 'Blob columns require canonical base64 strings');
+    throw new QBError('VALIDATION', 'BYTEA columns require canonical base64 strings');
   }
   if (/BOOL/.test(kind)) {
-    if (scalar === 0 || scalar === 1) return scalar;
+    if (scalar === 0 || scalar === 1) return Boolean(scalar);
     throw new QBError('VALIDATION', 'Boolean columns require 0 or 1');
   }
   if (/REAL|FLOAT|DOUBLE|NUMERIC|DECIMAL/.test(kind)) {
@@ -53,7 +56,7 @@ export function columnValue(column: TableSchema['columns'][number], value: unkno
       return scalar;
     throw new QBError('VALIDATION', 'Numeric columns require a finite numeric value');
   }
-  if (kind === 'JSON') {
+  if (/^JSONB?$/.test(kind)) {
     try {
       if (typeof scalar !== 'string') throw new Error();
       JSON.parse(scalar);
@@ -71,7 +74,10 @@ export function compileQuery(
 ): Compiled & {
   limit: number;
   selected: string[];
-  order: { column: string; direction: 'asc' | 'desc' }[];
+  order: {
+    column: string;
+    direction: 'asc' | 'desc';
+  }[];
 } {
   if (!query || typeof query !== 'object') throw new QBError('VALIDATION', 'Invalid query');
   const available = table.allowedColumns;
@@ -106,7 +112,9 @@ export function compileQuery(
     else if (f.op === 'in') {
       if (!Array.isArray(f.value) || f.value.length > 100)
         throw new QBError('VALIDATION', 'Invalid membership filter');
-      conditions.push(f.value.length ? `${column} IN (${f.value.map(() => '?').join(',')})` : '0');
+      conditions.push(
+        f.value.length ? `${column} IN (${f.value.map(() => '?').join(',')})` : 'FALSE',
+      );
       params.push(
         ...f.value.map((value) =>
           columnValue(
@@ -174,7 +182,13 @@ export function cursorCodec(secret: string) {
     },
     scope(table: string, query: Query, identity: Identity, version: number) {
       return sign(
-        JSON.stringify({ table, query: { ...query, cursor: undefined }, identity, version }),
+        JSON.stringify({
+          engine: 'pglite-v1',
+          table,
+          query: { ...query, cursor: undefined },
+          identity,
+          version,
+        }),
       );
     },
   };

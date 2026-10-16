@@ -1,0 +1,43 @@
+export const frontmatter = {"title": "Resend and React Email", "description": "Configure verification and password-reset delivery with Resend or SMTP.", "section": "Authentication", "slug": "authentication/email", "order": 31.2};
+
+# Resend and React Email
+
+## Shared authentication mail
+
+Platform and application verification/password-reset messages render the repository's React Email templates. Both Resend and SMTP send HTML plus a plain-text link. These are authentication messages, not a bulk mail or operational-alert service.
+
+## Resend configuration
+
+Set these server-only values before starting the API:
+
+```dotenv
+QB_MAIL_PROVIDER=resend
+QB_RESEND_API_KEY=replace_with_provider_api_key
+QB_MAIL_FROM=QB Flex <hello@example.com>
+```
+
+Use a sender authorized by your provider and test verification/reset on your deployment. Keep the API key out of browser `VITE_*` configuration, Studio screenshots and source control. Templates live in `packages/auth/src/email/templates.tsx`; there is no Studio template editor yet.
+
+## Provider selection
+
+| Setting | Behavior |
+| --- | --- |
+| `QB_MAIL_PROVIDER=resend` | Requires `QB_RESEND_API_KEY`; explicitly chooses Resend. |
+| `QB_MAIL_PROVIDER=smtp` | Uses the SMTP relay even when a Resend key is present. |
+| `QB_MAIL_PROVIDER=auto` or omitted | Chooses Resend when its key exists, otherwise SMTP. |
+
+SMTP is an alternative adapter, **not automatic failover** after a failed Resend send. Delivery errors are surfaced; configuration presence or a provider's acceptance does not prove inbox delivery.
+
+## SMTP and local Mailpit
+
+```dotenv
+QB_MAIL_PROVIDER=smtp
+QB_SMTP_HOST=127.0.0.1
+QB_SMTP_PORT=7615
+QB_SMTP_SECURE=false
+QB_MAIL_FROM=QB Flex <hello@localhost>
+```
+
+These host/port values are for native development with Compose Mailpit. Containers use `mailpit:1025`. Set `QB_SMTP_USER` and `QB_SMTP_PASSWORD` only if the relay requires authentication. `QB_SMTP_SECURE=true` selects implicit TLS; configure the port to match your relay. Mailpit's local inbox is `http://localhost:7616`.
+
+Production requires the selected provider's configuration. Never assume production mail works because local Mailpit passed. Enable project verification settings and use allowlisted callback URLs. See [application authentication](/docs/authentication/overview) and [Deployment Doctor](/docs/self-hosting/doctor) for lifecycle and redacted inventory checks.

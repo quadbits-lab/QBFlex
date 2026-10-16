@@ -1,0 +1,32 @@
+{
+  "engine": "pglite",
+  "version": "0.5.10",
+  "bun": "1.4.2",
+  "platform": "darwin",
+  "arch": "arm64",
+  "measuredAt": "2026-10-15T17:59:53.030Z",
+  "baselineRssBytes": 31621120,
+  "samples": [
+    {
+      "owners": 1,
+      "startupMs": 940,
+      "rssBytes": 1025703936
+    },
+    {
+      "owners": 2,
+      "startupMs": 904,
+      "rssBytes": 1712046080
+    },
+    {
+      "owners": 3,
+      "startupMs": 896,
+      "rssBytes": 2217918464
+    },
+    {
+      "owners": 4,
+      "startupMs": 895,
+      "rssBytes": 2668380160
+    }
+  ],
+  "limitations": "Four isolated empty branch owners, including authentication initialization; short local startup/RSS measurement, not throughput or production capacity certification."
+}

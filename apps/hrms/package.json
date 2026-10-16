@@ -1,0 +1,5 @@
+{
+  "name": "@qb-flex/hrms", "version": "0.1.0", "private": true, "type": "module",
+  "scripts": { "dev": "vite --host 127.0.0.1 --port 7619 --strictPort", "build": "vite build", "start": "bun server.ts", "typecheck": "tsc --noEmit -p tsconfig.json", "test": "bun test tests", "demo": "bun scripts/demo.ts" },
+  "dependencies": { "@qb-flex/client": "workspace:*", "@qb-flex/react": "workspace:*", "@qb-flex/ui": "workspace:*" }
+}

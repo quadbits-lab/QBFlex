@@ -5,6 +5,9 @@ x-build: &build
 x-environment: &environment
   QB_DATA_DIR: /var/lib/qb-flex
   QB_HOST: 0.0.0.0
+  QB_LOG_FORMAT: ${QB_LOG_FORMAT:-auto}
+  QB_LOG_INTERNAL: ${QB_LOG_INTERNAL:-false}
+  QB_MAX_BRANCH_OWNERS: ${QB_MAX_BRANCH_OWNERS:-4}
   QB_PUBLIC_URL: http://localhost:7612
   QB_STUDIO_URL: http://localhost:7610
   QB_ALLOWED_ORIGINS: http://localhost:7610,http://127.0.0.1:7610,http://localhost:7617,http://127.0.0.1:7617,http://localhost:7618,http://127.0.0.1:7618
@@ -15,6 +18,7 @@ x-environment: &environment
   QB_S3_SECRET_KEY: ${QB_S3_SECRET_KEY:-}
   QB_SMTP_HOST: mailpit
   QB_SMTP_PORT: 1025
+  QB_WEBHOOK_INTERNAL_ALLOWLIST: ${QB_WEBHOOK_INTERNAL_ALLOWLIST:-}
 services:
   mailpit:
     image: axllent/mailpit@sha256:b68349e3a014b90c5610bfb26b2ae36f3892d7b8cf25ee140c6c71c98d2fcf48

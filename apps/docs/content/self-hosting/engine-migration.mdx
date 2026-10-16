@@ -1,0 +1,37 @@
+export const frontmatter = {"title":"Migrate SQLite to PGlite","description":"Preflight, convert and validate a stopped installation without overwriting its source.","section":"Operations","slug":"self-hosting/engine-migration","order":63};
+
+# Migrate SQLite to PGlite
+
+QB Flex now stores the control catalog and each project branch in persistent PGlite directories. Studio and new migrations use PostgreSQL SQL. REST/SDK booleans remain 0/1, binary values remain base64, JSON remains text, and unsafe integers remain decimal strings.
+
+## Prepare and inspect
+
+Stop the source API and maintenance worker. Preserve the original installation, master key and object-store backups. Do not point the new API at the SQLite directory: startup rejects it. Conversion requires both exclusive volume ownership and the legacy SQLite lock.
+
+```sh
+bun run qb db migrate-engine --from sqlite --to pglite --data-dir /srv/qb-sqlite --output-dir /srv/qb-pglite --check
+```
+
+The check inspects the control catalog and every referenced branch. Custom views/triggers, virtual/generated columns, unsupported defaults/constraints/indexes, mixed-type values and invalid constraints block conversion. SQLite input must use UTF-8; invalid UTF-8 and embedded NUL bytes in text are rejected rather than rewritten. Resolve reported blockers in a reviewed copy of the source before retrying. The converter never silently drops objects or coerces incompatible values. Checks can be slow because they inspect every value.
+
+Source and destination must not overlap. Existing destination directories must be empty. Symlinks require manual review. Provide enough private disk and memory for PGlite initialization, conversion and snapshot export/import; archive limits do not guarantee available memory.
+
+## Convert and validate
+
+Run the same command without `--check`. The command creates `control.pglite/` and `projects/<project>/branches/<branch>/main.pglite/`, preserving immutable IDs. It copies the existing keys and archive files, keeps historical SQL/checksums, and records a separate PostgreSQL baseline.
+
+Tables, values, primary/foreign keys, supported defaults/indexes, identity sequence positions, exposure, policies, auth/password hashes, live sessions, encrypted settings and durable job/outbox checkpoints are preserved. Copying does not generate row events. Row counts and canonical content hashes are checked before constraints are validated. Internal backup references point to the copied archive tree; externally stored archives must remain accessible. S3 bytes are a separate recovery asset.
+
+PostgreSQL constraints and representative authorization queries are validated during private conversion and can still block completion after preflight. Only successful completion writes `engine.json`. A failed conversion removes its private destination; the source databases remain intact. A hard process crash can leave an incomplete destination with `engine.migrating.json` and without the completion marker; the API refuses to open it: preserve its logs, remove only that reviewed destination, and restart conversion from the unchanged source.
+
+## Activate separately
+
+Review the conversion report and run representative auth, authorized queries, CRUD, realtime, jobs and backup/restore checks against an isolated deployment using the destination. Keep external delivery workers stopped during rehearsal to avoid sending copied pending jobs.
+
+Schedule activation by switching `QB_DATA_DIR` to the converted directory and starting the new API/worker with the original master key and configuration. Preserve object-store credentials and the same service URLs/origins. Discard old pagination cursors, refetch rows and reconnect subscriptions after activation. Existing SQL scripts must be rewritten for PostgreSQL. Regenerate application types after schema changes; applied SQLite migrations are retained as evidence and are not replayed on PostgreSQL.
+
+Before new writes, rollback can use the retained SQLite directory with the former binary. After accepting writes, returning to SQLite requires reconciliation; engine conversion does not reverse or merge databases.
+
+## Historical backups
+
+Encrypted SQLite archives remain unchanged. Restoring them uses the validated converter and blocks incompatible schemas. Backup restoration retains its existing exclusions/revocations; engine conversion preserves live credentials and durable work. New PGlite datadir archives authenticate their engine version and require a compatible pinned runtime. See [backups and restore](/docs/self-hosting/backups).

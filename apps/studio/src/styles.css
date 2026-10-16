@@ -1,2 +1,119 @@
 /* Studio layouts use Tailwind utilities. Shared tokens and accessible
    component styles are provided by @qb-flex/ui/src/theme.css. */
+
+@keyframes route-progress {
+  0% {
+    transform: scaleX(0.08);
+  }
+  50% {
+    transform: scaleX(0.55);
+  }
+  100% {
+    transform: scaleX(0.82);
+  }
+}
+
+@keyframes route-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes route-indeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+.animate-route-progress {
+  animation: route-progress 1.1s ease-in-out infinite;
+}
+
+.animate-route-orbit {
+  animation: route-orbit 1.6s linear infinite;
+}
+
+.animate-route-indeterminate {
+  animation: route-indeterminate 1.15s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-route-progress,
+  .animate-route-orbit,
+  .animate-route-indeterminate {
+    animation: none !important;
+  }
+}
+
+/* A capped, keyed list: completed rows collapse before the next queued item enters. */
+@keyframes upload-queue-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes upload-row-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes upload-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes upload-orbit {
+  50% {
+    opacity: 0.25;
+  }
+}
+.upload-queue-panel {
+  animation: upload-queue-enter 220ms ease-out both;
+}
+.upload-queue-row {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition:
+    grid-template-rows 220ms ease,
+    opacity 180ms ease,
+    transform 220ms ease;
+  animation: upload-row-enter 240ms ease-out backwards;
+}
+.upload-queue-row[data-leaving='true'] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateX(12px);
+  pointer-events: none;
+}
+.upload-queue-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  animation: upload-shimmer 1.3s linear infinite;
+}
+.upload-queue-orbit {
+  animation: upload-orbit 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .upload-queue-panel,
+  .upload-queue-row,
+  .upload-queue-shimmer,
+  .upload-queue-orbit {
+    animation: none !important;
+    transition: none !important;
+  }
+}

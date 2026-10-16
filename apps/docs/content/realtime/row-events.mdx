@@ -33,3 +33,7 @@ Only authorized columns are delivered. Row removals deliver permitted keys. Do n
 The implementation provides single-node branch ordering and at-least-once replay. Frames are bounded to 64 KiB. Heartbeats keep connections active. Slow clients are disconnected rather than accumulating unlimited buffers.
 
 Presence, broadcast, binary channels and multi-node fan-out are planned capabilities. Persistent application messages belong in ordinary authorized tables.
+
+## Debugger status
+
+Connection callbacks, reconnect/replay and resynchronization behavior are available in the client. A dedicated Realtime Debugger with bounded metadata traces, replay-gap/latency diagnostics and scoped application debug sessions is still required by specification 1.1. Studio management privileges must not masquerade as a user's authorization proof. Do not record protected payloads or credential-bearing URLs when diagnosing your application.

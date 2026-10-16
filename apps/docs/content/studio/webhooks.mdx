@@ -1,0 +1,88 @@
+export const frontmatter = {"title":"Durable webhooks","description":"Configure scoped database subscriptions, verify exact-body signatures and inspect bounded delivery attempts.","section":"Studio","slug":"studio/webhooks","order":12.1};
+
+# Durable webhooks
+
+## Experimental database deliveries
+
+Studio **Webhooks** (`/webhooks`) supports committed database INSERT/UPDATE/DELETE subscriptions for the selected immutable branch. The existing maintenance worker now runs an authenticated webhook executor. This is an experimental integration, not completion of specification 1.1 or the email-alert, recovery-drill or push services.
+
+Delivery is **at least once**, not exactly once. An HTTP 2xx means the receiver accepted a request—not that a downstream action completed. Cancellation, policy changes and revocation cannot retract an in-flight request.
+
+## Create a subscription
+
+1. Expose the table and only intended columns in Database.
+2. Create an active service key with this **immutable branch ID**, this table and `GET`. `primary` scopes, publishable keys, revoked/expired keys and policy-bypass keys are rejected for webhooks.
+3. Configure a SELECT policy for role `service`. Its server-derived `sub` is the service-key **ID**, not the raw key. Use the actual policy simulator; administrator access is not proof of integration access.
+4. Open Webhooks, choose the key/table, enter a public HTTPS receiver, select events/columns and create. Include every primary key in the projection; hidden keys/columns are rejected.
+5. Save the signing secret on the receiver. It is returned only on creation/rotation and is never listed. Studio shows it in an ephemeral secret dialog; it does not save it to browser storage. Copying it intentionally places it on your clipboard.
+
+Creation starts at the current outbox checkpoint; older commits are not retroactively delivered. URLs cannot include credentials, query strings or fragments. Management reads require viewer access; create/state/rotation and Job Inbox replay require administrator-authorized, audited writes and the existing MFA rules.
+
+## Authorization and checkpoints
+
+The existing branch owner atomically advances each subscription checkpoint and enqueues encrypted reference jobs. Rolled-back database writes never appear. Duplicate production scans do not create duplicate jobs. A job contains subscription/sequence references, not captured protected row contents.
+
+Immediately before dispatch the private API checks key validity, exact branch/table/GET scope and non-bypass configuration, then applies the **actual current SELECT policy engine and column allowlist** to the outbox image. Changed exposure/policies or revoked credentials prevent dispatch. Invisible rows are skipped; deletion/visibility-loss projections contain only subscribed keys. Dispatch preparation rejects expired leases. Restores remove subscriptions, pending jobs and Advisor acknowledgments rather than reviving integrations.
+
+The outbox window remains 24 hours. A missed checkpoint sets `resync_required`, never silently advances it. Reconcile the gap before creating a new subscription. An expired source event cannot be resurrected through dead-letter replay. Pausing does not extend retention; paused or revoked deliveries are skipped, not confirmed delivered.
+
+## Verify exact-body signatures
+
+Headers are `x-qb-event-id`, `x-qb-timestamp` (Unix seconds) and `x-qb-signature` (`v1=<hex>`, with two signatures during rotation). Compute HMAC-SHA256 with the **signing-secret string** over:
+
+```text
+timestamp + "." + eventId + "." + exact raw request body bytes
+```
+
+Do not JSON-parse/re-serialize before verification. Reject stale/future timestamps, bound input/header sizes and compare signatures in constant time. Example receiver helper using native Node crypto:
+
+```ts
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
+export function verifyWebhook(body: Uint8Array, headers: Headers, secret: string): boolean {
+  if (body.byteLength > 65_536) return false;
+  const timestamp = headers.get('x-qb-timestamp') ?? '';
+  const eventId = headers.get('x-qb-event-id') ?? '';
+  const signatures = headers.get('x-qb-signature') ?? '';
+  if (!/^\d{1,12}$/.test(timestamp) || !eventId || eventId.length > 200 || signatures.length > 256)
+    return false;
+  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) return false;
+  const expected = createHmac('sha256', secret)
+    .update(`${timestamp}.${eventId}.`).update(body).digest();
+  return signatures.split(',').some(signature => {
+    if (!/^v1=[a-f0-9]{64}$/.test(signature)) return false;
+    return timingSafeEqual(expected, Buffer.from(signature.slice(3), 'hex'));
+  });
+}
+```
+
+After verification, atomically deduplicate `eventId` in the receiver's durable storage alongside its side effect. Keep IDs for at least the 30-day replay/history window. Rotating a secret creates a 24-hour dual-signature overlap; another rotation is blocked until that overlap expires. Rotate the receiver's verifier during the overlap, then discard the old secret. Replay keeps the original event ID but signs a fresh timestamp and currently authorized projection; consumers must tolerate projection changes.
+
+## Delivery limits and diagnostics
+
+At most 20 non-revoked subscriptions/branch, 100 listed subscriptions (active first), 1,000 retained subscription records and 200 produced jobs per owner call. Revoked subscription history expires after 30 days. Existing jobs cap payloads at 64 KiB and pending work at 10,000/branch. Queue-full failures roll back the producer checkpoint, log metadata-only backpressure and do not prevent scheduled cleanup/backups. Other producer failures remain errors, not successful maintenance.
+
+The worker polls only registered branch markers, at most eight targets/page, two claims/target and 20 completions/20 seconds per tick; heavy requests can finish beyond the tick budget but remain individually bounded. Empty targets do not allocate every project owner. Executor-only owners retire before replacement; application owners remain alive. Leases default to 30 seconds; HTTPS/DNS requests have a ten-second deadline. Requests forward only signature/content headers, never cookies or worker/management credentials; response bodies are not persisted or logged.
+
+Webhooks allow ten attempts within 24 hours, with bounded exponential backoff. Timeouts, connection failures, HTTP 408/429 and 5xx retry; other failures dead-letter. Redirects never follow. [Job Inbox](/docs/studio/job-inbox) shows attempts, controlled codes, cancel and explicit replay. `PROVIDER_ACCEPTED` is handoff; skip codes include `KEY_REVOKED`, `KEY_SCOPE`, `NOT_AUTHORIZED`, `SUBSCRIPTION_INACTIVE`, `EVENT_EXPIRED` and `EVENT_TOO_LARGE`. A skipped job may be terminal `succeeded`: inspect its code, not just the state.
+
+## Network hardening and deployment
+
+Default: public HTTPS only. All DNS A/AAAA answers must pass conservative IPv4/IPv6 special-range checks. The worker pins the validated IP while preserving the original Host/SNI and normal certificate verification, including on retries. Mapped IPv6, loopback, private/link-local, multicast, metadata and ambiguous IP forms do not bypass the default policy. No proxy or redirect path is used.
+
+An operator may configure `QB_WEBHOOK_INTERNAL_ALLOWLIST` as a JSON map of exact HTTPS origins to fixed IPs, for example `{"https://receiver.internal:8443":["10.20.0.5"]}`. Set the **same value on API and worker**; Compose passes it to both. Entries are bounded to 20 origins/eight IPs each. There are no wildcards or insecure-TLS exceptions, and known metadata addresses remain prohibited. Treat allowlist changes as a reviewed trust-boundary change and enforce network-level egress rules too. Private certificates must be trusted through runtime/operator CA configuration, never a disabled verification flag.
+
+The implementation follows [OWASP SSRF guidance](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html) and uses the standard [HTTPS request API](https://nodejs.org/api/https.html). Local TLS/policy/replay tests do not certify every production receiver or network. Keep `/internal/*` inaccessible through the public gateway.
+
+## Management contract
+
+Prefix with `/management/v1/projects/{projectId}/branches/{branchId}`:
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET | `/webhooks` | Metadata-only bounded subscription list. |
+| POST | `/webhooks` | Create using name/url/serviceKeyId/table/events/columns; secret returned once. |
+| POST | `/webhooks/{id}/state` | `{ state: "active" }`, `paused` or `revoked`; revocation is permanent. |
+| POST | `/webhooks/{id}/rotate` | Return one new signing secret with bounded overlap. |
+
+The repository management client provides `webhooks(projectId, branchId).list/create/state/rotate`, retaining `{ data, meta }`. Do not embed a management token or signing secret in browser application bundles. Creating a subscription is not an idempotent API: reconcile uncertain creation by listing its metadata before retrying.

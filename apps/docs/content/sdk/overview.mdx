@@ -29,4 +29,8 @@ Methods return successful data envelopes and throw `QBError` for failures. Inspe
 
 Subscriptions expose explicit cleanup. Session refresh is single-flight. Safe reads and explicitly idempotent writes receive bounded retries. Requests support timeout and AbortSignal cancellation.
 
-React Native, offline writes, GraphQL, functions and AI SDK modules are deferred. Browser compatibility is the initial supported target.
+React Native, encrypted offline writes, background tasks and Expo push are accepted expanded-release requirements but not implemented. See [native/push scope](/docs/roadmap/native-push). GraphQL, functions and AI remain deferred product candidates. Browser React and JavaScript are the current implemented client tracks.
+
+## Newly added client capabilities
+
+The shared client supports [browser passkeys and application TOTP](/docs/authentication/passkeys-mfa), conditional PATCH/DELETE revisions, cancellation and [optional upload checksums](/docs/storage/files). Generated [JavaScript declarations](/docs/reference/vanilla-api) and [React declarations](/docs/reference/react-api) remain the precise signatures; there is no published native package or push helper to install yet.

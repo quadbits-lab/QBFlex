@@ -1,0 +1,51 @@
+export const frontmatter = {"title": "Job Inbox", "description": "Inspect private durable-job metadata, attempts, cancellation and replay.", "section": "Studio", "slug": "studio/job-inbox", "order": 12};
+
+# Job Inbox
+
+## Experimental foundation
+
+Open **Job Inbox** (`/jobs`) for the selected project and branch. Durable jobs are experimental. [Database webhooks](/docs/studio/webhooks) now have checkpointed producers and an authenticated executor; alert emails, recovery drills and push campaigns remain separate pending integrations. An empty inbox does not mean these integrations are available.
+
+The queue stores encrypted payloads in private branch tables under the existing single writable owner. Studio and management clients receive metadata only: kind, state, timestamps, attempts and safe error codes. Payloads, secrets and lease credentials are not shown.
+
+Skipped webhook jobs can finish as `succeeded` with a controlled skip code. Inspect `lastCode`/history: `PROVIDER_ACCEPTED` means receiver handoff, while `NOT_AUTHORIZED`, `KEY_REVOKED`, `SUBSCRIPTION_INACTIVE` and `EVENT_EXPIRED` mean nothing was dispatched. Queue success is not proof of user delivery/reading.
+
+## States and attempts
+
+| State | Meaning |
+| --- | --- |
+| `queued` | Waiting for its eligible time and an executor. |
+| `leased` | Claimed for a bounded lease with a fencing token. |
+| `retry_wait` | Failed/expired attempt awaiting another bounded attempt. |
+| `succeeded` | Executor recorded success; not proof of downstream delivery/read. |
+| `dead` | Retry/deadline budget exhausted or payload unusable. |
+| `cancelled` | Future claims/completions are fenced. |
+
+The list refreshes every 15 seconds and supports bounded pagination. Select a job for attempt history; Escape closes the dialog. Viewers can inspect metadata. Administrator-authorized cancel/replay operations are audited and require explicit confirmation in Studio.
+
+## Cancel or replay
+
+Cancellation cannot undo an external side effect already sent by an executor. Reconcile uncertain outcomes before retrying. Dead-letter replay creates a new job with the original event ID and a parent-job link. It is explicit, not an infinite automatic retry.
+
+Replay requires `Idempotency-Key`; keep the same key when retrying an uncertain replay request. A new deliberate replay needs a new key. **Push replay is blocked** until recipient-aware campaign retry exists. Webhook receivers must deduplicate event IDs. Replays recheck current projection/authorization and require the source event to remain inside the 24-hour outbox window.
+
+## Management client and routes
+
+Trusted management code can use `ManagementClient.jobs(projectId, branchId).list`, `get`, `cancel` and `replay`. Keep management tokens server-side; Studio can use its platform cookie. The helpers retain the standard `{ data, meta }` envelope.
+
+| Method | Branch-relative route | Access |
+| --- | --- | --- |
+| GET | `/jobs?limit=100&cursor=…` | Viewer or higher; maximum 500 rows. |
+| GET | `/jobs/{id}` | Viewer or higher; includes attempt history. |
+| POST | `/jobs/{id}/cancel` | Administrator-authorized audited write. |
+| POST | `/jobs/{id}/replay` | Administrator-authorized audited write; idempotency key required. |
+
+Prefix routes with `/management/v1/projects/{projectId}/branches/{branchId}`. Cursors bind the route, actor and immutable branch. Do not reuse them after switching users or targets. There is no public submission API yet.
+
+## Resource and executor boundaries
+
+Payloads are limited to 64 KiB; a branch permits at most 10,000 pending jobs. Leases default to 30 seconds and cannot exceed 60 seconds. Scheduled eligibility is bounded to seven days. Terminal history/deduplication is retained for 30 days; cleanup does not erase pending work.
+
+Kind policies bound webhook/email attempts to ten within 24 hours, push to six within one hour, and maintenance/drills to three within 24 hours. These are queue policies, not certification of those integrations.
+
+Private internal claim/finish endpoints require immutable project/branch IDs and derive allowed kinds from the executor credential. The webhook executor selects a server-defined subset and cannot consume other work. `QB_WORKER_TOKEN` cannot claim push work. `QB_PUSH_ENABLED=false` is the default; enabling its separate `QB_PUSH_WORKER_TOKEN` only enables a restricted principal, **not a push worker or notification service**. Keep `/internal/*` off the public gateway. See [expanded release status](/docs/roadmap/expanded-release).

@@ -1,13 +1,21 @@
 import { test, expect } from 'bun:test';
 import { buildSchemaGraph } from '../apps/studio/src/schema-graph';
-const table = (name: string, columns: any[] = [], foreignKeys: any[] = [], exposed = true) =>
-  ({ name, columns, foreignKeys, exposed, allowedColumns: columns.map((c) => c.name), indexes: [] });
+const table = (name: string, columns: any[] = [], foreignKeys: any[] = [], exposed = true) => ({
+  name,
+  columns,
+  foreignKeys,
+  exposed,
+  allowedColumns: columns.map((c) => c.name),
+  indexes: [],
+});
 test('builds nodes per table and edges per foreign key', () => {
   const graph = buildSchemaGraph([
     table('users', [{ name: 'id' }]),
-    table('tasks', [{ name: 'id' }, { name: 'owner_id' }], [
-      { table: 'users', from: 'owner_id', to: 'id' },
-    ]),
+    table(
+      'tasks',
+      [{ name: 'id' }, { name: 'owner_id' }],
+      [{ table: 'users', from: 'owner_id', to: 'id' }],
+    ),
   ]);
   expect(graph.nodes.length).toBe(2);
   expect(graph.edges.length).toBe(1);

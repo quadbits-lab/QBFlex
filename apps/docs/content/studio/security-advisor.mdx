@@ -1,0 +1,47 @@
+export const frontmatter = {"title":"Security Advisor","description":"Review bounded security findings and expiring acknowledgments without automatic fixes.","section":"Studio","slug":"studio/security-advisor","order":12.2};
+
+# Security Advisor
+
+## Experimental metadata diagnostics
+
+Open **Security** (`/security`) for the selected project/branch. Run a scan to review severity, resource, evidence and remediation. The Advisor samples no production rows, issues no application tokens and makes no policy/exposure repairs. **A clean report is not proof of security.** Static checks supplement the actual [policy simulator](/docs/database/policies), not a second authorization engine.
+
+## Findings
+
+| Code | Interpretation |
+| --- | --- |
+| `MISSING_GRANT` | No enabled permissive grant for an exposed operation. Access fails closed; this is informational, not an authorization bypass. |
+| `UNREACHABLE_GRANT` | All permissive grants contain a literal false access/check condition. Verify intended access in the simulator. |
+| `SENSITIVE_COLUMN_EXPOSURE` | Exposed column names resemble passwords, secrets, tokens, private keys or credentials. A naming heuristic, not inspection of their contents. |
+| `BROAD_ANONYMOUS_GRANT` | An unconditional anonymous permissive policy needs review. Additional restrictive policies reduce severity but require actual simulation. |
+| `PUBLIC_BUCKET` | A public-read bucket exposes bytes intentionally; verify that this is appropriate. |
+| `AGING_CREDENTIAL` | An active project credential has a known creation age of at least 90 days. |
+| `CREDENTIAL_AGE_UNKNOWN` | Legacy creation provenance is missing. Unknown is not fresh. |
+| `CREDENTIAL_SCAN_LIMIT` | The bounded credential inventory is incomplete. |
+| `ADMIN_MFA_GAP` | Organization owner/admin accounts lack TOTP; evidence is an aggregate count, not email addresses or secrets. |
+
+Key creation times live in additive control metadata and are backfilled only from existing creation audits. Their age survives later audit retention. Expired/revoked project credentials are excluded. The scan does not currently inventory all platform management tokens; live provider diagnostics and a complete security audit remain outside these static checks.
+
+## Acknowledge, do not hide risk
+
+Administrator-authorized acknowledgment writes are audited and expire within 30 days. Studio offers one/seven/30 days with explicit confirmation; administrators can clear them early. Finding IDs bind code, severity, resource and evidence. Changed evidence does not inherit an old acknowledgment. Stale/resolved IDs return `FINDING_STALE`; refresh before retrying.
+
+Acknowledged findings stay visible; the dashboard separates them from unacknowledged counts. Exact expiry makes the risk unacknowledged again. Acknowledgment cannot weaken policies, enable public access or disable the existing administrator MFA gate. Isolated branch restore drops acknowledgments so restored state requires fresh review.
+
+## Limits and authorization
+
+Scans examine up to 100 tables, 500 public buckets and 500 active project keys, return up to 500 findings and explicitly mark truncation. Evidence uses schema/configuration metadata; it never contains row values, token hashes, raw keys or provider responses. At most 500 unexpired acknowledgments are stored per branch. Policy relationship/type/constraint certification and hard simulation execution budgets remain expanded-release acceptance work.
+
+Management reads require viewer access within the project; acknowledgments require administrator-authorized audited writes and existing MFA enforcement. Application sessions, publishable/service keys and unrelated project credentials do not authorize this surface. Organization administrator MFA evidence is limited to the selected project's organization. There are no public simulation-token or automatic-remediation endpoints.
+
+## API and repository management client
+
+Prefix with `/management/v1/projects/{projectId}/branches/{branchId}`:
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET | `/security` | `{ scannedAt, schemaVersion, findings, truncated, limitations }`. |
+| POST | `/security/{findingId}/acknowledge` | `{ expiresAt }` in Unix milliseconds, future and no later than 30 days. |
+| DELETE | `/security/{findingId}/acknowledge` | Clear an acknowledgment; idempotent. |
+
+`ManagementClient.security(projectId, branchId).scan/acknowledge/clear` retains the standard response envelope and cancellation support. Keep management credentials server-side. Operational alert email/webhook delivery is still a separate pending integration; findings are not automatically sent externally.

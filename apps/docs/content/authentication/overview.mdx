@@ -10,13 +10,13 @@ Better Auth provides password hashing, session creation, verification, reset and
 
 ## Email and password
 
-Use SDK `auth.signUp`, `auth.signIn` and `auth.signOut`. Passwords require at least 12 characters. Auth requests are rate limited. Revoking sessions in Studio takes effect on later requests and realtime authorization checks.
+Use SDK `auth.signUp`, `auth.signIn` and `auth.signOut`. Passwords require at least 12 characters. Auth requests are rate limited. Studio Authentication can also create users, edit profiles, assign [application roles](/docs/authentication/roles), block or delete users, and revoke sessions. Session revocation takes effect on later requests and realtime authorization checks.
 
 ## Verification and reset
 
-Enable email verification in project settings and configure SMTP. Unverified users cannot sign in when verification is required. SDK `sendVerification` requests a new message; `resetPassword` requests a reset link, and `updatePassword` completes it with the one-use token.
+Enable email verification in project settings and configure [Resend or SMTP](/docs/authentication/email). Both adapters render React Email templates. Unverified users cannot sign in when verification is required. SDK `sendVerification` requests a new message; `resetPassword` requests a reset link, and `updatePassword` completes it with the one-use token.
 
-Use an allowlisted callback URL. Local messages appear in Mailpit. SMTP failures are recoverable operation failures rather than silently delivered messages.
+Use an allowlisted callback URL. Local SMTP messages can appear in Mailpit. Provider failures are surfaced, not silently treated as delivered messages; provider acceptance is not proof of inbox delivery.
 
 ## Google and GitHub
 
@@ -31,3 +31,7 @@ The API uses HttpOnly cookies where supported, while SDK bearer tokens remain in
 ## Platform MFA
 
 Platform owners can enable Better Auth two-factor authentication. Production readiness requires administrator enrollment and MFA enforcement; local availability alone is not a production certification.
+
+## Passkeys and application TOTP
+
+Browser clients expose `auth.passkey` enrollment/list/rename/remove/sign-in and `auth.twoFactor` enable/verify/disable. A password login requiring TOTP throws `MFA_REQUIRED`; complete the challenge and refresh the session before reading protected data. See [passkeys and MFA](/docs/authentication/passkeys-mfa) for origin restrictions, SDK examples and recovery cautions. Native ceremonies are not implemented yet.

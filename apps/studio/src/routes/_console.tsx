@@ -1,44 +1,58 @@
-import { createFileRoute, Outlet, Navigate } from '@tanstack/react-router';
+import { createFileRoute, Outlet, useNavigate, useLocation } from '@tanstack/react-router';
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Loading } from '@qb-flex/ui';
-import { raw } from '../api';
-import { ConsoleProvider } from '../console-context';
+import { ConsoleProvider, useConsole } from '../console-context';
 import { ConsoleShell } from '../console-shell';
-import { AuthUnavailableScreen } from '../auth-screen';
+import { AuthUnavailableScreen, AuthRouteError } from '../auth-screen';
+import { WorkspaceDetails } from '../workspaces/workspace-details';
+import { RoutePreloader } from '../route-preloader';
+import { guardStudioRoute, platformSessionOptions, studioReturnTo } from '../session';
 
 export const Route = createFileRoute('/_console')({
+  ssr: false,
+  beforeLoad: ({ context, location }) =>
+    guardStudioRoute(context.queryClient, 'console', location.href),
+  errorComponent: AuthRouteError,
   component: ConsoleLayout,
 });
 
 function ConsoleLayout() {
-  const setup = useQuery({ queryKey: ['setup'], queryFn: () => raw('/setup') });
+  const location = useLocation();
+  const navigate = useNavigate();
+  const returnTo = studioReturnTo(location.href);
   const session = useQuery({
-    queryKey: ['platform-session'],
-    queryFn: () => raw('/platform/auth/get-session'),
+    ...platformSessionOptions(),
+    refetchOnMount: false,
+    refetchInterval: 60_000,
   });
-  if (setup.isPending || session.isPending)
-    return (
-      <div className="grid grid-cols-1 min-h-screen place-items-center">
-        <Loading />
-      </div>
-    );
-  if (setup.error || session.error)
+  useEffect(() => {
+    if (session.isSuccess && !session.data)
+      void navigate({ to: '/sign-in', search: { redirect: returnTo }, replace: true });
+  }, [session.isSuccess, session.data, navigate, returnTo]);
+  if (session.isPending) return <RoutePreloader />;
+  if (session.error)
     return (
       <AuthUnavailableScreen
-        error={(setup.error ?? session.error) as Error}
+        error={session.error}
         onRetry={() => {
-          void setup.refetch();
           void session.refetch();
         }}
       />
     );
-  if (setup.data?.data?.required) return <Navigate to="/setup" replace />;
-  if (!session.data?.user) return <Navigate to="/sign-in" replace />;
+  if (!session.data) return <RoutePreloader />;
   return (
     <ConsoleProvider>
-      <ConsoleShell user={session.data.user}>
-        <Outlet />
-      </ConsoleShell>
+      <ConsoleFrame user={session.data.user} />
     </ConsoleProvider>
+  );
+}
+
+function ConsoleFrame({ user }: { user: { name: string; email: string; image?: string | null } }) {
+  const { state } = useConsole();
+  if (!state.organization) return <WorkspaceDetails />;
+  return (
+    <ConsoleShell user={user}>
+      <Outlet />
+    </ConsoleShell>
   );
 }

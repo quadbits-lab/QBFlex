@@ -84,7 +84,7 @@ test('management scopes, signed pagination, quotas, corrupt backup denial and ca
       )
     ).data;
     // Stop automatic admissions to test the supported cancellation boundary deterministically.
-    f.service.db
+    await f.service.db
       .query("UPDATE operations SET status='requested' WHERE id=?")
       .run(provision.operationId);
     const cancellation = await f.call(
@@ -213,7 +213,9 @@ test('management scopes, signed pagination, quotas, corrupt backup denial and ca
       429,
     );
     const backup = (await f.call(a.base + '/backups', 'POST', {}, f.token)).data;
-    const record = f.service.db.query('SELECT path FROM backups WHERE id=?').get(backup.id) as any;
+    const record = (await f.service.db
+      .query('SELECT path FROM backups WHERE id=?')
+      .get(backup.id)) as any;
     const bytes = readFileSync(record.path);
     bytes[20] ^= 0xff;
     writeFileSync(record.path, bytes);

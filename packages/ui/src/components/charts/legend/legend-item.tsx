@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import type { ReactNode } from "react";
-import { cn } from "../../../lib/utils";
-import { useLegend, useLegendItem } from "./legend-context";
+import type { ReactNode } from 'react';
+import { cn } from '../../../lib/utils';
+import { useLegend, useLegendItem } from './legend-context';
 
 export interface LegendItemProps {
   /** Container class name */
@@ -11,7 +11,7 @@ export interface LegendItemProps {
   children: ReactNode;
 }
 
-export function LegendItem({ className = "", children }: LegendItemProps) {
+export function LegendItem({ className = '', children }: LegendItemProps) {
   const { setHoveredIndex } = useLegend();
   const { index, isHovered } = useLegendItem();
 
@@ -20,11 +20,11 @@ export function LegendItem({ className = "", children }: LegendItemProps) {
     // biome-ignore lint/a11y/noStaticElementInteractions: Legend item hover interaction
     <div
       className={cn(
-        "cursor-pointer rounded-lg px-2 py-1.5 transition-all duration-150 ease-out",
-        isHovered && "bg-legend-muted",
-        className
+        'cursor-pointer rounded-lg px-2 py-1.5 transition-all duration-150 ease-out',
+        isHovered && 'bg-legend-muted',
+        className,
       )}
-      data-hovered={isHovered ? "" : undefined}
+      data-hovered={isHovered ? '' : undefined}
       onMouseEnter={() => setHoveredIndex(index)}
       onMouseLeave={() => setHoveredIndex(null)}
     >
@@ -33,4 +33,4 @@ export function LegendItem({ className = "", children }: LegendItemProps) {
   );
 }
 
-LegendItem.displayName = "LegendItem";
+LegendItem.displayName = 'LegendItem';

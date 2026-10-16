@@ -6,24 +6,24 @@ import { openDatabase } from '@qb-flex/database';
 import { initializeBranch, expose, registerRPC } from '@qb-flex/schema';
 import { BranchEngine } from '../packages/database/src/engine';
 const directory = mkdtempSync(join(tmpdir(), 'qb-types-'));
-const db = openDatabase(join(directory, 'main.sqlite'));
+const db = openDatabase(join(directory, 'main.pglite'));
 try {
-  initializeBranch(db);
-  const engine = new BranchEngine(db, 'test');
-  engine.migration(
+  await initializeBranch(db);
+  const engine = await new BranchEngine(db, 'test').initialize();
+  await engine.migration(
     '001',
-    'CREATE TABLE tasks(id TEXT PRIMARY KEY NOT NULL DEFAULT(lower(hex(randomblob(16)))),owner_id TEXT NOT NULL,title TEXT NOT NULL,completed INTEGER NOT NULL DEFAULT 0);',
+    "CREATE TABLE tasks(id TEXT PRIMARY KEY NOT NULL DEFAULT(replace(gen_random_uuid()::text,'-','')),owner_id TEXT NOT NULL,title TEXT NOT NULL,completed BIGINT NOT NULL DEFAULT 0);",
     'test',
   );
-  expose(db, 'tasks', true, ['id', 'owner_id', 'title', 'completed']);
-  registerRPC(db, {
+  await expose(db, 'tasks', true, ['id', 'owner_id', 'title', 'completed']);
+  await registerRPC(db, {
     name: 'create_task',
     table: 'tasks',
     kind: 'insert',
     args: { title: 'string' },
     values: { title: { arg: 'title' }, owner_id: { claim: 'sub' } },
   });
-  writeFileSync(join(directory, 'qb-flex.types.ts'), engine.types());
+  writeFileSync(join(directory, 'qb-flex.types.ts'), await engine.types());
   writeFileSync(
     join(directory, 'consumer.tsx'),
     `import {createClient} from '@qb-flex/client';import {useQBQuery,useQBMutation,QBProvider,useQBClient} from '@qb-flex/react';import type {Database,RPC} from './qb-flex.types';
@@ -85,6 +85,6 @@ const invalid:RPC['create_task']['Args']={sql:'DROP TABLE tasks'};
     );
   console.log('Generated row/insert/update/RPC types and React inference checked.');
 } finally {
-  db.close(true);
+  await db.close(true);
   rmSync(directory, { recursive: true, force: true });
 }

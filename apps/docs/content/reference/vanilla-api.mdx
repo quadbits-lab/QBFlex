@@ -133,7 +133,9 @@ export declare class QBClient<D = DatabaseShape, R = RPCShape> {
     storage: {
         listBuckets: () => Promise<Result<any[]>>;
         list: (bucket: string) => Promise<Result<any[]>>;
-        upload: (bucket: string, key: string, file: Blob, options?: RequestOptions) => Promise<Result<{
+        upload: (bucket: string, key: string, file: Blob, options?: RequestOptions & {
+            checksum?: string;
+        }) => Promise<Result<{
             id: string;
             state: string;
         }>>;

@@ -47,3 +47,7 @@ Call cleanup only when the instance is no longer used. `dispose` closes channels
 ## Identity changes
 
 Refetch and clear protected DOM state after signout. Keep every application's state scoped to its client and user; do not mix results from another project. The SDK reauthorizes its channels after identity changes, while your application remains responsible for clearing previously rendered private content.
+
+## Upload integrity and limits
+
+The shared upload method accepts optional SHA-256 checksum and AbortSignal options. Server uploads stream through private disk staging before S3 persistence, with size/checksum verification, four-transfer concurrency and a 100 MiB maximum. This does not add resumable or native background uploads. See [storage configuration and integrity examples](/docs/storage/files).

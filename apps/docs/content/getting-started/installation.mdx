@@ -4,47 +4,60 @@ export const frontmatter = {"title": "Install and run locally", "description": "
 
 ## Requirements
 
-Use Bun 1.4.2 and a running Docker-compatible engine for MinIO, Mailpit and container verification. Install the dependencies from the committed lockfile:
+Use pinned Bun 1.4.2. Native macOS development is the current development track; Windows uses WSL2/Docker, with native Windows execution experimental. A Docker-compatible engine is needed for optional Mailpit, bucket initialization and container verification. Object storage is separately supplied by you, such as RustFS; there is no bundled MinIO service.
 
 ```sh
 bun install --frozen-lockfile
 cp .env.example .env
+```
+
+Edit the new `.env` with your S3 endpoint/bucket/credentials and email provider selection. Do not commit it. Configure an endpoint reachable from the API process, then start native hot reload:
+
+```sh
 bun run dev
 ```
 
-The development command starts Studio on port 7610, Docs on 7611 and API on 7612. All three applications have independent workspace commands. Database files and local secrets live under `.data`, which is ignored by Git.
+Studio runs on 7610, Docs on 7611 and API on 7612. The terminal startup panel confirms readiness and shows the service links; see [terminal logging](/docs/self-hosting/monitoring#terminal-display) for display controls. Each app has independent workspace commands. Database files and generated local secrets live under ignored `.data`.
 
-The launcher checks for occupied ports before starting services and waits for the API to create and accept its worker credential. If the full Docker local profile already owns these ports, use its running applications or switch to native hot reload:
+The launcher checks occupied ports and waits for the API to create/accept its worker credential. If the full Docker local profile owns these ports, use its running apps or stop those application services before hot reload:
 
 ```sh
 docker compose --profile local stop studio docs api worker
 bun run dev
 ```
 
-This preserves database and object volumes and leaves MinIO and Mailpit running. The native `.data` directory and the Docker database volume are separate installations. An independent worker must use the same `QB_DATA_DIR` as its API, or the same server-only `QB_WORKER_TOKEN`. The API owns credential creation; do not create or copy `worker.token` to bypass a startup error.
+This preserves database volumes and separately managed storage. Native `.data` and Docker's database volume are separate installations. A worker must use its API's `QB_DATA_DIR` or securely supplied `QB_WORKER_TOKEN`; never create/copy a token file to bypass startup checks.
 
-## Storage and email
+## Object storage and email
 
-Start the infrastructure services in another terminal:
+Run RustFS or your chosen provider independently. For native development `.env.example` assumes an S3 endpoint at `http://127.0.0.1:9000`. [Storage configuration](/docs/storage/files) explains the remaining variables and container addressing.
+
+For local SMTP inbox capture:
 
 ```sh
-docker compose --profile dependencies up -d --build
+docker compose --profile dependencies up -d mailpit
 ```
 
-MinIO provides the S3 backend. Mailpit captures verification and password reset messages at port 7616. Configure the S3 environment settings in `.env` before starting the API. Local infrastructure credentials are development-only defaults.
+Select `QB_MAIL_PROVIDER=smtp`, `QB_SMTP_HOST=127.0.0.1` and `QB_SMTP_PORT=7615` for native API development. Mailpit's inbox is on 7616. Alternatively configure [Resend and React Email](/docs/authentication/email); explicit SMTP selection overrides a present Resend key.
+
+The optional `storage-init` service runs inside Docker, so use a container-reachable endpoint when invoking it:
+
+```sh
+QB_S3_ENDPOINT=http://host.docker.internal:9000 docker compose --profile dependencies run --rm --build storage-init
+```
+
+The service needs your configured bucket/credentials; provider provisioning failure is not a healthy storage configuration. Do not reuse example placeholders as real credentials.
 
 ## First owner
 
-Open Studio. On a clean installation the setup screen asks for the bootstrap token, name, email, password and organization. The token is in `.data/bootstrap.token`; do not commit it. After successful setup the file is removed and the setup endpoint cannot create another owner.
-
-Passwords must contain at least 12 characters. Sign in with the account you created. Production setup requires operator-supplied master and bootstrap keys.
+Open Studio's setup flow. A clean local installation stores the one-time token at `.data/bootstrap.token`; never commit it. Enter it with your name, email, password and organization. After setup the file is removed, Studio opens sign-in, and setup cannot create another owner. Passwords require at least 12 characters. Production requires injected master/bootstrap/worker secrets and administrator MFA.
 
 ## Verify your installation
 
 ```sh
-bun run spike
+bun run qb doctor --directory .
 bun run check
 bun run build
 ```
 
-The compatibility spike checks auth realm isolation and GraphQL interoperability. Native vector loading is reported separately. Passing local checks does not certify Linux deployment or remote OAuth providers.
+Doctor is redacted inventory, not a live provider certification. The optional `bun run spike` checks integration candidates but does not make GraphQL/vector product capabilities available. See [compatibility](/docs/reference/compatibility) and [production deployment](/docs/self-hosting/deployment).

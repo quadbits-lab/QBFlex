@@ -83,9 +83,8 @@ import {
 } from '@qb-flex/ui';
 import { management } from '../api';
 import { ErrorMessage, download, useWrite } from './shared';
+import { CreateTableDialog } from './create-table-dialog';
 import type { TableSchema } from '@qb-flex/contracts';
-
-const taskSQL = `CREATE TABLE tasks (\n  id TEXT PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(16)))),\n  owner_id TEXT NOT NULL,\n  title TEXT NOT NULL,\n  completed INTEGER NOT NULL DEFAULT 0 CHECK (completed IN (0, 1)),\n  revision INTEGER NOT NULL DEFAULT 1\n);\nCREATE INDEX tasks_owner_idx ON tasks(owner_id);`;
 
 export function DatabaseWorkspace({ base }: { base: string }) {
   const schema = useQuery({
@@ -206,9 +205,15 @@ export function DatabaseWorkspace({ base }: { base: string }) {
                     <Table2 className="size-3.5 shrink-0" aria-hidden="true" />
                     <span className="min-w-0 flex-1 truncate font-mono text-xs">{t.name}</span>
                     {t.exposed ? (
-                      <Globe className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      <Globe
+                        className="size-3.5 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
                     ) : (
-                      <Lock className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      <Lock
+                        className="size-3.5 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
                     )}
                   </button>
                 </li>
@@ -224,7 +229,7 @@ export function DatabaseWorkspace({ base }: { base: string }) {
         </div>
       </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center gap-1 overflow-x-auto border-b bg-muted/20 px-1">
           {openTabs.length ? (
             openTabs.map((name) => (
@@ -343,72 +348,13 @@ export function DatabaseWorkspace({ base }: { base: string }) {
           </div>
         </Tabs>
       </div>
-      <TableDialog base={base} open={dialog} onClose={() => setDialog(false)} />
+      <CreateTableDialog
+        base={base}
+        open={dialog}
+        onClose={() => setDialog(false)}
+        tables={tables}
+      />
     </div>
-  );
-}
-
-function TableDialog({
-  base,
-  open,
-  onClose,
-}: {
-  base: string;
-  open: boolean;
-  onClose: () => void;
-}) {
-  const [name, setName] = useState('tasks');
-  const [sql, setSQL] = useState(taskSQL);
-    const write = useWrite();
-  return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent>
-        <DialogTitle>Create a table</DialogTitle>
-        <DialogDescription>
-          Apply a reviewed schema migration. The table starts private.
-        </DialogDescription>
-        <FieldGroup>
-          <Field>
-            <FieldLabel htmlFor="migration-id">Migration ID</FieldLabel>
-            <Input
-              id="migration-id"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="migration-sql">SQLite schema</FieldLabel>
-            <Textarea
-              id="migration-sql"
-              className="min-h-40 font-mono text-xs"
-              value={sql}
-              onChange={(e) => setSQL(e.target.value)}
-              spellCheck={false}
-            />
-          </Field>
-        </FieldGroup>
-        <CardFooter className="px-0">
-          <Button
-            disabled={write.isPending}
-            onClick={async () => {
-              try {
-                await write.mutateAsync({
-                  path: base + '/migrations',
-                  body: { id: name + '_' + Date.now(), sql },
-                });
-                toast.success(`Table "${name}" created`);
-                onClose();
-              } catch {
-              }
-            }}
-          >
-            {write.isPending && <Spinner data-icon="inline-start" />}
-            Create table
-          </Button>
-        </CardFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -436,7 +382,7 @@ function DataGrid({
   const [edit, setEdit] = useState<any>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [nulls, setNulls] = useState<Record<string, boolean>>({});
-    const parent = useRef<HTMLDivElement>(null);
+  const parent = useRef<HTMLDivElement>(null);
   const write = useWrite();
   const filters = filter ? [{ column: filterColumn, op: 'like', value: `%${filter}%` }] : [];
   const params = new URLSearchParams({
@@ -567,11 +513,15 @@ function DataGrid({
           if (!(c.name in values) && !nulls[c.name]) continue;
           row[c.name] = nulls[c.name]
             ? null
-            : /INT|REAL|FLOAT|DOUBLE|NUMERIC/i.test(c.type) &&
-                values[c.name] !== '' &&
-                Number.isSafeInteger(Number(values[c.name]))
-              ? Number(values[c.name])
-              : values[c.name];
+            : /^boolean$/i.test(c.type) && /^(?:0|1|true|false)$/i.test(values[c.name] ?? '')
+              ? /^(?:1|true)$/i.test(values[c.name]!)
+                ? 1
+                : 0
+              : /INT|REAL|FLOAT|DOUBLE|NUMERIC/i.test(c.type) &&
+                  values[c.name] !== '' &&
+                  Number.isSafeInteger(Number(values[c.name]))
+                ? Number(values[c.name])
+                : values[c.name];
         }
         await write.mutateAsync({
           path: base + '/data/' + table.name + (edit ? '/' + encodeURIComponent(key(edit)) : ''),
@@ -581,8 +531,7 @@ function DataGrid({
         toast.success(edit ? 'Row updated' : 'Row inserted');
       }
       setRowDialog(false);
-    } catch {
-              }
+    } catch {}
   };
   return (
     <>
@@ -642,8 +591,7 @@ function DataGrid({
                   });
                   toast.success(`${(parsed as unknown[]).length} rows imported`);
                   setImportDialog(false);
-                } catch {
-                }
+                } catch {}
               }}
             >
               {write.isPending && <Spinner data-icon="inline-start" />}
@@ -653,236 +601,236 @@ function DataGrid({
         </DialogContent>
       </Dialog>
       <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-56 flex-1">
-          <Filter
-            aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
-          />
-          <Input
-            aria-label="Filter rows"
-            className="pl-8"
-            placeholder="Filter rows…"
-            value={filter}
-            onChange={(e) => {
-              setFilter(e.target.value);
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-56 flex-1">
+            <Filter
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              aria-label="Filter rows"
+              className="pl-8"
+              placeholder="Filter rows…"
+              value={filter}
+              onChange={(e) => {
+                setFilter(e.target.value);
+                setCursor(undefined);
+              }}
+            />
+          </div>
+          <Select
+            value={filterColumn}
+            onValueChange={(v) => {
+              setFilterColumn(v);
               setCursor(undefined);
             }}
-          />
-        </div>
-        <Select
-          value={filterColumn}
-          onValueChange={(v) => {
-            setFilterColumn(v);
-            setCursor(undefined);
-          }}
-        >
-          <SelectTrigger className="w-36" aria-label="Filter column">
-            <SelectValue placeholder="Column" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
+          >
+            <SelectTrigger className="w-36" aria-label="Filter column">
+              <SelectValue placeholder="Column" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {table.columns.map((c) => (
+                  <SelectItem key={c.name} value={c.name}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <ShadcnButton variant="outline" size="sm">
+                <ArrowUpDown data-icon="inline-start" />
+                Sort
+                {sort ? (
+                  <Badge className="ml-1" variant="secondary">
+                    {sort.column}
+                  </Badge>
+                ) : null}
+              </ShadcnButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="max-h-72 w-48 overflow-y-auto">
               {table.columns.map((c) => (
-                <SelectItem key={c.name} value={c.name}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <ShadcnButton variant="outline" size="sm">
-              <ArrowUpDown data-icon="inline-start" />
-              Sort
-              {sort ? (
-                <Badge className="ml-1" variant="secondary">
-                  {sort.column}
-                </Badge>
-              ) : null}
-            </ShadcnButton>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="max-h-72 w-48 overflow-y-auto">
-            {table.columns.map((c) => (
-              <DropdownMenuItem
-                key={c.name}
-                onSelect={() => {
-                  setCursor(undefined);
-                  setSort({
-                    column: c.name,
-                    direction:
-                      sort?.column === c.name && sort.direction === 'asc' ? 'desc' : 'asc',
-                  });
-                }}
-              >
-                {c.name}
-                {sort?.column === c.name ? (sort.direction === 'asc' ? ' ↑' : ' ↓') : ''}
-              </DropdownMenuItem>
-            ))}
-            {sort ? (
-              <>
-                <DropdownMenuSeparator />
                 <DropdownMenuItem
+                  key={c.name}
                   onSelect={() => {
-                    setSort(null);
                     setCursor(undefined);
+                    setSort({
+                      column: c.name,
+                      direction:
+                        sort?.column === c.name && sort.direction === 'asc' ? 'desc' : 'asc',
+                    });
                   }}
                 >
-                  Clear sort
+                  {c.name}
+                  {sort?.column === c.name ? (sort.direction === 'asc' ? ' ↑' : ' ↓') : ''}
                 </DropdownMenuItem>
-              </>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <ShadcnButton size="sm" variant="outline" onClick={onOpenPolicies}>
-          <ShieldCheck data-icon="inline-start" />
-          {policyCount} {policyCount === 1 ? 'policy' : 'policies'}
-        </ShadcnButton>
-        <Badge variant={table.exposed ? 'success' : 'outline'}>
-          {table.exposed ? 'Exposed' : 'Private'}
-        </Badge>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <ShadcnButton variant="ghost" size="sm">
-              <Columns3 data-icon="inline-start" /> Columns
-            </ShadcnButton>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="max-h-72 w-44 overflow-y-auto">
-            {grid
-              .getAllLeafColumns()
-              .filter((c) => c.id !== 'actions')
-              .map((c) => (
-                <DropdownMenuCheckboxItem
-                  key={c.id}
-                  checked={c.getIsVisible()}
-                  onCheckedChange={(checked) => c.toggleVisibility(checked === true)}
-                  onSelect={(e) => e.preventDefault()}
-                >
-                  {c.id}
-                </DropdownMenuCheckboxItem>
               ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <ShadcnButton aria-label="More actions" size="icon" variant="ghost">
-              <MoreHorizontal />
-            </ShadcnButton>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onSelect={() =>
-                download(
-                  JSON.stringify(rows.data?.data ?? [], null, 2),
-                  table.name + '.json',
-                  'application/json',
-                )
-              }
-            >
-              <DownloadIcon /> Export page
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => {
-                setImportDialog(true);
-                setImportText('');
-              }}
-            >
-              <UploadIcon /> Import JSON
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => void rows.refetch()}>
-              <RefreshCw /> Refresh
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <ShadcnButton size="sm" onClick={() => openRow()}>
-          <Plus data-icon="inline-start" /> Insert
-        </ShadcnButton>
-      </div>
-      <ErrorMessage error={rows.error} />
-      {rows.isPending ? (
-        <Loading />
-      ) : !gridRows.length ? (
-        <Empty title="No matching rows">Insert a row or change the filter.</Empty>
-      ) : (
-        <div className="overflow-hidden rounded-lg border">
-          <div
-            className="h-[min(520px,calc(100svh-26rem))] overflow-auto [&_td]:max-w-[280px] [&_td]:truncate"
-            ref={parent}
-          >
-            <table className="w-full text-left text-sm">
-              <thead className="sticky top-0 z-10 bg-muted/90 backdrop-blur-sm">
-                {grid.getHeaderGroups().map((group) => (
-                  <tr key={group.id} className="border-b border-border">
-                    {group.headers.map((header) => (
-                      <th key={header.id} className="px-3 py-2.5 font-medium">
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                      </th>
-                    ))}
-                  </tr>
+              {sort ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      setSort(null);
+                      setCursor(undefined);
+                    }}
+                  >
+                    Clear sort
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <ShadcnButton size="sm" variant="outline" onClick={onOpenPolicies}>
+            <ShieldCheck data-icon="inline-start" />
+            {policyCount} {policyCount === 1 ? 'policy' : 'policies'}
+          </ShadcnButton>
+          <Badge variant={table.exposed ? 'success' : 'outline'}>
+            {table.exposed ? 'Exposed' : 'Private'}
+          </Badge>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <ShadcnButton variant="ghost" size="sm">
+                <Columns3 data-icon="inline-start" /> Columns
+              </ShadcnButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="max-h-72 w-44 overflow-y-auto">
+              {grid
+                .getAllLeafColumns()
+                .filter((c) => c.id !== 'actions')
+                .map((c) => (
+                  <DropdownMenuCheckboxItem
+                    key={c.id}
+                    checked={c.getIsVisible()}
+                    onCheckedChange={(checked) => c.toggleVisibility(checked === true)}
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    {c.id}
+                  </DropdownMenuCheckboxItem>
                 ))}
-              </thead>
-              <tbody>
-                {items[0]?.start > 0 && (
-                  <tr aria-hidden="true">
-                    <td colSpan={columns.length} style={{ height: items[0].start, padding: 0 }} />
-                  </tr>
-                )}
-                {items.map((item) => {
-                  const row = gridRows[item.index]!;
-                  return (
-                    <tr
-                      key={row.id}
-                      className="border-b border-border/60 transition-colors last:border-0 hover:bg-muted/40"
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <td key={cell.id} className="px-3 py-2 align-middle font-mono text-xs">
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </td>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <ShadcnButton aria-label="More actions" size="icon" variant="ghost">
+                <MoreHorizontal />
+              </ShadcnButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onSelect={() =>
+                  download(
+                    JSON.stringify(rows.data?.data ?? [], null, 2),
+                    table.name + '.json',
+                    'application/json',
+                  )
+                }
+              >
+                <DownloadIcon /> Export page
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => {
+                  setImportDialog(true);
+                  setImportText('');
+                }}
+              >
+                <UploadIcon /> Import JSON
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => void rows.refetch()}>
+                <RefreshCw /> Refresh
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <ShadcnButton size="sm" onClick={() => openRow()}>
+            <Plus data-icon="inline-start" /> Insert
+          </ShadcnButton>
+        </div>
+        <ErrorMessage error={rows.error} />
+        {rows.isPending ? (
+          <Loading />
+        ) : !gridRows.length ? (
+          <Empty title="No matching rows">Insert a row or change the filter.</Empty>
+        ) : (
+          <div className="overflow-hidden rounded-lg border">
+            <div
+              className="h-[min(520px,calc(100svh-26rem))] overflow-auto [&_td]:max-w-[280px] [&_td]:truncate"
+              ref={parent}
+            >
+              <table className="w-full text-left text-sm">
+                <thead className="sticky top-0 z-10 bg-muted/90 backdrop-blur-sm">
+                  {grid.getHeaderGroups().map((group) => (
+                    <tr key={group.id} className="border-b border-border">
+                      {group.headers.map((header) => (
+                        <th key={header.id} className="px-3 py-2.5 font-medium">
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                        </th>
                       ))}
                     </tr>
-                  );
-                })}
-                {items.length > 0 && virtual.getTotalSize() - (items.at(-1)?.end ?? 0) > 0 && (
-                  <tr aria-hidden="true">
-                    <td
-                      colSpan={columns.length}
-                      style={{
-                        height: virtual.getTotalSize() - (items.at(-1)?.end ?? 0),
-                        padding: 0,
-                      }}
-                    />
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  ))}
+                </thead>
+                <tbody>
+                  {items[0]?.start > 0 && (
+                    <tr aria-hidden="true">
+                      <td colSpan={columns.length} style={{ height: items[0].start, padding: 0 }} />
+                    </tr>
+                  )}
+                  {items.map((item) => {
+                    const row = gridRows[item.index]!;
+                    return (
+                      <tr
+                        key={row.id}
+                        className="border-b border-border/60 transition-colors last:border-0 hover:bg-muted/40"
+                      >
+                        {row.getVisibleCells().map((cell) => (
+                          <td key={cell.id} className="px-3 py-2 align-middle font-mono text-xs">
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                  {items.length > 0 && virtual.getTotalSize() - (items.at(-1)?.end ?? 0) > 0 && (
+                    <tr aria-hidden="true">
+                      <td
+                        colSpan={columns.length}
+                        style={{
+                          height: virtual.getTotalSize() - (items.at(-1)?.end ?? 0),
+                          padding: 0,
+                        }}
+                      />
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+          <span>
+            {rows.data?.data.length ?? 0} rows on this page
+            {rows.data?.meta.count != null ? ` · ${rows.data.meta.count} total` : ''}
+          </span>
+          <div className="flex gap-2">
+            <ShadcnButton
+              variant="ghost"
+              size="sm"
+              disabled={!cursor}
+              onClick={() => setCursor(undefined)}
+            >
+              First page
+            </ShadcnButton>
+            <ShadcnButton
+              variant="outline"
+              size="sm"
+              disabled={!rows.data?.meta.cursor}
+              onClick={() => setCursor(rows.data?.meta.cursor)}
+            >
+              Next page
+            </ShadcnButton>
           </div>
         </div>
-      )}
-      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
-        <span>
-          {rows.data?.data.length ?? 0} rows on this page
-          {rows.data?.meta.count != null ? ` · ${rows.data.meta.count} total` : ''}
-        </span>
-        <div className="flex gap-2">
-          <ShadcnButton
-            variant="ghost"
-            size="sm"
-            disabled={!cursor}
-            onClick={() => setCursor(undefined)}
-          >
-            First page
-          </ShadcnButton>
-          <ShadcnButton
-            variant="outline"
-            size="sm"
-            disabled={!rows.data?.meta.cursor}
-            onClick={() => setCursor(rows.data?.meta.cursor)}
-          >
-            Next page
-          </ShadcnButton>
-        </div>
-      </div>
       </div>
       <Dialog open={rowDialog} onOpenChange={setRowDialog}>
         <DialogContent>
@@ -892,7 +840,7 @@ function DataGrid({
           <DialogDescription>
             {edit?.__delete
               ? 'This removes the selected row from the current branch.'
-              : 'Values are validated by SQLite and the Management API.'}
+              : 'Values are validated by PostgreSQL and the Management API.'}
           </DialogDescription>
           {edit?.__delete ? (
             <p className="truncate rounded-md bg-muted px-3 py-2 font-mono text-xs">{key(edit)}</p>
@@ -914,6 +862,9 @@ function DataGrid({
                     </FieldLabel>
                     <Input
                       id={'row-' + c.name}
+                      placeholder={
+                        /^boolean$/i.test(c.type) ? 'true / false (or 1 / 0)' : undefined
+                      }
                       value={values[c.name] ?? ''}
                       disabled={nulls[c.name]}
                       onChange={(e) => setValues((v) => ({ ...v, [c.name]: e.target.value }))}
@@ -955,7 +906,7 @@ function SchemaEditor({ base, table }: { base: string; table: TableSchema }) {
   const [exposure, setExposure] = useState(table.exposed);
   const [columns, setColumns] = useState(table.allowedColumns);
   const [sql, setSql] = useState('');
-    useEffect(() => {
+  useEffect(() => {
     setExposure(table.exposed);
     setColumns(table.allowedColumns);
   }, [table.name, table.exposed, table.allowedColumns]);
@@ -1055,8 +1006,7 @@ function SchemaEditor({ base, table }: { base: string; table: TableSchema }) {
                   body: { enabled: exposure, columns },
                 });
                 toast.success('Exposure saved for ' + table.name);
-              } catch {
-              }
+              } catch {}
             }}
           >
             {write.isPending && <Spinner data-icon="inline-start" />}
@@ -1097,8 +1047,7 @@ function SchemaEditor({ base, table }: { base: string; table: TableSchema }) {
                 });
                 toast.success('Migration applied');
                 setSql('');
-              } catch {
-              }
+              } catch {}
             }}
           >
             {write.isPending && <Spinner data-icon="inline-start" />}
@@ -1117,12 +1066,23 @@ function PolicyEditor({ base, table }: { base: string; table: TableSchema }) {
   const [role, setRole] = useState('authenticated');
   const [mode, setMode] = useState('permissive');
   const [subject, setSubject] = useState('');
+  const [testRole, setTestRole] = useState('authenticated');
   const [result, setResult] = useState('');
-    const write = useWrite();
+  const write = useWrite();
   const saved = useQuery({
     queryKey: ['policies', base],
     queryFn: () => management.request<any[]>(base + '/policies'),
   });
+  const appRoles = useQuery({
+    queryKey: ['roles', base],
+    queryFn: () => management.request<{ name: string }[]>(base + '/roles'),
+  });
+  const roleOptions = [
+    'authenticated',
+    'anonymous',
+    'service',
+    ...(appRoles.data?.data.map((r) => r.name) ?? []),
+  ];
   const tablePolicies = saved.data?.data.filter((p: any) => p.resource === table.name) ?? [];
   return (
     <div className="grid grid-cols-1 content-start gap-4">
@@ -1191,8 +1151,11 @@ function PolicyEditor({ base, table }: { base: string; table: TableSchema }) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="authenticated">authenticated</SelectItem>
-                    <SelectItem value="anonymous">anonymous</SelectItem>
+                    {roleOptions.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {r}
+                      </SelectItem>
+                    ))}
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -1243,8 +1206,7 @@ function PolicyEditor({ base, table }: { base: string; table: TableSchema }) {
                   },
                 });
                 toast.success('Policy created');
-              } catch {
-              }
+              } catch {}
             }}
           >
             {write.isPending && <Spinner data-icon="inline-start" />}
@@ -1260,25 +1222,51 @@ function PolicyEditor({ base, table }: { base: string; table: TableSchema }) {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-3">
-          <Field>
-            <FieldLabel htmlFor="policy-subject">Application user ID</FieldLabel>
-            <Input
-              id="policy-subject"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="Use a real user ID or fixture subject"
-            />
-          </Field>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="policy-subject">Application user ID</FieldLabel>
+              <Input
+                id="policy-subject"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="Use a real user ID or fixture subject"
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="policy-test-role">Simulated role</FieldLabel>
+              <Select value={testRole} onValueChange={setTestRole}>
+                <SelectTrigger id="policy-test-role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {roleOptions
+                      .filter((r) => r !== 'service')
+                      .map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {r}
+                        </SelectItem>
+                      ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
           <div>
             <ShadcnButton
               variant="outline"
               onClick={async () => {
                 try {
+                  const anonymous = !subject || testRole === 'anonymous';
                   const outcome = await management.request(base + '/policies/test', 'POST', {
                     table: table.name,
                     identity: {
-                      sub: subject || null,
-                      role: subject ? 'authenticated' : 'anonymous',
+                      sub: anonymous ? null : subject,
+                      role: anonymous ? 'anonymous' : 'authenticated',
+                      roles:
+                        anonymous || testRole === 'authenticated' || testRole === 'anonymous'
+                          ? []
+                          : [testRole],
                     },
                     query: { limit: 10, count: true },
                   });
@@ -1323,7 +1311,7 @@ function SQLEditor({ base }: { base: string }) {
         <CardContent className="grid grid-cols-1 gap-3">
           <Field>
             <FieldLabel htmlFor="sql-editor" className="sr-only">
-              SQLite SQL
+              PostgreSQL SQL
             </FieldLabel>
             <Textarea
               id="sql-editor"

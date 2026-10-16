@@ -28,9 +28,19 @@ export function createMailer(): Mailer {
       async send(to: string, kind: EmailKind, url: string) {
         const subject = subjects[kind];
         const html = await render(
-          kind === 'verify-email' ? <VerifyEmailEmail url={url} /> : <ResetPasswordEmail url={url} />,
+          kind === 'verify-email' ? (
+            <VerifyEmailEmail url={url} />
+          ) : (
+            <ResetPasswordEmail url={url} />
+          ),
         );
-        const { error } = await resend.emails.send({ from, to, subject, html, text: `${subject}\n\n${url}` });
+        const { error } = await resend.emails.send({
+          from,
+          to,
+          subject,
+          html,
+          text: `${subject}\n\n${url}`,
+        });
         if (error) throw new Error('Email delivery failed', { cause: error });
       },
     };

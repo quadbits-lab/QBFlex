@@ -10,14 +10,16 @@ Usage: qb [options] [command]
 QB Flex project tools
 
 Options:
-  -V, --version    output the version number
-  -h, --help       display help for command
+  -V, --version     output the version number
+  -h, --help        display help for command
 
 Commands:
-  init             Create local project configuration
-  dev              Start the local workspace
+  doctor [options]  Read-only, redacted deployment inventory (no implicit
+                    network probes)
+  init              Create local project configuration
+  dev               Start the local workspace
   login [options]
-  link [options]   Link a project and branch
+  link [options]    Link a project and branch
   projects
   db
   types
@@ -25,7 +27,21 @@ Commands:
   branches
   storage
   secrets
-  help [command]   display help for command
+  help [command]    display help for command
+```
+
+## qb doctor
+
+```text
+Usage: qb doctor [options]
+
+Read-only, redacted deployment inventory (no implicit network probes)
+
+Options:
+  --directory <path>    Workspace or application directory (default: ".")
+  --probe-url <origin>  Explicit read-only readiness probe of a bare HTTP(S)
+                        origin
+  -h, --help            display help for command
 ```
 
 ## qb init
@@ -119,15 +135,16 @@ Options:
 Usage: qb db [options] [command]
 
 Options:
-  -h, --help         display help for command
+  -h, --help                display help for command
 
 Commands:
   migrate [options]
   diff [options]
+  migrate-engine [options]
   reset [options]
   export [options]
   import [options]
-  help [command]     display help for command
+  help [command]            display help for command
 ```
 
 ## qb db migrate
@@ -155,6 +172,21 @@ Options:
   --branch <id>   Branch ID or alias
   --url <url>     API URL
   -h, --help      display help for command
+```
+
+## qb db migrate-engine
+
+```text
+Usage: qb db migrate-engine [options]
+
+Options:
+  --from <engine>
+  --to <engine>
+  --data-dir <directory>
+  --output-dir <directory>
+  --check                   Inspect compatibility without creating destination
+                            databases
+  -h, --help                display help for command
 ```
 
 ## qb db reset

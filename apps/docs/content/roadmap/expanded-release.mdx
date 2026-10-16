@@ -1,0 +1,60 @@
+export const frontmatter = {"title":"Expanded release specification 1.1","description":"Implementation status and acceptance boundaries for production confidence, native SDK, push and local browser tooling.","section":"Roadmap","slug":"roadmap/expanded-release","order":92};
+
+# Expanded release specification 1.1
+
+Specification1.1 does not change product version0.1.0. **The expanded release is under development, not available as a complete feature set.** The repository development specification and `docs/expanded-release-status.md` are the normative requirements and implementation ledger.
+
+## Implemented foundations
+
+Durable jobs live in private branch tables within existing owners: encrypted payloads, deduplicated submissions, fenced leases, bounded retries, attempt history, cancellation and explicit dead-letter replay. Management routes expose metadata, not payloads or lease credentials. Push replay is blocked until recipient-aware campaigns exist. Studio `/jobs` now provides private metadata, attempt history, pagination and explicit replay/cancel confirmations. Experimental [database webhooks](/docs/studio/webhooks) now add atomic outbox checkpoints, scoped/current-policy projections, signed exact-byte deliveries, rotation/retries and pinned SSRF-safe HTTPS. Notification and alert services remain pending.
+
+Policy simulation now supports synthetic fixtures and real-engine SELECT/INSERT/UPDATE/DELETE without modifying production rows. Legacy read tests remain compatible and cannot enable service bypass with request fields. DELETE forwards revision guards like PATCH. Experimental [Security Advisor](/docs/studio/security-advisor) adds bounded metadata findings, remediation, expiring evidence-bound acknowledgments and Studio `/security`. Static checks are not a security audit.
+
+Both application and management uploads stream through private disk staging, with incremental SHA256 and optional expected checksum. Branch archives use authenticated streamed v2 framing; legacy branch archives remain readable. Control-catalog archives now use self-contained authenticated streamed v2 metadata, with bounded legacy recovery, offline rollback and revoked restored capabilities.
+
+Private metrics include cumulative latency histograms with contract-derived bounded labels. `qb doctor` adds read-only redacted local checks and an explicitly requested readiness probe. Configuration presence is not connectivity or provider certification.
+
+## Required before expanded release completion
+
+Recovery Center; full Security Advisor/simulator acceptance; Operations Dashboard and alerts; full streaming acceptance; live Deployment Doctor probes; Query Inspector; Schema Change Review; expiring schema/fixture-only previews; full webhook crash/load/compatibility certification; Local Data Lab; identity-aware Realtime Debugger; permission-aware PostgreSQL full-text search.
+
+Native SDK, SQLCipher caches/queued writes, SecureStore sessions, OAuth/passkeys, optional media/background capabilities and the complete Expo push lifecycle/campaign/toolkit/Node-worker integration remain required, **not implemented by the job foundation**.
+
+All four browser WASM integrations remain required: SQLite WASM, jSquash resize/WebP, hash-wasm SHA256 and DuckDB-WASM. They are optional/lazy-loaded capabilities, never server PGlite replacements or required for login/CRUD.
+
+## Verification and deployment boundaries
+
+The full release requires compatibility gates, legacy consumer/archive tests, policy isolation, crash/lease behavior, bounded transfer measurements, SSRF/signatures, encrypted native restart/conflicts, push lifecycle/environment/MFA/receipts and local-worker budget/cancellation tests. Physical passkey/biometric/background/real-push checks are explicit opt-in certification. Mocks do not certify providers/devices.
+
+No deployment, external publication, EAS credentials, production notifications, automatic cutover, multi-region services or integrated object-byte backup is implied. Object-store backup/versioning and master-key custody remain separately managed operator responsibilities.
+
+## Feature-by-feature development status
+
+| Required feature | What exists now | Remaining accepted scope |
+| --- | --- | --- |
+| Recovery Center | Encrypted branch/control snapshots; isolated restore and retention. | Encrypted off-node destinations/inventory, freshness alerts, scheduled isolated drills and separate database/object/key verification reports. No automatic cutover or integrated object-copy backup. |
+| Security Advisor + Policy Simulator | Real-engine simulator; bounded grant/exposure/bucket/key-age/MFA findings, evidence/remediation, expiring acknowledgment and Advisor UI. | Full relationship/type/constraint matrix, hard scratch execution budget and broader security/compatibility acceptance. No automatic fixes. |
+| Operations Dashboard | Private request counters, contract-labeled latency histograms, owner/disk basics. | Authorized latency/queue/restarts/WAL/outbox/maintenance/backup/delivery summaries with bounded labels/retention and redacted data. |
+| Bounded streaming transfers | Private disk-staged uploads, checksum/cancellation and streamed branch/control v2 archives with legacy recovery. | Full expanded stress/restart/concurrency evidence and remaining transfer validation gates. Resumable multipart remains deferred. |
+| Deployment Doctor | Read-only redacted CLI inventory and explicitly requested readiness GET. | Runtime/ownership/provider/worker/destination/native diagnostics; explicitly invoked scoped write/mail/push probes. |
+| Query Inspector | Existing trusted SQL console; not an inspector. | Normalized slow queries, owner-generated plans including policies, schema-based index suggestions and reviewed comparisons; no values or automatic indexes. |
+| Schema Change Review | Migration/backup path and Schema Visualizer. | Destructive diffs, isolated safe rehearsal, exposure/policy review, generated type checks and approvals bound to the base schema version. |
+| Disposable Preview Environments | Isolated restore exists; not a preview service. | Schema/policy-only fresh-identity forks with reviewed fixtures, quotas, default 72-hour/max-seven-day TTL and fenced cleanup. Never clone users/tokens/jobs/destinations; no merge/promotion. |
+| Durable Webhooks + Job Inbox | Encrypted queue, atomic checkpoints, scoped/current-policy projections, signed exact-byte deliveries/rotation/retries, pinned HTTPS/SSRF checks and Studio controls. | Full crash/queue/load/cross-platform certification and downstream operational alerts. Local TLS tests are not production receiver certification. |
+| Local Data Lab | Specification only. | Explicit local imports, schema preview/query/profile/export, opt-in persistence/deletion and bounded local workers; no silent uploads or remote SQL fetch. |
+| Realtime Debugger | Current SDK lifecycle/reconnect/replay and basic Studio guidance. | Metadata-only tracing, gaps/resync/latency and identity-scoped application debug sessions. |
+| Permission-aware Search | No application search API/collection service. | Registered PostgreSQL full-text collections over exposed allowed text, transactional indexes, policy-filtered results/counts/snippets, deterministic pagination and schema-change invalidation. Docs search is unrelated. |
+
+## Operational alerts
+
+Planned Studio/email/signed-webhook alerts reuse the mail adapter and durable delivery facility. They need configured recipients/destinations, deduplication, acknowledgment, cooldown and recovery notifications. Defaults cover stale backups, disk pressure, sustained queue saturation, maintenance and delivery-worker failure. Current auth mail is not this alert service.
+
+## Native, notifications and browser accelerators
+
+Read the dedicated [native/offline/background/push requirements](/docs/roadmap/native-push) and [WASM/Data Lab requirements](/docs/roadmap/wasm). These pages describe accepted contracts without presenting unsupported runnable SDK methods. All remain required, not completed by the job foundation.
+
+## Dependency order and acceptance traceability
+
+The implementation order is specification/contracts, shared jobs/streaming/metrics/authorization, production confidence, native/push, developer workflows/WASM, then full documentation/packaging/compatibility verification. Completing one stage does not satisfy the overall release.
+
+The [specification 1.1](/docs/reference/development-spec) includes purpose, workflows, authorization, API/SDK/state/configuration/limits/failure/compatibility contracts and requirements-to-tests traceability. Require real crash/negative/isolation tests, legacy consumers/archives, bounded transfers, signatures/SSRF, preview secret exclusion, policy-aware search, encrypted native restart, exact push cleanup boundaries and worker cancellation/budgets. Generated capability status remains available in the [API reference](/docs/reference/management-api).

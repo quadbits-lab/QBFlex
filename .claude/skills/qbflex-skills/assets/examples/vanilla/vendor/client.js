@@ -3074,7 +3074,10 @@ class QBClient {
     twoFactor: {
       enable: async (password) => {
         const result = await this.request("/auth/two-factor/enable", "POST", { password }, { auth: true });
-        return { totpURI: result.totpURI, backupCodes: result.backupCodes ?? [] };
+        return {
+          totpURI: result.totpURI,
+          backupCodes: result.backupCodes ?? []
+        };
       },
       verify: async (code) => {
         await this.request("/auth/two-factor/verify-totp", "POST", { code }, { auth: true });
@@ -3128,7 +3131,12 @@ class QBClient {
     listBuckets: () => this.request("/storage/buckets"),
     list: (bucket) => this.request(`/storage/buckets/${encodeURIComponent(bucket)}/objects`),
     upload: async (bucket, key, file, options = {}) => {
-      const intent = await this.request(`/storage/buckets/${encodeURIComponent(bucket)}/objects`, "POST", { key, size: file.size, mime: file.type || "application/octet-stream" }, options);
+      const intent = await this.request(`/storage/buckets/${encodeURIComponent(bucket)}/objects`, "POST", {
+        key,
+        size: file.size,
+        mime: file.type || "application/octet-stream",
+        ...options.checksum ? { checksum: options.checksum } : {}
+      }, options);
       return this.request(`/storage/objects/${intent.data.id}/content`, "PUT", file, options);
     },
     download: (id, options = {}) => this.request(`/storage/objects/${encodeURIComponent(id)}/content`, "GET", undefined, {
@@ -3349,4 +3357,4 @@ export {
   createClient
 };
 
-//# debugId=489319035125070364756E2164756E21
+//# debugId=4DA00627A4DF861B64756E2164756E21

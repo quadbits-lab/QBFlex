@@ -1,0 +1,32 @@
+export const frontmatter = {"title": "What changed in QB Flex", "description": "Current source-backed updates and honest expanded-release availability.", "section": "Getting started", "slug": "getting-started/updates", "order": 1.5};
+
+# What changed in QB Flex
+
+## Product 0.1.0 · specification 1.1
+
+This documents the current development checkout, not a new product version or a declaration that the expanded release is complete. Start with the linked guides for usable workflows.
+
+| Change | Status and guide |
+| --- | --- |
+| Dark-first console, light theme, mobile drawer, command palette and shared shadcn/Tailwind styling | Implemented [Studio workflows](/docs/studio/workspaces). |
+| Schema workflow canvas and table detail sheet | Implemented [Schema Visualizer](/docs/studio/schema-visualizer). |
+| Automatic refresh after Studio submissions | Successful forms refresh active views and mark inactive views stale; file transfers share the same behavior. [Studio workflows](/docs/studio/workspaces#automatic-refresh-after-submissions). |
+| Platform/application passkeys and TOTP | Implemented browser/server adapters; deployment origins and physical ceremonies need verification. [Passkeys and MFA](/docs/authentication/passkeys-mfa). |
+| Resend and React Email templates, optional SMTP adapter | Implemented [email configuration](/docs/authentication/email); live provider delivery requires deployment checks. |
+| External S3-compatible storage, including operator-managed RustFS | Bundled MinIO removed. [Storage](/docs/storage/files) and [deployment](/docs/self-hosting/deployment). |
+| Private streaming uploads with optional SHA-256 | Implemented application/management paths; resumable transfers remain planned. [Upload lifecycle](/docs/storage/files). |
+| Streamed authenticated branch/control archive v2 and legacy restore | Implemented for both archive types; offline control recovery retains key/session revocation. [Backups](/docs/self-hosting/backups). |
+| Synthetic policy SELECT/INSERT/UPDATE/DELETE rehearsal | Implemented isolated real-engine simulation. [Policies](/docs/database/policies). |
+| Conditional DELETE with expected revision | Implemented alongside PATCH; legacy calls unchanged. [REST](/docs/database/rest). |
+| Encrypted durable jobs and Studio Job Inbox | Experimental foundation. [Job Inbox](/docs/studio/job-inbox). |
+| Checkpointed, scoped database webhooks | Experimental signed delivery with policy revalidation, rotation, retries and SSRF-safe HTTPS. [Webhooks](/docs/studio/webhooks). |
+| Security Advisor | Experimental metadata findings and expiring evidence-bound acknowledgments. [Advisor](/docs/studio/security-advisor). |
+| Redacted Deployment Doctor and private latency histograms | Implemented foundations. [Doctor](/docs/self-hosting/doctor) and [monitoring](/docs/self-hosting/monitoring). |
+
+## Expanded release is still in development
+
+All twelve production/developer features, native/offline/background/push and four optional WASM integrations belong to the accepted expanded release. Foundations above do not satisfy the full objective. See [feature-by-feature status](/docs/roadmap/expanded-release), [native and push scope](/docs/roadmap/native-push), [WASM scope](/docs/roadmap/wasm) and the generated [specification 1.1](/docs/reference/development-spec).
+
+## Documentation stays with the implementation
+
+Contributions must update affected Docs guides, examples, configuration, availability and contextual Studio Help in the same change. API/SDK references and the specification mirror are generated from source. Search/navigation/sitemap metadata are regenerated and checked, and tutorial code is typechecked against the actual SDK. Run the documented repository gates before treating a changed workflow as available.

@@ -2,12 +2,14 @@ import { defineConfig } from 'vite';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import react from '@vitejs/plugin-react';
 import tailwind from '@tailwindcss/vite';
+import { quietClientDisconnectPlugin } from '../../scripts/client-disconnect.ts';
 import mdx from '@mdx-js/rollup';
 import remarkGfm from 'remark-gfm';
 import rehypeSlug from 'rehype-slug';
 import rehypeShiki from '@shikijs/rehype';
 export default defineConfig({
   plugins: [
+    quietClientDisconnectPlugin(),
     mdx({
       remarkPlugins: [remarkGfm],
       rehypePlugins: [

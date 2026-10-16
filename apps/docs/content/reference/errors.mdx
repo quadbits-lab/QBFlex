@@ -21,11 +21,11 @@ SDK methods throw `QBError` with `code`, `message`, `status`, `retryable` and op
 
 Read pages default to 50 and cap at 500 rows. Atomic inserts cap at 100 rows. Query filters cap at 30, membership values at 100 and policy nesting at 12. Branch queues cap at 64 requests and active owners at 32 per API instance.
 
-The default database and total reserved object quotas are 1 GiB per branch. Project configuration exposes `quotas.databaseBytes`, `quotas.storageBytes` and `quotas.requestsPerMinute` with optimistic `If-Match` updates. The default rate quota is 600 requests per minute per credential; the process keeps at most 10,000 credential buckets. Database admission includes the main file and WAL; a final admitted transaction may cross its threshold. Object intents reserve space before upload.
+The default database and total reserved object quotas are 1 GiB per branch. Studio enters those two limits in MB. Project configuration stores `quotas.databaseBytes` and `quotas.storageBytes` in bytes, plus `quotas.requestsPerMinute`, with optimistic `If-Match` updates. The default rate quota is 600 requests per minute per credential; the process keeps at most 10,000 credential buckets. Database admission includes the main file and WAL; a final admitted transaction may cross its threshold. Object intents reserve space before upload.
 
 Realtime connections cap at 100 per project and 256 per process. Realtime frames cap at 64 KiB. Storage uploads cap at 100 MiB, with smaller bucket-specific limits. Privileged SQL console results cap at 500 rows.
 
-Database pages and their expanded relationships share a conservative 2 MiB serialization budget, measured in SQLite before loading row values. Reduce the projection or page size after `RESULT_TOO_LARGE`. Events with oversized row images require a fresh snapshot instead of replay. The API admits four concurrent uploads and two snapshots; additional work receives retryable `TRANSFER_BUSY` or `BACKUP_BUSY`. Object listings currently return at most 500 ready objects.
+Database pages and their expanded relationships share a conservative 2 MiB serialization budget, measured in PGlite before loading row values. Reduce the projection or page size after `RESULT_TOO_LARGE`. Events with oversized row images require a fresh snapshot instead of replay. The API admits four concurrent uploads and two snapshots; additional work receives retryable `TRANSFER_BUSY` or `BACKUP_BUSY`. Object listings currently return at most 500 ready objects.
 
 ## Safe retry
 

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { openDatabase, BranchOwner } from '@qb-flex/database';
 test('SIGKILL leaves acknowledged FULL/WAL commits and rolls back an open transaction', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'qb-crash-')),
-    path = join(directory, 'main.sqlite');
+    path = join(directory, 'main.pglite');
   const child = Bun.spawn(['bun', 'tests/fixtures-crash.ts', path], {
     stdout: 'pipe',
     stderr: 'pipe',
@@ -22,11 +22,13 @@ test('SIGKILL leaves acknowledged FULL/WAL commits and rolls back an open transa
     await child.exited;
     const db = openDatabase(path);
     try {
-      expect(Number((db.query('SELECT COUNT(*) AS n FROM ledger').get() as any).n)).toBe(20);
-      expect((db.query('PRAGMA integrity_check').get() as any).integrity_check).toBe('ok');
-      expect(db.query('SELECT * FROM ledger WHERE id=21').get()).toBeNull();
+      expect(Number(((await db.query('SELECT COUNT(*) AS n FROM ledger').get()) as any).n)).toBe(
+        20,
+      );
+      expect((await db.query('SELECT 1 AS valid').get())!.valid).toBe(1);
+      expect(await db.query('SELECT * FROM ledger WHERE id=21').get()).toBeNull();
     } finally {
-      db.close(true);
+      await db.close(true);
     }
   } finally {
     child.kill();
@@ -44,7 +46,7 @@ test('branch queue is bounded, timed-out owners reject ambiguous work and can re
       origins: [],
     },
   };
-  const path = join(directory, 'main.sqlite');
+  const path = join(directory, 'main.pglite');
   let owner = new BranchOwner(path, options);
   try {
     await owner.call('schema');

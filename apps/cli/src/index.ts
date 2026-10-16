@@ -7,6 +7,7 @@ import { QBError } from '@qb-flex/contracts';
 import {
   restoreControlSnapshot,
   writeControlSnapshot,
+  cleanupControlStaging,
 } from '../../../packages/database/src/control-backup';
 import { openDatabase } from '@qb-flex/database';
 import { acquireLease } from '../../../packages/database/src/lease';
@@ -70,6 +71,28 @@ function scoped(command: Command) {
     .option('--branch <id>', 'Branch ID or alias')
     .option('--url <url>', 'API URL');
 }
+program
+  .command('doctor')
+  .description('Read-only, redacted deployment inventory (no implicit network probes)')
+  .option('--directory <path>', 'Workspace or application directory', '.')
+  .option('--probe-url <origin>', 'Explicit read-only readiness probe of a bare HTTP(S) origin')
+  .action(async (options) => {
+    try {
+      const { doctor } = await import('../../../.claude/skills/qbflex-skills/scripts/diagnose.mjs');
+      const report = await doctor(options.directory, { probeURL: options.probeUrl });
+      output(report);
+      process.exitCode = report.exitStatus;
+    } catch {
+      output({
+        error: {
+          code: 'DOCTOR_INVOCATION',
+          message:
+            'Use a readable directory and a bare HTTP(S) probe origin without credentials, path, query or fragment.',
+        },
+      });
+      process.exitCode = 2;
+    }
+  });
 program
   .command('init')
   .description('Create local project configuration')
@@ -199,6 +222,24 @@ scoped(
   for (const name of tables.keys()) changes.push({ table: name, change: 'extra' });
   output({ changes });
 });
+db.command('migrate-engine')
+  .requiredOption('--from <engine>')
+  .requiredOption('--to <engine>')
+  .requiredOption('--data-dir <directory>')
+  .requiredOption('--output-dir <directory>')
+  .option('--check', 'Inspect compatibility without creating destination databases')
+  .action(async (options) => {
+    if (options.from !== 'sqlite' || options.to !== 'pglite')
+      throw new QBError('VALIDATION', 'Supported conversion: --from sqlite --to pglite');
+    const { migrateEngine } = await import('../../../packages/database/src/legacy');
+    const result = await migrateEngine({
+      dataDir: options.dataDir,
+      outputDir: options.outputDir,
+      check: options.check,
+    });
+    output(result);
+    if ('compatible' in result && !result.compatible) process.exitCode = 1;
+  });
 scoped(
   db
     .command('reset')
@@ -208,14 +249,14 @@ scoped(
   if (!options.confirmLocalReset)
     throw new QBError(
       'CONFIRM_REQUIRED',
-      'Reset removes local SQLite databases and generated local keys; pass --confirm-local-reset',
+      'Reset removes local PGlite databases and generated local keys; pass --confirm-local-reset',
     );
   const directory = resolve(options.dataDir);
   if (
     directory === process.cwd() ||
     directory === '/' ||
     !existsSync(join(directory, 'master.key')) ||
-    !existsSync(join(directory, 'control.sqlite'))
+    !existsSync(join(directory, 'control.pglite'))
   )
     throw new QBError(
       'DENIED',
@@ -277,15 +318,16 @@ function localMaster(directory: string) {
 backups
   .command('control-create')
   .requiredOption('--data-dir <directory>', 'Stopped local API data directory')
-  .action((options) => {
+  .action(async (options) => {
     const directory = resolve(options.dataDir),
       release = acquireLease(directory);
     try {
-      const db = openDatabase(join(directory, 'control.sqlite'), false);
+      cleanupControlStaging(directory);
+      const db = openDatabase(join(directory, 'control.pglite'), false);
       try {
-        output(writeControlSnapshot(db, directory, localMaster(directory)));
+        output(await writeControlSnapshot(db, directory, localMaster(directory)));
       } finally {
-        db.close(true);
+        await db.close(true);
       }
     } finally {
       release();
@@ -299,14 +341,14 @@ backups
     '--confirm-local-control-restore',
     'Replace the stopped control catalog and revoke credentials',
   )
-  .action((options) => {
+  .action(async (options) => {
     if (!options.confirmLocalControlRestore)
       throw new QBError(
         'CONFIRM_REQUIRED',
         'Use --confirm-local-control-restore after validating the catalog and referenced database files',
       );
     const directory = resolve(options.dataDir);
-    output(restoreControlSnapshot(directory, localMaster(directory), resolve(options.file)));
+    output(await restoreControlSnapshot(directory, localMaster(directory), resolve(options.file)));
   });
 scoped(backups.command('create')).action(async (options) =>
   output(await client(options).request(target(options).base + '/backups', 'POST', {})),

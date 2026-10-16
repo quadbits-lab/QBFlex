@@ -1,6 +1,6 @@
 # QB Flex
 
-Local-first, self-hostable SQLite backend with a branded Studio, generated REST, application authentication, row policies, realtime, S3 storage, encrypted recovery, CLI and independent documentation application. This implements the P0 scope of [the development specification](qb-flex-development-spec.md). P1/P2 services remain visibly planned.
+Local-first, self-hostable PGlite backend with a branded Studio, generated REST, application authentication, row policies, realtime, S3 storage, encrypted recovery, CLI and independent documentation application. This implements the P0 scope of [the development specification](qb-flex-development-spec.md). P1/P2 services remain visibly planned. [Specification1.1](qb-flex-development-spec.md) defines an expanded release; [its implementation ledger](docs/expanded-release-status.md) tracks incomplete features and acceptance evidence. Product version remains0.1.0.
 
 ## Start locally
 
@@ -86,7 +86,7 @@ Run `bun run qb --help`. macOS login stores a scoped token in Keychain. Linux/CI
 
 The maintenance worker performs expiry cleanup, checkpoints, object cleanup and daily encrypted branch/control snapshots. Default retention keeps seven days plus four weekly checkpoints. Branch restore validates integrity/foreign keys/schema version, excludes sessions/OAuth tokens, and leaves object bytes unavailable. Studio cutover requires the project slug, saves a rollback checkpoint and retires the former primary. Control recovery is offline and revokes restored credentials. Back up the master key and S3 objects separately, and move snapshots off-node.
 
-Use persistent local disks for SQLite. One API process owns the data volume through an OS-managed file lock. Do not share live WAL databases across nodes. Project limits, bounded owner queues, query deadlines and realtime connection caps shed overload explicitly.
+Use persistent local disks for PGlite. One API process owns the data volume through an OS-managed file lock. Do not open one live PGlite directory from multiple processes or nodes. Project limits, bounded owner queues, query deadlines and realtime connection caps shed overload explicitly.
 
 Linux self-hosting is configured by `compose.selfhost.yml` and `infra/Caddyfile`; supply the required domains, secrets, email credentials (Resend API key or SMTP) and application origins before starting it. The full production walkthrough — prerequisites, secrets, external S3, backups, upgrades and recovery — is in [docs/deployment.md](docs/deployment.md), with all required variables templated in `.env.production.example`. Object storage is provider-agnostic: any S3-compatible backend (RustFS, MinIO CE, AWS S3, R2) is configured through `QB_S3_*`. Certify your production object backend and external identity providers independently.
 
@@ -118,3 +118,5 @@ Integration/browser checks need the local dependencies. Browser verification use
 `apps/api` owns management/data/auth routes; `apps/worker` drives maintenance; `apps/studio` and `apps/docs` are independent TanStack Start applications; `apps/cli` supplies the CLI. Shared packages own contracts, schema, policy/query compilation, database workers, auth, S3, observability, UI and SDKs. Examples and tests exercise the public API.
 
 No external deployment or registry publication is performed. The existing Sites Studio prototype remains the visual reference and its audience is unchanged.
+
+Existing SQLite installations require [offline conversion](apps/docs/content/self-hosting/engine-migration.mdx) into a separate directory before activation. PGlite owners default to four (`QB_MAX_BRANCH_OWNERS`, range 1–32); provision memory for independent WASM instances and complete snapshot exports.

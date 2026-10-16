@@ -67,10 +67,12 @@ import { raw, docsURL } from './api';
 import { useConsole } from './console-context';
 import { NewProjectDialog } from './new-project-dialog';
 import { UserAvatar } from './workspaces/account-profile';
-import { ErrorMessage } from './workspaces/shared';
+import { WorkspaceAvatar } from './workspaces/workspace-details';
+import { WorkspaceConnectionError } from './error-pages';
 
 const navigation = [
   { name: 'Overview', path: '/overview', icon: LayoutDashboard, group: 'Workspace' },
+  { name: 'Workspace', path: '/workspace', icon: Building2, group: 'Workspace' },
   { name: 'Database', path: '/database', icon: Database, group: 'Build' },
   { name: 'Schema', path: '/schema', icon: GitBranch, group: 'Build' },
   { name: 'Authentication', path: '/auth', icon: Users, group: 'Build' },
@@ -81,19 +83,26 @@ const navigation = [
   { name: 'AI & Vectors', path: '/ai', icon: Sparkles, group: 'Build', planned: true },
   { name: 'Backups', path: '/backups', icon: GitBranch, group: 'Manage' },
   { name: 'Activity', path: '/logs', icon: Activity, group: 'Manage' },
+  { name: 'Job Inbox', path: '/jobs', icon: Activity, group: 'Manage' },
+  { name: 'Webhooks', path: '/webhooks', icon: Zap, group: 'Manage' },
+  { name: 'Security', path: '/security', icon: Users, group: 'Manage' },
   { name: 'Settings', path: '/settings', icon: Settings, group: 'Manage' },
 ] as const;
 const helpLinks: Record<string, string> = {
   '/overview': 'getting-started/first-project',
+  '/workspace': 'studio/workspaces',
   '/database': 'database/schema',
-  '/schema': 'database/schema',
+  '/schema': 'studio/schema-visualizer',
   '/auth': 'authentication/overview',
   '/api': 'database/rest',
   '/realtime': 'realtime/row-events',
   '/storage': 'storage/files',
   '/backups': 'self-hosting/backups',
   '/logs': 'self-hosting/monitoring',
-  '/settings': 'authentication/administrator-mfa',
+  '/jobs': 'studio/job-inbox',
+  '/webhooks': 'studio/webhooks',
+  '/security': 'studio/security-advisor',
+  '/settings': 'studio/workspaces',
 };
 
 export function ConsoleShell({ user, children }: { user: any; children: ReactNode }) {
@@ -128,9 +137,10 @@ export function ConsoleShell({ user, children }: { user: any; children: ReactNod
   const signOut = async () => {
     try {
       await raw('/platform/auth/sign-out', 'POST', {});
+      await cache.cancelQueries();
       cache.clear();
       sessionStorage.removeItem('qb-console-context');
-      await navigate({ to: '/sign-in' });
+      await navigate({ to: '/sign-in', search: { redirect: '/overview' }, replace: true });
     } catch (error) {
       notifyError(error, 'Sign-out failed');
     }
@@ -170,6 +180,7 @@ export function ConsoleShell({ user, children }: { user: any; children: ReactNod
           d: '/database',
           s: '/schema',
           o: '/overview',
+          w: '/workspace',
           a: '/auth',
           l: '/logs',
           t: '/settings',
@@ -210,23 +221,27 @@ export function ConsoleShell({ user, children }: { user: any; children: ReactNod
           onValueChange={(v) => select({ organization: v, project: '', branch: 'primary' })}
         >
           <SelectTrigger aria-label="Organization" className="w-full">
-            <div className="flex min-w-0 items-center gap-2">
-              <span
-                className="grid grid-cols-1 size-6 shrink-0 place-items-center rounded bg-muted text-xs"
-                aria-hidden="true"
-              >
-                {organization?.name?.[0] ?? 'Q'}
-              </span>
-              <SelectValue placeholder="Organization" />
-            </div>
+            <SelectValue placeholder="Organization" />
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
-              {organizations.data?.data.map((o: any) => (
-                <SelectItem value={o.id} key={o.id}>
-                  {o.name}
-                </SelectItem>
-              ))}
+              {(organizations.data?.data ?? [])
+                .filter(
+                  (o: any) => !o.archived_at || o.id === state.organization,
+                )
+                .map((o: any) => (
+                  <SelectItem value={o.id} key={o.id}>
+                    <span className="flex items-center gap-2">
+                      <WorkspaceAvatar organization={o} size={20} className="rounded-md" />
+                      <span className="truncate">{o.name}</span>
+                      {o.archived_at ? (
+                        <Badge variant="warning" className="ml-auto">
+                          Archived
+                        </Badge>
+                      ) : null}
+                    </span>
+                  </SelectItem>
+                ))}
             </SelectGroup>
           </SelectContent>
         </Select>
@@ -351,61 +366,77 @@ export function ConsoleShell({ user, children }: { user: any; children: ReactNod
                     {organization?.name ?? 'Organization'}
                   </span>
                 </span>
-                <ChevronRight className="size-3 shrink-0 text-muted-foreground/70" aria-hidden="true" />
+                <ChevronRight
+                  className="size-3 shrink-0 text-muted-foreground/70"
+                  aria-hidden="true"
+                />
               </div>
 
-              <div className="flex h-8 min-w-0 items-center gap-1.5 rounded-md border border-border/80 bg-muted/25 px-2">
-                <span className="hidden shrink-0 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase sm:inline">
-                  Project
-                </span>
-                <Select
-                  value={state.project || undefined}
-                  onValueChange={(v) => select({ project: v, branch: 'primary' })}
-                >
-                  <SelectTrigger
-                    aria-label="Project"
-                    className="h-7 min-h-7 w-[7.5rem] gap-1.5 border-0 bg-transparent px-1.5 py-0 shadow-none sm:w-40 [&_svg:not([class*='size-'])]:size-3.5"
+              <div className="flex h-8 min-w-0 items-center gap-2 rounded-md border border-border/80 bg-muted/25 px-2">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span className="hidden shrink-0 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase sm:inline">
+                    Project
+                  </span>
+                  <Select
+                    value={state.project || undefined}
+                    onValueChange={(v) => select({ project: v, branch: 'primary' })}
                   >
-                    <FolderKanban className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                    <SelectValue placeholder="Select project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {relevant.map((p: any) => (
-                        <SelectItem value={p.id} key={p.id}>
-                          {p.name}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex h-8 min-w-0 items-center gap-1.5 rounded-md border border-border/80 bg-muted/25 px-2">
-                <span className="hidden shrink-0 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase sm:inline">
-                  Branch
-                </span>
-                <Select value={state.branch} onValueChange={(v) => select({ branch: v })}>
-                  <SelectTrigger
-                    aria-label="Branch"
-                    className="h-7 min-h-7 w-[6.5rem] gap-1.5 border-0 bg-transparent px-1.5 py-0 shadow-none sm:w-32 [&_svg:not([class*='size-'])]:size-3.5"
-                  >
-                    <GitBranch className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="primary">main</SelectItem>
-                      {(branches.data?.data ?? [])
-                        .filter((b: any) => b.name !== 'main' && b.status === 'ready')
-                        .map((b: any) => (
-                          <SelectItem value={b.id} key={b.id}>
-                            {b.name}
+                    <SelectTrigger
+                      aria-label="Project"
+                      className="h-7 min-h-7 w-auto max-w-48 gap-1.5 border-0 bg-transparent px-1.5 py-0 shadow-none [&_svg:not([class*='size-'])]:size-3.5"
+                    >
+                      <FolderKanban
+                        className="size-3.5 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      <SelectValue placeholder="Select project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {relevant.map((p: any) => (
+                          <SelectItem value={p.id} key={p.id}>
+                            {p.name}
                           </SelectItem>
                         ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <span
+                  className="h-4 shrink-0 self-center border-l border-dashed border-border"
+                  aria-hidden="true"
+                />
+
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span className="hidden shrink-0 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase sm:inline">
+                    Branch
+                  </span>
+                  <Select value={state.branch} onValueChange={(v) => select({ branch: v })}>
+                    <SelectTrigger
+                      aria-label="Branch"
+                      className="h-7 min-h-7 w-auto max-w-40 gap-1.5 border-0 bg-transparent px-1.5 py-0 shadow-none [&_svg:not([class*='size-'])]:size-3.5"
+                    >
+                      <GitBranch
+                        className="size-3.5 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="primary">main</SelectItem>
+                        {(branches.data?.data ?? [])
+                          .filter((b: any) => b.name !== 'main' && b.status === 'ready')
+                          .map((b: any) => (
+                            <SelectItem value={b.id} key={b.id}>
+                              {b.name}
+                            </SelectItem>
+                          ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="hidden items-center gap-1.5 md:flex">
@@ -465,7 +496,12 @@ export function ConsoleShell({ user, children }: { user: any; children: ReactNod
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon" aria-label="Account menu" className="overflow-hidden p-0">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="Account menu"
+                    className="overflow-hidden p-0"
+                  >
                     <UserAvatar className="size-full rounded-md border-0" size="sm" user={user} />
                   </Button>
                 </DropdownMenuTrigger>
@@ -507,18 +543,13 @@ export function ConsoleShell({ user, children }: { user: any; children: ReactNod
             className="mx-auto w-full min-w-0 max-w-[1600px] flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8"
           >
             {organizations.error || projects.error ? (
-              <div className="flex flex-col gap-3">
-                <ErrorMessage error={(organizations.error ?? projects.error) as Error} />
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    void organizations.refetch();
-                    void projects.refetch();
-                  }}
-                >
-                  Retry workspace connection
-                </Button>
-              </div>
+              <WorkspaceConnectionError
+                message={((organizations.error ?? projects.error) as Error).message}
+                onRetry={() => {
+                  void organizations.refetch();
+                  void projects.refetch();
+                }}
+              />
             ) : organizations.isPending || projects.isPending ? (
               <div className="flex flex-col gap-4" aria-label="Loading workspace">
                 <Skeleton className="h-8 w-48" />

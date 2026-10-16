@@ -2,30 +2,56 @@ export const frontmatter = {"title": "Upload and download files", "description":
 
 # Upload and download files
 
-## Configure the backend
+## Configure any S3-compatible backend
 
-Set the S3 endpoint, region, physical bucket and operator credentials. These credentials remain server-side. Start local MinIO and initialize its physical bucket through the Compose setup service.
+QB Flex no longer bundles or starts MinIO. Provision RustFS or another S3-compatible provider separately, then configure the API with server-only operator credentials:
 
-Create logical buckets in Studio with a name, public/private visibility, size limit and optional MIME allowlist.
+```dotenv
+QB_S3_ENDPOINT=http://127.0.0.1:9000
+QB_S3_REGION=us-east-1
+QB_S3_BUCKET=qb-flex
+QB_S3_ACCESS_KEY=replace_with_provider_access_key
+QB_S3_SECRET_KEY=replace_with_provider_secret_key
+```
 
-## Upload lifecycle
+The endpoint above is for native development. Inside Compose, `127.0.0.1` points to that container, not the host; use a reachable service/remote endpoint or `http://host.docker.internal:9000` with the host-gateway mapping. Use HTTPS for a remote production backend. Operator credentials never enter the browser SDK.
+
+The `storage-init` service attempts physical-bucket provisioning. If your provider's credentials cannot create buckets, provision the physical bucket separately and grant the required object access. A logical bucket in Studio is not the physical backend bucket. Provider compatibility must be verified on your actual deployment.
+
+Create logical buckets in Studio with name, visibility, size limit and optional MIME allowlist.
+
+Studio refreshes file lists and related cached workspaces automatically after successful uploads/deletions. File-action menus remain non-modal; destructive confirmation dialogs still trap focus and support Escape. Cancellation restores focus to the opener; deleting its row moves focus to file search. Closing or submitting a confirmation must leave the rest of Studio interactive. See [submission refresh behavior](/docs/studio/workspaces#automatic-refresh-after-submissions).
+
+## Upload lifecycle and streaming
 
 ```js
 const result = await qb.storage.upload(bucketId, 'notes/report.txt', file);
 console.log(result.data.id);
 ```
 
-The SDK creates an upload intent, then sends the bytes to the authenticated gateway. The object is visible only after S3 persistence and expected-size verification succeed. Failed objects remain unavailable and can be retried.
+The SDK creates an intent and uploads bytes through the authenticated gateway. Both management and application paths stream to private disk staging with backpressure and incremental native SHA-256, then stream validated bytes to S3. The object becomes ready only after backend persistence and expected-size verification. Failed/pending objects remain unavailable; retry/reconcile uncertain remote effects rather than assuming success.
 
-The initial gateway caps uploads at 100 MiB and buffers each bounded upload. Streaming and resumable uploads are later enhancements. Choose smaller bucket limits for constrained hosts.
+Uploads are limited to 100 MiB, with at most four concurrent transfers and a 120-second deadline. Staging needs the expected size plus 64 MiB disk headroom. Files use mode 0600 in private directories (0700). Recognized abandoned staging is cleaned on startup only after exclusive volume ownership. Disk/WAL/backup capacity still needs operator monitoring. Resumable multipart uploads are not implemented.
 
-## Ownership policies
+## Optional expected checksum and cancellation
 
-Only authenticated users can upload. Private objects are read and modified by their owners. Public buckets allow reads of ready objects; writes remain owner-restricted. The metadata owner check and current session are enforced on each request.
+`storage.upload` accepts a lowercase 64-character SHA-256 digest. For a small browser file, this example uses Web Crypto; it buffers the file locally and is not a large-file streaming hash implementation.
 
-Object bytes stay in S3 while searchable metadata stays in the branch database. Keys are normalized, and project/branch object prefixes are independent.
+```ts
+const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+const checksum = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+const upload = await client.storage.upload(bucketId, 'notes/report.txt', file, {
+  checksum,
+  signal: controller.signal,
+});
+console.log(upload.data.id);
+```
 
-## Download and delete
+Abort the controller to cancel. Size mismatch returns `UPLOAD_MISMATCH`; a digest mismatch returns `CHECKSUM_MISMATCH` before S3 PUT. Staging is removed on cancellation/failure. Existing clients without checksum metadata remain compatible. Browser hash-wasm workers and image optimization are [planned optional capabilities](/docs/roadmap/wasm), not requirements for uploading today.
+
+## Ownership and downloads
+
+Only authenticated application users can upload. Private objects are read/modified by their owners; public buckets allow reads of ready objects but retain owner-restricted writes. The current session and metadata owner check apply on every request. Studio uses separate audited organization capabilities, not application identity.
 
 ```js
 const blob = await qb.storage.download(objectId);
@@ -35,8 +61,8 @@ URL.revokeObjectURL(url);
 await qb.storage.remove(objectId);
 ```
 
-Delete marks the object as deleting before removing its backend bytes. Metadata is finalized only after cleanup succeeds. Private responses use `no-store` caching.
+Deletion marks metadata as deleting before removing backend bytes; it is finalized only after cleanup succeeds. Private responses use `no-store`. Keys are normalized and project/branch object prefixes are independent.
 
 ## Recovery boundaries
 
-A database backup includes metadata, not object bytes. Enable object-backend backups separately. Restored branch metadata cannot assume a new branch prefix contains the source bytes; perform an explicit object restore before expecting restored files to be available.
+Database backups include object metadata, not bytes. Protect/version/back up your object provider separately. Restored metadata cannot assume the new branch prefix contains source bytes; perform explicit object recovery before expecting availability. See [backups](/docs/self-hosting/backups).

@@ -4,33 +4,83 @@ export const frontmatter = {"title": "Deploy a single node", "description": "Run
 
 ## Deployment shape
 
-The Compose deployment includes a gateway, Studio, Docs, API/database owners, maintenance worker and optional local MinIO/Mailpit. Keep writable SQLite files on persistent local storage owned by one API node. Never share a live WAL file across nodes or network filesystems.
+The self-host Compose overlay runs Caddy, API/database owners, maintenance worker, Studio, Docs and one-shot `storage-init`. Object bytes live in your separately operated S3-compatible provider, such as RustFS. There is no bundled MinIO service or object-storage volume. Mailpit belongs to local development, not production mail.
+
+Keep writable PGlite directories on persistent local disk with one API volume owner. Do not start multiple writers against the same volume or put live databases on network filesystems.
+
+## Prepare domains and secrets
+
+Use a Linux AMD64/ARM64 Docker Engine host and Compose v2. Resolve API, Studio and Docs DNS to the host, and expose only gateway ports 80/443 publicly. Copy `.env.production.example` to a protected, untracked `.env` and replace placeholders.
+
+| Variable | Purpose |
+| --- | --- |
+| `QB_API_DOMAIN`, `QB_STUDIO_DOMAIN`, `QB_DOCS_DOMAIN` | Domains used by the overlay/gateway and public URL configuration. |
+| `QB_APP_ORIGINS` | Exact additional browser origins; no wildcard. |
+| `QB_MASTER_KEY` | Encryption custody; preserve independently offline. |
+| `QB_BOOTSTRAP_TOKEN` | One-time first-owner setup. |
+| `QB_WORKER_TOKEN` | Private maintenance and metrics credential. |
+| `QB_S3_ENDPOINT`, `QB_S3_REGION`, `QB_S3_BUCKET` | Reachable object-provider endpoint and physical bucket. |
+| `QB_S3_ACCESS_KEY`, `QB_S3_SECRET_KEY` | Server-only object-provider credentials. |
+| `QB_RESEND_API_KEY`, `QB_MAIL_FROM` | Resend authentication-mail configuration. |
+
+Generate independent secrets locally, for example with `openssl rand -hex 32`. Never put them in images, source control, browser variables or documentation. Losing the original master key prevents decrypting protected settings/archives. The overlay enables `QB_REQUIRE_ADMIN_MFA=true` and derives production HTTPS URLs from domains. Runtime `QB_ALLOWED_ORIGINS` is distinct from the overlay's `QB_APP_ORIGINS` input.
+
+[Email configuration](/docs/authentication/email) covers explicit `QB_MAIL_PROVIDER` and the SMTP alternative (`QB_SMTP_HOST`, port, user/password and TLS). Provider configuration does not certify delivery.
+
+## External RustFS or other S3 storage
+
+Use an endpoint reachable from containers, not their own `127.0.0.1`. For a host-local provider, use `http://host.docker.internal:9000`; the current Compose includes the Linux host-gateway mapping. Remote production providers should use HTTPS.
+
+The one-shot initializer tries HeadBucket/CreateBucket. Operators can provision the bucket independently when bucket-creation rights are unavailable. Inspect initializer output and verify upload/download on your actual backend. Its failure does not prevent API boot and must not be mistaken for a successful storage setup.
+
+## Build and start
 
 ```sh
+docker compose -f compose.yml -f compose.selfhost.yml --profile selfhost config --quiet
 docker compose -f compose.yml -f compose.selfhost.yml --profile selfhost build
 docker compose -f compose.yml -f compose.selfhost.yml --profile selfhost up -d
+docker compose -f compose.yml -f compose.selfhost.yml --profile selfhost ps
 ```
 
-## Required production configuration
+Avoid printing the fully expanded Compose configuration because it may contain secrets. Caddy obtains TLS certificates; check DNS/firewall if issuance fails. Verify public `/ready` and Studio/Docs over HTTPS, then inspect bucket provisioning:
 
-Supply `QB_MASTER_KEY`, `QB_BOOTSTRAP_TOKEN` for the first owner, HTTPS `QB_PUBLIC_URL`, Studio/Docs URLs, exact allowed origins and S3/SMTP configuration. Use protected environment injection or mounted secret files rather than checking secrets into the repository.
+```sh
+curl -fsS https://api.example.com/ready
+docker compose -f compose.yml -f compose.selfhost.yml --profile selfhost logs --tail 100 storage-init
+```
 
-The master key protects provider settings and backup encryption. Losing it prevents decrypting those records. Back it up separately and restrict access.
+Production startup requires injected configuration, not an already-created owner. Open Studio to create the first owner using the bootstrap token, enroll/verify TOTP and securely save recovery codes. Remove the plaintext bootstrap token after setup; the API does not require it again once an owner exists. Platform credentials must never become browser application credentials.
 
-## Gateway and TLS
+## Day-two capacity and recovery
 
-Terminate public HTTPS at the configured reverse proxy. Route API and Studio consistently so cookie and origin semantics match the configured URLs. Internal maintenance endpoints require the operator worker token. Do not expose MinIO operator credentials to browser applications.
+Upload staging reserves local disk before S3 PUT: plan for up to four 100 MiB uploads plus headroom, WALs and archives. Branch backup/restore streams share a two-operation capacity and 120-second deadline. Do not delete live WAL files or scale out writers to solve disk/queue pressure.
 
-Authentication rate limits use the API socket address, ignoring caller-supplied forwarding headers. Behind a proxy, clients therefore share that proxy's address bucket. Configure per-client abuse limits at the gateway; trusted forwarded-address processing is not implemented in this release.
+Monitor `/ready`, bounded logs and private `/internal/metrics`. The gateway blocks `/internal/*` with 404; scrape only on the trusted private network with the worker credential. [Deployment Doctor](/docs/self-hosting/doctor) adds redacted inventory and an optional explicit readiness probe, not automatic provider tests.
 
-## Docs publishing
+Protect three separate recovery assets: encrypted database/control snapshots, S3 object bytes/versioning and the original master key. [Branch restore](/docs/self-hosting/backups) creates an isolated branch; there is no automatic cutover. Sessions, provider tokens, jobs, webhook destinations and Advisor acknowledgments do not resume from a branch restore.
 
-Docs has independent build/start commands and prerendered HTML output. Set both `QB_DOCS_URL` and `VITE_DOCS_URL` before generating and building documentation to produce correct canonical and sitemap URLs. Host its static output separately or run its Bun server. No login is required to read documentation.
+The existing worker runs experimental [database-webhook deliveries](/docs/studio/webhooks) through private APIs without PGlite writes. Default egress is public HTTPS only. Optional `QB_WEBHOOK_INTERNAL_ALLOWLIST` must match on API and worker; exact origins map to fixed reviewed IPs with TLS verification retained and known metadata destinations prohibited. [Security Advisor](/docs/studio/security-advisor) provides static operator findings, not automatic fixes or external alert dispatch.
 
-## Release verification
+## Upgrade and rollback
 
-Local Linux builds, MinIO workflows and recovery drills are verified in the repository. Certify your production S3/SMTP services, live OAuth callbacks and load/recovery targets on the actual deployment. Check the implementation status before exposing a public service.
+Create and verify a fresh backup before changing versions. Build the reviewed commit/digest and run the same `up -d` workflow. Named volumes persist. **Never use `down -v` as an upgrade or port-change step.** Validate schema compatibility before rolling code back; data rollback uses an isolated restore and explicit alias cutover, not a data merge.
 
-## Local object-store build
+## Docs publishing and verification
 
-Historical MinIO container images are unavailable in the tested registries. `infra/minio.Dockerfile` builds the archived upstream community source at commit `7aac2a2c5b7c882e68c1ce017d8256be2feea27f` and verifies its source archive SHA-256. The build preserves the upstream license. MinIO is a development backend; configure and certify your production S3 backend independently.
+Set `QB_DOCS_URL` and `VITE_DOCS_URL` consistently before generation/build for correct sitemap/canonical links. Docs is independently deployable and needs no login; its production build prerenders content. Do not expose provider secrets to it.
+
+Run repository checks/builds, CLI/browser checks and isolated `test:compose`/Linux gates for the affected boundaries. These do not replace production TLS, mail/OAuth/device/provider checks or sustained load/recovery evidence. Linux AMD64/ARM64 are certification targets; current evidence must be checked per architecture.
+
+## Expanded features are not silently enabled
+
+Keep `QB_PUSH_ENABLED=false`. A separately supplied distinct `QB_PUSH_WORKER_TOKEN` only enables a restricted queue principal in current source; it does not deploy a Node push executor or campaigns. Off-node Recovery Center, alert deliveries, advanced operations and native/push/WASM integrations remain [expanded-release work](/docs/roadmap/expanded-release).
+
+## Existing SQLite data
+
+The new API refuses a data directory containing `control.sqlite`. Run the [offline engine migration](/docs/self-hosting/engine-migration) into a separate directory, validate it, then schedule activation through `QB_DATA_DIR`. Keep the original installation and master key for recovery.
+
+## PGlite owner memory
+
+`QB_MAX_BRANCH_OWNERS` defaults to four and accepts 1–32. Each active branch has an independent PGlite WASM instance; the control catalog is additional. Size memory for the intended active branch count and snapshot export/import. On the local macOS ARM64/Bun 1.4.2 startup measurement, four empty branch owners including authentication reached about 2.7 GB process RSS, with roughly 0.9-second startup per owner. This short local measurement is not a production capacity guarantee; run `bun scripts/pglite-benchmark.ts` on the deployment host. The raw repository evidence is `docs/benchmarks/pglite-macos-arm64.json`.
+
+The self-host Compose API memory ceiling defaults to 8 GiB (`QB_API_MEMORY=8g`) to leave room for the catalog, four branch instances and snapshot work. This is a configuration default, not measured Linux certification; lower the owner count or adjust memory only after measuring the deployment workload. The Compose environment passes `QB_MAX_BRANCH_OWNERS` to the API.

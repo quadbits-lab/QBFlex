@@ -1,0 +1,43 @@
+export const frontmatter = {"title": "Native SDK and push requirements", "description": "The accepted React Native, Expo, encrypted offline and notification scope; not available APIs.", "section": "Roadmap", "slug": "roadmap/native-push", "order": 102};
+
+# Native SDK and push requirements
+
+## Status: required, not implemented
+
+`@qb-flex/react-native`, native adapters, automatic polyfills, encrypted offline queues, background synchronization and Expo push are **not currently available**. Browser SDKs are the implemented tracks. The accepted scope is part of specification 1.1, not a separate completed release or npm availability announcement.
+
+## Native foundation
+
+The planned async native client shares provider/hooks and adds optional background, notifications and media entrypoints. React DOM must be optional, React external and exports Metro-compatible, with no eager browser WebAuthn code in Hermes bundles. Importing the SDK must not request permissions.
+
+The specified certification baseline is Expo SDK 57 (`expo@57.0.26`), React Native 0.86.3 and React 19.2.3 with Hermes/New Architecture, including bare RN with Expo modules. These are requested pins, not certified integrations. SecureStore-coordinated Better Auth sessions, rotation, TOTP/OAuth callbacks and native passkeys require real device/association validation.
+
+Missing URL, secure UUID, abort composition, UTF-8 and base64url capabilities must be supplied without replacing working host implementations or using insecure random/DOM emulation. Optional features include biometric foreground lock, URI transfers with progress/cancellation, media selection/capture/sharing and capability diagnostics.
+
+## Offline and background contract
+
+Persistence is opt-in and requires SQLCipher encryption with SecureStore keys—no plaintext fallback. Scope is API/project/immutable branch/user; an offline client must choose an explicit branch ID. Cache expiry defaults to 24 hours.
+
+Queued single-row writes return tickets, not successful server results. Inserts require supplied keys; updates/deletes require expected server revisions. Persist idempotency before delivery, stop uncertain automatic retries 23 hours after the first attempt and pause conflicts for discard or explicit rebase. Auth, RPC, bulk and file-upload queues remain online-only.
+
+Signout clears protected caches, mutations, sessions and subscriptions. Foreground/headless sync share an atomic lease, with 20-operation/20-second flush bounds. The requested 15-minute background interval is subject to OS scheduling. Sockets pause in background and revalidate/replay/refetch on foreground. Background keys remain available after first unlock; biometric foreground lock does not gate unattended sync.
+
+## Push lifecycle
+
+The proposed implementation uses `expo-notifications` and a dedicated Node 24 LTS `expo-server-sdk@7.2.0` executor without a SQLite mount. No such executor/Compose service exists yet. APNs/FCM credentials stay with Expo/EAS; provider access tokens are encrypted server secrets.
+
+After permission and validated sign-in, installations register against the server-derived user. Multiple devices are supported with one current user per scoped installation. Scope includes project, immutable branch, application, EAS project, environment and platform. Raw tokens are encrypted and listings masked. Token rotation/connectivity recovery trigger reacquisition and registration.
+
+Authenticated foreground check-ins update activity at most once daily. Sends, receipts and background jobs do not count. Exclude tokens at 30 days of inactivity and remove token values during daily cleanup. Immediately invalidate opt-out, deleted users, deregistration and `DeviceNotRegistered`. Online logout deregisters; offline logout may retain only a restricted installation-revocation credential until acknowledgment. Restores/previews must never revive registrations or pending campaigns.
+
+## Studio and delivery scope
+
+The planned `/notifications` workspace contains Overview, Tokens & Users, Composer, Campaigns, platform-separated Test Lab and Configuration. Distinct EAS projects/application identifiers separate development/staging/production. Production sends and credential changes require owner/admin plus existing MFA.
+
+Planned tools include drafts/templates, dry-run audiences, single-installation/user and filtered bulk sends, UTC scheduling, unsent cancellation, explicit failed-recipient retry, masked tokens with audited reveal, quotas, receipt timelines and cleanup reports. Trusted-server send credentials are explicitly scoped; end users manage only their own installations/preferences.
+
+Campaign submission returns 202 plus an ID. Snapshot/deduplicate audiences and recheck ownership, activity, preferences and environment before dispatch. Limits: 5,000 installations/campaign, 100 messages/provider batch, shared 300 messages/second/EAS project and six attempts within one hour. Check receipts after 15 minutes, at most 1,000 IDs/batch and before 24-hour expiry. States distinguish accepted/provider handoff/failed/skipped/unknown—not confirmed delivery or reading. Keep masked lifecycle/campaign history for 30 days.
+
+## Certification gates
+
+Require encrypted restart, account isolation/switching, conflict/idempotency, offline logout, exact inactivity boundaries, token rotation, environment separation, production MFA and receipt failures. Physical passkey, biometric, OS background and real push checks are explicit opt-in gates. Current job storage/restricted worker credentials alone do not implement or certify any of these workflows.

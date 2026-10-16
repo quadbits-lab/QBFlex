@@ -1,0 +1,32 @@
+export const frontmatter = {"title": "Optional WASM tooling requirements", "description": "Local SQLite, image optimization, hashing and analytics remain under development.", "section": "Roadmap", "slug": "roadmap/wasm", "order": 103};
+
+# Optional WASM tooling requirements
+
+## Status: required, not integrated
+
+These four integrations are required by specification 1.1 but are not installed as working QB Flex capabilities yet. WASM is an optional browser accelerator, not a replacement for server PGlite, server authorization or a native Hermes dependency. Login, CRUD and normal uploads must work without it.
+
+| Library | Planned workflow | Required guardrails |
+| --- | --- | --- |
+| SQLite WASM | Inspect explicitly imported databases; local SQL and schema-only rehearsal with synthetic fixtures. | In-memory default; explicit OPFS consent/delete, documented single-owner concurrency; server rehearsal remains authoritative. |
+| jSquash resize/WebP | Opt-in pre-upload optimization with before/after preview. | Preserve original; bound input/pixels/formats; cancellation; server MIME/size/checksum validation remains authoritative. |
+| hash-wasm | Incremental SHA-256 for large browser imports/transfers. | Bounded chunks and workers; optional expected checksum only; native crypto remains the server baseline. |
+| DuckDB-WASM | Local CSV/JSON/Parquet analysis, profiling and bounded result export. | Register local files only; block remote fetching and extension installs; never part of transactional CRUD. |
+
+The existing upload SDK already accepts an optional checksum and the server verifies it before S3 persistence; that does **not** mean the hash-wasm browser worker exists. Current Schema Visualizer is also not a SQLite WASM playground.
+
+## Local Data Lab contract
+
+Explicitly imported files stay on the device; nothing uploads automatically. The planned separate workspace includes schema preview, bounded queries, profiling and result export. Default storage is ephemeral; persistence requires consent and an explicit delete control. No management credentials, S3 secrets or master keys enter workers.
+
+## Budgets and portability
+
+Allow one active heavy worker per workspace, at most 100 MiB imported files and 2 MiB query results, with a ten-second query/rehearsal timeout. Terminate on cancellation/timeout, bound engine memory where supported and report device/browser limits honestly.
+
+Lazy-load and self-host pinned runtime assets. Review wrapper and embedded-library licenses/advisories. Single-threaded operation is the baseline; do not globally enable isolation headers that break OAuth or embeds. Unsupported devices receive an actionable explanation and working core workflows.
+
+Measure cold startup, download bytes, processing time, memory, cancellation and low-end responsiveness before claiming a performance gain. Acceptance includes malformed/oversized inputs, remote-access rejection, budgets, cancellation, persistence deletion and unchanged core behavior.
+
+## Deferred candidates
+
+Tree-sitter requires a justified structural editor and SQLite-compatible grammar. RE2-WASM requires a real user-regex use case and explicit unsupported-syntax rejection. Zstandard needs compression benchmarks, decompressed-size bounds and versioned recovery. ONNX Runtime Web needs justified local models, download budgets and unsupported-device handling. Extism/Wasmtime require certified isolation, capability/resource limits and runtime patching before untrusted functions. These are not installed dependencies or expanded-release promises.

@@ -47,12 +47,7 @@ import {
   PieSlice,
   XAxis,
 } from '@qb-flex/ui/charts';
-import {
-  type AuditEvent,
-  activitySeries,
-  activitySummary,
-  countBy,
-} from './activity-metrics';
+import { type AuditEvent, activitySeries, activitySummary, countBy } from './activity-metrics';
 
 const RESULT_COLORS = [
   'var(--chart-1)',
@@ -71,13 +66,7 @@ function resultBadgeVariant(result: string) {
   return isFailure(result) ? ('warning' as const) : ('success' as const);
 }
 
-function ActivityKpis({
-  events,
-  pending,
-}: {
-  events: AuditEvent[];
-  pending: boolean;
-}) {
+function ActivityKpis({ events, pending }: { events: AuditEvent[]; pending: boolean }) {
   const summary = activitySummary(events);
   const items = [
     { label: 'Total events', value: summary.total },
@@ -302,10 +291,7 @@ function ActivityTable({
     return events.filter((event) => {
       if (resultFilter !== 'all' && String(event.result) !== resultFilter) return false;
       if (!needle) return true;
-      return [event.action, event.resource, event.result]
-        .join(' ')
-        .toLowerCase()
-        .includes(needle);
+      return [event.action, event.resource, event.result].join(' ').toLowerCase().includes(needle);
     });
   }, [events, query, resultFilter]);
   const rows = filtered.slice(0, compact ? 6 : 200);

@@ -1,8 +1,12 @@
 import { useState, type ReactNode } from 'react';
 import { useForm } from '@tanstack/react-form';
 import { useQueryClient } from '@tanstack/react-query';
-import { Navigate, useNavigate } from '@tanstack/react-router';
-import { useQuery } from '@tanstack/react-query';
+import {
+  useNavigate,
+  useRouter,
+  useSearch,
+  type ErrorComponentProps,
+} from '@tanstack/react-router';
 import { ShieldCheck, BookOpen, KeyRound } from 'lucide-react';
 import {
   Card,
@@ -16,7 +20,6 @@ import {
   FieldLabel,
   FieldGroup,
   FieldDescription,
-  Skeleton,
   Separator,
   Brand,
   AppFooter,
@@ -25,6 +28,7 @@ import {
 } from '@qb-flex/ui';
 import { raw, docsURL } from './api';
 import { platformAuth } from './platform-auth';
+import { confirmPlatformSignIn } from './session';
 
 function AuthLayout({ children }: { children: ReactNode }) {
   return (
@@ -43,29 +47,17 @@ function AuthLayout({ children }: { children: ReactNode }) {
   );
 }
 
-function useSetupState() {
-  return useQuery({ queryKey: ['setup'], queryFn: () => raw('/setup') });
-}
-function usePlatformSession() {
-  return useQuery({
-    queryKey: ['platform-session'],
-    queryFn: () => raw('/platform/auth/get-session'),
-    retry: false,
-    refetchOnWindowFocus: true,
-  });
-}
-
 export function SignInScreen() {
   const navigate = useNavigate();
   const cache = useQueryClient();
-  const setup = useSetupState();
-  const session = usePlatformSession();
+  const search = useSearch({ from: '/sign-in' });
   const [challenge, setChallenge] = useState(false);
   const [code, setCode] = useState('');
   const [passkeyPending, setPasskeyPending] = useState(false);
-  const onDone = () => {
-    void cache.invalidateQueries();
-    void navigate({ to: '/overview' });
+  const onDone = async () => {
+    await confirmPlatformSignIn(cache);
+    toast.success('Signed in');
+    await navigate({ to: search.redirect, replace: true });
   };
   const form = useForm({
     defaultValues: { email: '', password: '' },
@@ -79,38 +71,12 @@ export function SignInScreen() {
           });
           return;
         }
-        toast.success('Signed in');
-        onDone();
+        await onDone();
       } catch (e) {
         notifyError(e, 'Sign-in failed');
       }
     },
   });
-  if (setup.isPending || session.isPending)
-    return (
-      <AuthLayout>
-        <Card className="w-full">
-          <CardContent className="flex flex-col gap-4 py-6">
-            <Skeleton className="h-8 w-2/3" />
-            <Skeleton className="h-4 w-1/2" />
-            <Skeleton className="h-10" />
-            <Skeleton className="h-10" />
-          </CardContent>
-        </Card>
-      </AuthLayout>
-    );
-  if (setup.error || session.error)
-    return (
-      <AuthUnavailableScreen
-        error={(setup.error ?? session.error) as Error}
-        onRetry={() => {
-          void setup.refetch();
-          void session.refetch();
-        }}
-      />
-    );
-  if (setup.data?.data?.required) return <Navigate to="/setup" replace />;
-  if (session.data?.user) return <Navigate to="/overview" replace />;
   return (
     <AuthLayout>
       <Card className="w-full">
@@ -133,8 +99,7 @@ export function SignInScreen() {
                 e.preventDefault();
                 try {
                   await raw('/platform/auth/two-factor/verify-totp', 'POST', { code });
-                  toast.success('Signed in');
-                  onDone();
+                  await onDone();
                 } catch (err) {
                   notifyError(err, 'Invalid authenticator code');
                 }
@@ -217,8 +182,7 @@ export function SignInScreen() {
                       const result = await platformAuth.signIn.passkey();
                       if (result.error)
                         throw new Error(result.error.message ?? 'Passkey sign-in failed');
-                      toast.success('Signed in with passkey');
-                      onDone();
+                      await onDone();
                     } catch (e) {
                       notifyError(e, 'Passkey sign-in failed');
                     } finally {
@@ -247,11 +211,10 @@ export function SignInScreen() {
 export function SetupScreen() {
   const navigate = useNavigate();
   const cache = useQueryClient();
-  const setup = useSetupState();
-  const session = usePlatformSession();
-  const onDone = () => {
-    void cache.invalidateQueries();
-    void navigate({ to: '/overview' });
+  const onDone = async () => {
+    await cache.cancelQueries();
+    cache.clear();
+    await navigate({ to: '/sign-in', search: { redirect: '/overview' }, replace: true });
   };
   const form = useForm({
     defaultValues: {
@@ -265,39 +228,12 @@ export function SetupScreen() {
       try {
         await raw('/setup', 'POST', value);
         toast.success('Workspace created');
-        onDone();
+        await onDone();
       } catch (e) {
         notifyError(e, 'Setup failed');
       }
     },
   });
-  if (setup.isPending)
-    return (
-      <AuthLayout>
-        <Card className="w-full">
-          <CardContent className="flex flex-col gap-4 py-6">
-            <Skeleton className="h-8 w-2/3" />
-            <Skeleton className="h-4 w-1/2" />
-            <Skeleton className="h-10" />
-            <Skeleton className="h-10" />
-          </CardContent>
-        </Card>
-      </AuthLayout>
-    );
-  if (setup.error || session.error)
-    return (
-      <AuthUnavailableScreen
-        error={(setup.error ?? session.error) as Error}
-        onRetry={() => {
-          void setup.refetch();
-          void session.refetch();
-        }}
-      />
-    );
-  if (setup.data && !setup.data.data?.required) {
-    if (session.data?.user) return <Navigate to="/overview" replace />;
-    return <Navigate to="/sign-in" replace />;
-  }
   const fields = ['name', 'organization', 'email', 'password', 'bootstrapToken'] as const;
   const labelFor: Record<(typeof fields)[number], string> = {
     name: 'Name',
@@ -408,5 +344,17 @@ export function AuthUnavailableScreen({ error, onRetry }: { error: Error; onRetr
         </CardContent>
       </Card>
     </AuthLayout>
+  );
+}
+
+export function AuthRouteError({ error }: ErrorComponentProps) {
+  const router = useRouter();
+  return (
+    <AuthUnavailableScreen
+      error={error instanceof Error ? error : new Error('Session verification failed')}
+      onRetry={() => {
+        void router.invalidate();
+      }}
+    />
   );
 }

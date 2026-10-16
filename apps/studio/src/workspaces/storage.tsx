@@ -1,3 +1,5 @@
+import { useUploadQueue } from '../upload-queue-provider';
+import { useConsole } from '../console-context';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -43,6 +45,9 @@ import {
   FieldGroup,
   FieldLabel,
   Input,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
   Loading,
   Select,
   SelectContent,
@@ -64,6 +69,7 @@ import {
   notifyError,
 } from '@qb-flex/ui';
 import { management } from '../api';
+import { refreshStudioQueries } from '../query-client';
 import { useWrite } from './shared';
 
 type StorageBucket = {
@@ -88,6 +94,17 @@ type SortKey = 'name' | 'date' | 'size';
 type SortDir = 'asc' | 'desc';
 
 const PAGE_SIZES = [10, 25, 50] as const;
+const BYTES_PER_MB = 1024 * 1024;
+const MAX_FILE_SIZE_MB = 100;
+
+function fileSizeMbToBytes(value: string) {
+  const megabytes = Number(value);
+  if (!Number.isFinite(megabytes) || megabytes <= 0) return null;
+  const bytes = Math.round(megabytes * BYTES_PER_MB);
+  if (!Number.isSafeInteger(bytes) || bytes < 1 || bytes > MAX_FILE_SIZE_MB * BYTES_PER_MB)
+    return null;
+  return bytes;
+}
 
 function formatBytes(value: number) {
   if (!Number.isFinite(value) || value < 0) return '—';
@@ -145,17 +162,9 @@ function fileKind(object: StorageObject) {
   if (mime.startsWith('video/') || /\.(mp4|mov|webm|mkv)$/.test(key)) return 'video' as const;
   if (mime.startsWith('audio/') || /\.(mp3|wav|ogg|m4a)$/.test(key)) return 'audio' as const;
   if (mime === 'application/pdf' || key.endsWith('.pdf')) return 'pdf' as const;
-  if (
-    mime.includes('spreadsheet') ||
-    mime.includes('excel') ||
-    /\.(xlsx?|csv|tsv)$/.test(key)
-  )
+  if (mime.includes('spreadsheet') || mime.includes('excel') || /\.(xlsx?|csv|tsv)$/.test(key))
     return 'sheet' as const;
-  if (
-    mime.includes('zip') ||
-    mime.includes('compressed') ||
-    /\.(zip|rar|7z|tar|gz)$/.test(key)
-  )
+  if (mime.includes('zip') || mime.includes('compressed') || /\.(zip|rar|7z|tar|gz)$/.test(key))
     return 'archive' as const;
   if (
     mime.startsWith('text/') ||
@@ -168,10 +177,7 @@ function fileKind(object: StorageObject) {
   return 'file' as const;
 }
 
-const KIND_STYLES: Record<
-  ReturnType<typeof fileKind>,
-  { className: string; Icon: typeof File }
-> = {
+const KIND_STYLES: Record<ReturnType<typeof fileKind>, { className: string; Icon: typeof File }> = {
   folder: { className: 'bg-amber-500/15 text-amber-600 dark:text-amber-400', Icon: Folder },
   image: { className: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400', Icon: FileImage },
   video: { className: 'bg-violet-500/15 text-violet-600 dark:text-violet-400', Icon: FileVideo },
@@ -181,19 +187,16 @@ const KIND_STYLES: Record<
     className: 'bg-green-600/15 text-green-700 dark:text-green-400',
     Icon: FileSpreadsheet,
   },
-  archive: { className: 'bg-orange-500/15 text-orange-600 dark:text-orange-400', Icon: FileArchive },
+  archive: {
+    className: 'bg-orange-500/15 text-orange-600 dark:text-orange-400',
+    Icon: FileArchive,
+  },
   code: { className: 'bg-sky-500/15 text-sky-600 dark:text-sky-400', Icon: FileCode },
   doc: { className: 'bg-blue-500/15 text-blue-600 dark:text-blue-400', Icon: FileText },
   file: { className: 'bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-400', Icon: File },
 };
 
-function FileTypeIcon({
-  object,
-  size = 'md',
-}: {
-  object: StorageObject;
-  size?: 'md' | 'lg';
-}) {
+function FileTypeIcon({ object, size = 'md' }: { object: StorageObject; size?: 'md' | 'lg' }) {
   const kind = fileKind(object);
   const { className, Icon } = KIND_STYLES[kind];
   return (
@@ -239,7 +242,7 @@ export function StorageWorkspace({ base }: { base: string }) {
   const [dialog, setDialog] = useState(false);
   const [name, setName] = useState('');
   const [visibility, setVisibility] = useState('private');
-  const [size, setSize] = useState('10485760');
+  const [size, setSize] = useState('10');
   const [mime, setMime] = useState('');
   const [selected, setSelected] = useState('');
   const write = useWrite();
@@ -261,11 +264,7 @@ export function StorageWorkspace({ base }: { base: string }) {
     <div className="grid grid-cols-1 content-start gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-48 flex-1 sm:max-w-xs">
-          <Select
-            value={selected || undefined}
-            onValueChange={setSelected}
-            disabled={!rows.length}
-          >
+          <Select value={selected || undefined} onValueChange={setSelected} disabled={!rows.length}>
             <SelectTrigger aria-label="Storage bucket">
               <SelectValue placeholder={buckets.isPending ? 'Loading buckets…' : 'Select bucket'} />
             </SelectTrigger>
@@ -342,13 +341,23 @@ export function StorageWorkspace({ base }: { base: string }) {
               </Select>
             </Field>
             <Field>
-              <FieldLabel htmlFor="bucket-max-size">Maximum file size in bytes</FieldLabel>
-              <Input
-                id="bucket-max-size"
-                type="number"
-                value={size}
-                onChange={(e) => setSize(e.target.value)}
-              />
+              <FieldLabel htmlFor="bucket-max-size">Maximum file size</FieldLabel>
+              <InputGroup>
+                <InputGroupInput
+                  id="bucket-max-size"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  max={MAX_FILE_SIZE_MB}
+                  step="any"
+                  value={size}
+                  onChange={(e) => setSize(e.target.value)}
+                  aria-describedby="bucket-max-size-unit"
+                />
+                <InputGroupAddon align="inline-end">
+                  <span id="bucket-max-size-unit">MB</span>
+                </InputGroupAddon>
+              </InputGroup>
             </Field>
             <Field>
               <FieldLabel htmlFor="bucket-mime">Allowed MIME types (comma separated)</FieldLabel>
@@ -364,12 +373,17 @@ export function StorageWorkspace({ base }: { base: string }) {
             <Button
               disabled={write.isPending || !name}
               onClick={async () => {
+                const maxSize = fileSizeMbToBytes(size);
+                if (maxSize === null) {
+                  toast.error('Maximum file size must be greater than 0 and at most 100 MB');
+                  return;
+                }
                 const created = await write.mutateAsync({
                   path: base + '/buckets',
                   body: {
                     name,
                     visibility,
-                    maxSize: Number(size),
+                    maxSize,
                     mimeRules: mime
                       .split(',')
                       .map((s) => s.trim())
@@ -394,12 +408,17 @@ export function StorageWorkspace({ base }: { base: string }) {
 
 function ObjectBrowser({ base, bucket }: { base: string; bucket: StorageBucket }) {
   const cache = useQueryClient();
+  const pendingRemoval = useRef<StorageObject | null>(null);
+  const removeTrigger = useRef<HTMLButtonElement | null>(null);
+  const searchInput = useRef<HTMLInputElement | null>(null);
   const objects = useQuery({
     queryKey: ['objects', base, bucket.id],
     queryFn: () => management.request<StorageObject[]>(base + '/buckets/' + bucket.id + '/objects'),
   });
   const uploadInput = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState(false);
+  const uploads = useUploadQueue();
+  const { project, branch } = useConsole();
   const [remove, setRemove] = useState<StorageObject | null>(null);
   const [query, setQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('name');
@@ -414,7 +433,10 @@ function ObjectBrowser({ base, bucket }: { base: string; bucket: StorageBucket }
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const next = needle
-      ? rows.filter((row) => row.key.toLowerCase().includes(needle) || row.mime.toLowerCase().includes(needle))
+      ? rows.filter(
+          (row) =>
+            row.key.toLowerCase().includes(needle) || row.mime.toLowerCase().includes(needle),
+        )
       : [...rows];
     next.sort((a, b) => {
       let cmp = 0;
@@ -458,9 +480,7 @@ function ObjectBrowser({ base, bucket }: { base: string; bucket: StorageBucket }
 
   async function downloadObject(object: StorageObject) {
     try {
-      const blob = (await management.transfer(
-        base + '/objects/' + object.id + '/content',
-      )) as Blob;
+      const blob = (await management.transfer(base + '/objects/' + object.id + '/content')) as Blob;
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
@@ -481,6 +501,7 @@ function ObjectBrowser({ base, bucket }: { base: string; bucket: StorageBucket }
             className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
           />
           <Input
+            ref={searchInput}
             aria-label="Search for files and folders"
             className="h-10 border-0 bg-transparent pl-9 shadow-none focus-visible:ring-0"
             onChange={(event) => setQuery(event.target.value)}
@@ -488,42 +509,31 @@ function ObjectBrowser({ base, bucket }: { base: string; bucket: StorageBucket }
             value={query}
           />
         </div>
-        <ShadcnButton disabled={pending} onClick={() => uploadInput.current?.click()}>
+        <ShadcnButton disabled={!branch?.id} onClick={() => uploadInput.current?.click()}>
           <Upload data-icon="inline-start" />
-          {pending ? 'Uploading…' : 'Upload'}
+          Upload
         </ShadcnButton>
         <input
           ref={uploadInput}
           aria-label="Choose file to upload"
           type="file"
           className="sr-only"
-          disabled={pending}
-          onChange={async (event) => {
-            const file = event.target.files?.[0];
-            if (!file) return;
-            setPending(true);
+          multiple
+          disabled={!branch?.id}
+          onChange={(event) => {
+            const files = Array.from(event.target.files ?? []);
+            event.target.value = '';
+            if (!files.length || !branch?.id) return;
             try {
-              const intent = await management.request(
-                base + '/buckets/' + bucket.id + '/objects',
-                'POST',
-                {
-                  key: file.name,
-                  size: file.size,
-                  mime: file.type || 'application/octet-stream',
-                },
-              );
-              await management.transfer(
-                base + '/objects/' + intent.data.id + '/content',
-                'PUT',
-                file,
-              );
-              await cache.invalidateQueries({ queryKey: ['objects', base, bucket.id] });
-              toast.success(file.name + ' uploaded');
-            } catch (uploadError) {
-              notifyError(uploadError, 'Upload failed');
-            } finally {
-              setPending(false);
-              if (uploadInput.current) uploadInput.current.value = '';
+              uploads.enqueue(files, {
+                base: base.replace(/\/branches\/[^/]+$/, '/branches/' + branch.id),
+                bucketId: bucket.id,
+                bucketName: bucket.name,
+                projectName: project?.name ?? project?.id ?? 'Project',
+                branchName: branch.name ?? 'main',
+              });
+            } catch (error) {
+              notifyError(error, 'Could not queue uploads');
             }
           }}
         />
@@ -553,9 +563,7 @@ function ObjectBrowser({ base, bucket }: { base: string; bucket: StorageBucket }
                     <TableHead className="w-10 px-4">
                       <Checkbox
                         aria-label="Select all on page"
-                        checked={
-                          allPageChecked ? true : somePageChecked ? 'indeterminate' : false
-                        }
+                        checked={allPageChecked ? true : somePageChecked ? 'indeterminate' : false}
                         onCheckedChange={(value) => {
                           setChecked((prev) => {
                             const next = new Set(prev);
@@ -643,19 +651,35 @@ function ObjectBrowser({ base, bucket }: { base: string; bucket: StorageBucket }
                         <TableCell>
                           <OwnerAvatar ownerId={object.owner_id} />
                         </TableCell>
-                        <TableCell className="px-2 text-right" onClick={(event) => event.stopPropagation()}>
-                          <DropdownMenu>
+                        <TableCell
+                          className="px-2 text-right"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          {/* The confirmation dialog owns modal focus/pointer locking, not this action menu. */}
+                          <DropdownMenu modal={false}>
                             <DropdownMenuTrigger asChild>
                               <ShadcnButton
                                 variant="ghost"
                                 size="icon"
                                 className="size-8"
                                 aria-label={'Actions for ' + object.key}
+                                onFocus={(event) => {
+                                  removeTrigger.current = event.currentTarget;
+                                }}
                               >
                                 <MoreHorizontal />
                               </ShadcnButton>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                            <DropdownMenuContent
+                              align="end"
+                              onCloseAutoFocus={() => {
+                                const object = pendingRemoval.current;
+                                if (!object) return;
+                                pendingRemoval.current = null;
+                                // Let the menu restore trigger focus and finish unmounting first.
+                                queueMicrotask(() => setRemove(object));
+                              }}
+                            >
                               <DropdownMenuItem onClick={() => setActiveId(object.id)}>
                                 View details
                               </DropdownMenuItem>
@@ -666,7 +690,9 @@ function ObjectBrowser({ base, bucket }: { base: string; bucket: StorageBucket }
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 className="text-destructive focus:text-destructive"
-                                onClick={() => setRemove(object)}
+                                onSelect={() => {
+                                  pendingRemoval.current = object;
+                                }}
                               >
                                 <Trash2 />
                                 Delete
@@ -746,7 +772,9 @@ function ObjectBrowser({ base, bucket }: { base: string; bucket: StorageBucket }
                 <p className="mt-3 mb-0 truncate text-sm font-semibold text-foreground">
                   {fileName(active.key)}
                 </p>
-                <p className="m-0 truncate font-mono text-2xs text-muted-foreground">{active.key}</p>
+                <p className="m-0 truncate font-mono text-2xs text-muted-foreground">
+                  {active.key}
+                </p>
               </div>
               <ShadcnButton
                 variant="ghost"
@@ -765,7 +793,10 @@ function ObjectBrowser({ base, bucket }: { base: string; bucket: StorageBucket }
                   Info
                 </h3>
                 <dl className="m-0 grid grid-cols-1 gap-2.5 text-sm">
-                  <DetailRow label="Type" value={fileKind(active) === 'folder' ? 'Folder' : 'File'} />
+                  <DetailRow
+                    label="Type"
+                    value={fileKind(active) === 'folder' ? 'Folder' : 'File'}
+                  />
                   <DetailRow label="Size" value={formatBytes(Number(active.size))} />
                   <DetailRow label="Owner" value={active.owner_id} mono />
                   <DetailRow label="Location" value={bucket.name} />
@@ -808,7 +839,10 @@ function ObjectBrowser({ base, bucket }: { base: string; bucket: StorageBucket }
                 <ShadcnButton
                   variant="destructive"
                   size="sm"
-                  onClick={() => setRemove(active)}
+                  onClick={(event) => {
+                    removeTrigger.current = event.currentTarget;
+                    setRemove(active);
+                  }}
                 >
                   <Trash2 data-icon="inline-start" />
                   Delete
@@ -820,7 +854,14 @@ function ObjectBrowser({ base, bucket }: { base: string; bucket: StorageBucket }
       </div>
 
       <Dialog open={!!remove} onOpenChange={(open) => !open && setRemove(null)}>
-        <DialogContent>
+        <DialogContent
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            // Return to the opener on cancellation; after deletion its row may no longer exist.
+            if (removeTrigger.current?.isConnected) removeTrigger.current.focus();
+            else searchInput.current?.focus();
+          }}
+        >
           <DialogTitle>Delete object</DialogTitle>
           <DialogDescription>
             Delete <span className="font-mono">{remove?.key}</span> from this branch? This cannot be
@@ -843,7 +884,7 @@ function ObjectBrowser({ base, bucket }: { base: string; bucket: StorageBucket }
                     return next;
                   });
                   setRemove(null);
-                  await cache.invalidateQueries({ queryKey: ['objects', base, bucket.id] });
+                  await refreshStudioQueries(cache);
                 } catch (deleteError) {
                   notifyError(deleteError, 'Delete failed');
                 } finally {
@@ -861,15 +902,7 @@ function ObjectBrowser({ base, bucket }: { base: string; bucket: StorageBucket }
   );
 }
 
-function DetailRow({
-  label,
-  value,
-  mono,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
+function DetailRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-start gap-3">
       <dt className="m-0 text-muted-foreground">{label}</dt>
@@ -880,15 +913,7 @@ function DetailRow({
   );
 }
 
-function SettingRow({
-  label,
-  checked,
-  hint,
-}: {
-  label: string;
-  checked: boolean;
-  hint: string;
-}) {
+function SettingRow({ label, checked, hint }: { label: string; checked: boolean; hint: string }) {
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="min-w-0">

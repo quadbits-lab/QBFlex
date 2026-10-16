@@ -8,32 +8,32 @@ Status: expanded release under development; not a declaration of feature availab
 
 ## 1. Product definition
 
-QB Flex is a lightweight, self-hostable Backend as a Service for small applications, prototypes, internal tools, and early-stage products. It combines SQLite databases, generated APIs, authentication, realtime, storage, functions, and AI tooling behind a dark monochrome Studio.
+QB Flex is a lightweight, self-hostable Backend as a Service for small applications, prototypes, internal tools, and early-stage products. It combines PGlite databases, generated APIs, authentication, realtime, storage, functions, and AI tooling behind a dark monochrome Studio.
 
-The product should offer the convenience of Supabase while using Bun and SQLite as its core. It is a separate platform with its own APIs, SDK, CLI, and security semantics. Supabase interoperability is an explicitly scoped adapter project; neither its CLI nor its PostgreSQL wire protocol works automatically with QB Flex.
+The product should offer the convenience of Supabase while using Bun and PGlite as its core. It is a separate platform with its own APIs, SDK, CLI, and security semantics. Supabase interoperability is an explicitly scoped adapter project; neither its CLI nor its PostgreSQL wire protocol works automatically with QB Flex.
 
 **Primary goals:** provision a project in minutes; create tables visually or through migrations; generate typed REST and GraphQL access; protect every user-facing data path; provide straightforward backups and local development; keep a single-node installation operationally small.
 
-**Initial scale assumptions:** one writable SQLite database per project branch, local persistent SSD, one active database owner per branch, bounded write workloads, and one primary region. Higher traffic is addressed through independent project placement, read scaling, and quotas rather than simultaneous writers to one file.
+**Initial scale assumptions:** one writable PGlite database per project branch, local persistent SSD, one active database owner per branch, bounded write workloads, and one primary region. Higher traffic is addressed through independent project placement, read scaling, and quotas rather than simultaneous owners of one database directory.
 
-**Terminology:** an organization owns projects; a project owns branches; each branch is an isolated database environment. Platform operators and project developers are control-plane identities. Application end users belong to a project authentication realm. A project role is not an application user role.
+**Terminology:** an organization owns projects; a project owns branches; each branch is an isolated database environment. Platform operators and project developers are control-plane identities. Application end users belong to a project authentication realm. A project (organization) role is not an application user role. Application users may be assigned branch-scoped named roles used by Database policies alongside the fixed credential classes anonymous/authenticated/service.
 
 ### 1.1 Release scope
 
-- **P0 — foundation/MVP:** organizations, projects, primary branches, SQLite lifecycle, migrations, table editor, generated REST, application RLS, email/password auth, initial social providers, realtime row events, basic S3 storage, TypeScript SDK, CLI, audit logs, backups.
+- **P0 — foundation/MVP:** organizations, projects, primary branches, PGlite lifecycle, migrations, table editor, generated REST, application RLS, email/password auth, initial social providers, realtime row events, basic S3 storage, TypeScript SDK, CLI, audit logs, backups.
 - **P1 — complete small-project BaaS:** GraphQL, magic links/OTP, 20+ certified social connectors, phone auth, CAPTCHA, webhooks, presence/broadcast/binary channels, resumable uploads, image transforms, snapshot branching, AI inference/vector search, isolated Bun functions, hosted MCP.
 - **P2 — advanced platform:** SSO, OAuth identity provider, read replicas, CDN integration, analytics buckets, RAG workflows, Deno functions, regional placement, Terraform provider, advanced Studio assistant.
 
 These are delivery phases, not removal of requested scope. Feature flags and the Management API must expose availability and experimental status accurately.
 
-## 2. Feature coverage and SQLite adaptation
+## 2. Feature coverage and PGlite adaptation
 
 | Requested feature | QB Flex implementation | Phase / qualification |
 | --- | --- | --- |
-| Full SQLite database | Native SQLite SQL, transactions, indexes, triggers, views, FTS5 where built in; owner SQL console | P0; API exposure is a supported subset |
+| Full PGlite database | PostgreSQL SQL, transactions, indexes, triggers, views, full-text/vector APIs remain planned; owner SQL console | P0; API exposure is a supported subset |
 | Auto REST API | Schema registry generates validated CRUD/query routes | P0 |
 | Auto GraphQL API | Generated types, relations and mutations using the same query/policy engine | P1 |
-| RLS | Default-deny application policy compiler and transaction enforcement | P0; not native SQLite RLS |
+| RLS | Default-deny application policy compiler and transaction enforcement | P0; not native PGlite RLS |
 | Database webhooks | Transactional event outbox, signed asynchronous delivery | P1 |
 | Read replicas | Versioned consistent read-only snapshots first; incremental replication adapter later | P2; eventual consistency |
 | Database branching | Consistent snapshot fork plus branch-specific metadata/configuration | P1; no automatic data merge |
@@ -42,7 +42,7 @@ These are delivery phases, not removal of requested scope. Feature flags and the
 | SSO and phone auth | Enterprise OIDC/SAML adapter and SMS verification adapter | P2 SSO; P1 phone |
 | OAuth 2.1 identity provider | Dedicated authorization server configuration and consent UI | P2 |
 | CAPTCHA | Pluggable challenge verification on abuse-sensitive endpoints | P1 |
-| Postgres change listeners | Native SQLite transaction change stream | P0; optional external Postgres ingestion in P2 |
+| Postgres change listeners | Native PGlite transaction change stream | P0; optional external Postgres ingestion in P2 |
 | Broadcast, presence, binary | Authorized WebSocket channels, heartbeat leases, bounded binary frames | P1 |
 | Granular channels | Join/read/write/presence permissions, quotas, retention settings | P1 |
 | S3-compatible storage | QB metadata/policies plus S3-compatible object backend | P0 |
@@ -50,7 +50,7 @@ These are delivery phases, not removal of requested scope. Feature flags and the
 | Image transformations | Isolated Sharp-based processing and derivative cache | P1 |
 | Resumable uploads | tus-compatible gateway mapped to multipart object uploads | P1 |
 | Analytics buckets | Separate append-only usage/event objects with manifests and scheduled aggregates | P2; not object-store queries by default |
-| pgvector embeddings | SQLite vector adapter, initially sqlite-vec candidate | P1; pgvector requires PostgreSQL |
+| pgvector embeddings | PGlite extension adapter, not enabled | P1; pgvector requires PostgreSQL |
 | Inference, semantic search, RAG | Provider gateway, embedding collections, ingestion jobs and permission-aware retrieval | P1/P2 |
 | Ollama, Llamafile | Operator-configured HTTP model adapters | P1; inference runs outside API process |
 | OpenAI, LangChain | OpenAI provider adapter and documented LangChain integration | P1 |
@@ -77,13 +77,13 @@ These are delivery phases, not removal of requested scope. Feature flags and the
 | Reactive collections | TanStack DB | Selected Studio collections and live derived queries; not the server database |
 | API | Elysia | REST, authentication middleware, WebSocket gateway and management routes |
 | GraphQL | GraphQL Yoga candidate mounted under Elysia | Generated schema, execution limits, resolver integration; validate Bun interoperability |
-| Persistence | `bun:sqlite` | Prepared SQL, project databases and control-plane metadata |
+| Persistence | `@electric-sql/pglite` | Prepared SQL, project databases and control-plane metadata |
 | Auth | Better Auth candidate | Password/session/provider mechanisms with explicit tenant isolation |
 | UI | ShadCN UI, Tailwind | Accessible primitives and theme tokens |
 | UI references | bklit.com, blocks.so, Supabase Library | Selected dashboards, forms and AI UI patterns, adapted to QB branding |
 | Object storage | S3-compatible backend | RustFS/S3/R2-style adapter contract, tested per backend |
 | Image pipeline | Sharp candidate | Bounded transforms outside request event loop |
-| Vector search | sqlite-vec candidate | Extension-backed similarity search behind interchangeable adapter |
+| Vector search | PGlite extension candidate; not enabled | Extension-backed similarity search behind interchangeable adapter |
 | Telemetry | OpenTelemetry + structured logs | Request traces, metrics and job diagnostics |
 
 Use pinned compatible versions and a committed Bun lockfile. Resolve exact releases during the initial compatibility spike; this document does not prescribe unverified future version numbers. Verify SSR, GraphQL, native extensions, auth adapters and image binaries together on the production Linux image.
@@ -99,11 +99,11 @@ flowchart TD
   Clients["Studio, SDK, CLI and AI clients"] --> Gateway["TLS gateway and project routing"]
   Gateway --> Control["Management API and platform auth"]
   Gateway --> Data["Project API, auth and realtime"]
-  Control --> Catalog["Control SQLite and encrypted config"]
+  Control --> Catalog["Control PGlite and encrypted config"]
   Data --> Engine["Policy and query engine"]
   Engine --> Owner["Branch database owner"]
-  Owner --> SQLite["Branch SQLite and transaction outbox"]
-  SQLite --> Jobs["Durable job workers"]
+  Owner --> PGlite["Branch PGlite and transaction outbox"]
+  PGlite --> Jobs["Durable job workers"]
   Data --> Storage["Storage policy gateway"]
   Storage --> Objects["S3 backend"]
   Jobs --> Extensions["Webhooks, AI and isolated functions"]
@@ -111,13 +111,13 @@ flowchart TD
 
 ### 4.1 Control plane
 
-Manages organizations, memberships, projects, routing, region placement, branch lifecycle, keys, billing-ready quotas, operations and audit trails. Control-plane credentials never serve as end-user sessions. Initial deployment uses one control SQLite file with backups; an adapter boundary permits later migration if platform metadata concurrency outgrows SQLite.
+Manages organizations, memberships, projects, routing, region placement, branch lifecycle, keys, billing-ready quotas, operations and audit trails. Control-plane credentials never serve as end-user sessions. Initial deployment uses one control PGlite directory with backups; an adapter boundary permits later migration if platform metadata concurrency outgrows PGlite.
 
 ### 4.2 Data plane
 
-Each branch has its own SQLite file and its own execution owner. API instances route work to that owner through internal authenticated IPC/RPC. MVP can colocate owner and API; production multi-node deployment must preserve ownership, fencing and authentication. Separate projects can live on different nodes.
+Each branch has its own PGlite directory and its own execution owner. API instances route work to that owner through internal authenticated IPC/RPC. MVP can colocate owner and API; production multi-node deployment must preserve ownership, fencing and authentication. Separate projects can live on different nodes.
 
-Keep database handles in bounded worker processes or Bun workers. Synchronous SQLite execution must not block the shared API event loop. Use queue depth limits, query deadlines, cancellation/worker termination strategy, bounded result streaming and a capped connection cache. Confirm SQLite interrupt support in the selected runtime; if unavailable, terminate isolated query workers and recover safely.
+Keep database handles in bounded worker processes or Bun workers. WASM SQL execution must not block the shared API event loop. Use queue depth limits, query deadlines, cancellation/worker termination strategy, bounded result streaming and a capped connection cache. Confirm PGlite cancellation support in the selected runtime; if unavailable, terminate isolated query workers and recover safely.
 
 ### 4.3 Deployment profiles
 
@@ -140,7 +140,7 @@ qb-flex/
     mcp/                    # Hosted MCP transport and tools
   packages/
     contracts/              # Shared schemas, errors, API versions
-    database/               # SQLite lifecycle and ownership
+    database/               # PGlite lifecycle and ownership
     schema/                 # Introspection and schema registry
     query-engine/           # Validated query AST and SQL compiler
     policies/               # Policy parser/compiler/evaluator
@@ -168,28 +168,21 @@ Packages import contracts rather than application internals. The policy/query en
 
 ### 6.1 File layout and settings
 
-Use opaque server-generated IDs and canonical validated paths: `/data/projects/<project-id>/branches/<branch-id>/main.sqlite`. Never derive file paths directly from a user slug. Keep control data outside project files. Authentication and storage metadata use reserved `_qb_*` tables within the project branch where transactional coordination is needed.
+Use opaque server-generated IDs and canonical validated paths: `/data/projects/<project-id>/branches/<branch-id>/main.pglite/`. Never derive file paths directly from a user slug. Keep control data outside project files. Authentication and storage metadata use reserved `_qb_*` tables within the project branch where transactional coordination is needed.
 
-Default connection initialization:
+Use `@electric-sql/pglite@0.5.10`, persistent Node filesystem storage, asynchronous queries/transactions and `relaxedDurability: false`. One instance serves each database, including its Better Auth Kysely dialect. Transaction callbacks receive the transaction handle; nested domain operations inherit its scope and use savepoints. An OS advisory flock fences the volume and releases on process death. Branch queues remain bounded and query timeouts terminate isolated owners.
 
-```sql
-PRAGMA journal_mode = WAL;
-PRAGMA foreign_keys = ON;
-PRAGMA synchronous = FULL;
-PRAGMA busy_timeout = 5000;
-```
-
-Verify returned settings on every connection. `FULL` is the durable default; `NORMAL` may be an explicit operator tradeoff. Busy timeout is bounded waiting, not a throughput solution. Monitor checkpoints, WAL growth, free disk and long readers. Allocate per-project writer queues; expose saturation with a retriable error rather than unbounded waiting.
+Measure memory and cold initialization under the intended branch count. `QB_MAX_BRANCH_OWNERS` defaults to 4 and accepts 1–32; the ceiling is not a capacity guarantee. Monitor directory size, free disk, owner memory and long queries. Database quotas account for the entire PGlite directory.
 
 ### 6.2 Exposure contract
 
-Introspect `sqlite_schema`, column/index/foreign-key PRAGMAs and migration records. Store exposure metadata separately from physical schema. Tables are private until deliberately exposed with policies. Public CRUD requires stable primary keys; define composite-key encoding. FTS/vector/virtual tables and views require explicit read adapters. Views are private by default because underlying row policies do not automatically apply. Arbitrary triggers, SQL console and migrations are trusted developer operations; they are not available to application users.
+Introspect PostgreSQL catalogs for columns, keys, indexes, constraints and migration records. Store exposure metadata separately from physical schema. Tables are private until deliberately exposed with policies. Public CRUD requires stable primary keys; define composite-key encoding. FTS/vector/virtual tables and views require explicit read adapters. Views are private by default because underlying row policies do not automatically apply. Arbitrary triggers, SQL console and migrations are trusted developer operations; they are not available to application users.
 
 Represent booleans as validated 0/1, timestamps as UTC ISO strings or an explicitly selected integer convention, JSON as validated text and blobs as base64 or separate binary endpoints. Return 64-bit integers outside JavaScript's safe range as strings. Document nullability, defaults, generated columns and numeric precision in generated types.
 
 ### 6.3 Migrations and schema cache
 
-Each migration has ID, checksum, author, applied time, schema version and status. Reject edited applied checksums. Preflight SQL and backup before destructive changes. Apply migrations under an exclusive branch maintenance lock and a SQLite transaction where supported. Table-rebuild migrations copy, validate, swap and regenerate managed triggers atomically. No automatic destructive rollback; restore or apply a forward migration.
+Each migration has ID, checksum, author, applied time, schema version and status. Reject edited applied checksums. Preflight SQL and backup before destructive changes. Apply migrations under an exclusive branch maintenance lock and a PGlite transaction where supported. Table-rebuild migrations copy, validate, swap and regenerate managed triggers atomically. No automatic destructive rollback; restore or apply a forward migration.
 
 After commit, publish a monotonic schema version. Regenerate API metadata, GraphQL schema and type declarations; invalidate prepared statements and realtime/table caches. Requests carry or resolve a coherent schema version. DDL bypassing the migration API is detected and marks the schema stale until reconciled.
 
@@ -234,7 +227,7 @@ Keys support rotation, expiry and revocation. Store hashes of opaque API keys, s
 
 ### 8.2 Policy engine
 
-SQLite does not provide PostgreSQL-style native RLS. QB Flex enforces policies at all exposed execution boundaries; trusted direct access to the database file bypasses this layer. Do not market file-level isolation as row authorization.
+QB Flex continues to enforce its application policy contracts rather than relying on PostgreSQL native RLS. QB Flex enforces policies at all exposed execution boundaries; trusted direct access to the database file bypasses this layer. Do not market file-level isolation as row authorization.
 
 Policies use a restricted JSON AST, not arbitrary JavaScript or user SQL. Supported expressions include boolean operations, comparisons, null checks, membership and approved relationship existence checks. Claims are verified and server-supplied. Identifiers come from schema allowlists; all values use parameter bindings.
 
@@ -275,7 +268,7 @@ Mutations accept idempotency keys scoped to credential, branch and operation; pe
 
 ## 10. Generated GraphQL API
 
-Endpoint: `POST /graphql`. Generate types only for supported exposed objects. Use custom JSON, DateTime, Bytes and BigInt scalars; SQLite does not imply PostgreSQL GraphQL semantics. Generate paginated connections, allowlisted filter inputs and named mutations. Foreign-key relationships use batched resolvers and the shared policy engine.
+Endpoint: `POST /graphql`. Generate types only for supported exposed objects. Use custom JSON, DateTime, Bytes and BigInt scalars; PGlite does not imply PostgreSQL GraphQL semantics. Generate paginated connections, allowlisted filter inputs and named mutations. Foreign-key relationships use batched resolvers and the shared policy engine.
 
 Limits: maximum depth 8, configurable complexity budget, bounded aliases and page sizes, request/body/time limits, per-request DataLoader caches keyed by user and branch. Disable unrestricted introspection in production by configuration; developers can use authenticated schema tooling. Persisted operations are an optional production mode.
 
@@ -299,11 +292,11 @@ SSO adds organization discovery, OIDC/SAML connection configuration, verified do
 
 ### 12.1 Commit event source
 
-Install managed INSERT/UPDATE/DELETE triggers on exposed ordinary tables to insert outbox events in the same SQLite transaction. Rollback removes events. Triggers capture primary keys and bounded permitted images; blobs/oversized columns are omitted or referenced. Outbox tables have no recursive capture triggers. Managed trigger regeneration is part of migrations.
+Install managed INSERT/UPDATE/DELETE triggers on exposed ordinary tables to insert outbox events in the same PGlite transaction. Rollback removes events. Triggers capture primary keys and bounded permitted images; blobs/oversized columns are omitted or referenced. Outbox tables have no recursive capture triggers. Managed trigger regeneration is part of migrations.
 
 Durable consumers poll committed events using a branch-local sequence. At-least-once delivery is expected; event IDs enable deduplication. Transaction IDs preserve grouping; order is defined within one branch, not across projects. Direct trusted SQL changes are captured only on tables with installed triggers. Changes on unsupported virtual tables require explicit adapter events.
 
-This stream replaces the requested PostgreSQL listener for QB-native databases. A future external PostgreSQL connector can ingest logical changes, but is optional and not required to operate SQLite.
+This stream replaces the requested PostgreSQL listener for QB-native databases. A future external PostgreSQL connector can ingest logical changes, but is optional and not required to operate PGlite.
 
 ### 12.2 WebSocket protocol
 
@@ -329,9 +322,9 @@ Block SSRF targets: loopback, link-local, metadata endpoints, private addresses 
 
 ### 14.1 Object contract
 
-Buckets have public/private visibility, allowed MIME types, per-object size limits, retention and policies. Store object metadata in SQLite; bytes stay in S3. Object keys are project/branch scoped and normalized. Do not expose raw backend credentials. Authorized upload intents issue short-lived URLs limited to one object, size and content constraints supported by the backend.
+Buckets have public/private visibility, allowed MIME types, per-object size limits, retention and policies. Store object metadata in PGlite; bytes stay in S3. Object keys are project/branch scoped and normalized. Do not expose raw backend credentials. Authorized upload intents issue short-lived URLs limited to one object, size and content constraints supported by the backend.
 
-Objects transition `pending → uploading → verifying → ready` or `failed`. Finalization checks backend existence, expected size/checksum and content validation before publishing metadata. SQLite and S3 are not one atomic transaction: use retryable workflows and orphan cleanup. Deletes use tombstones and retryable backend cleanup. Downloads require ready state and current policy.
+Objects transition `pending → uploading → verifying → ready` or `failed`. Finalization checks backend existence, expected size/checksum and content validation before publishing metadata. PGlite and S3 are not one atomic transaction: use retryable workflows and orphan cleanup. Deletes use tombstones and retryable backend cleanup. Downloads require ready state and current policy.
 
 ### 14.2 Resumable uploads
 
@@ -343,21 +336,21 @@ Transformation API allows bounded width/height, fit, quality and approved format
 
 Public immutable objects can use long CDN TTLs. Private objects require edge token verification or short-lived signed access whose expiry governs cache behavior. Never share cached private content across users without authorization. Policy revocation and cache purge behavior must be documented; private authorization should be evaluated at delivery for immediate revocation.
 
-Global CDN is an optional provider integration, not a property of SQLite or S3 compatibility. Show CDN provider status, region availability, cache hits and purge failures.
+Global CDN is an optional provider integration, not a property of PGlite or S3 compatibility. Show CDN provider status, region availability, cache hits and purge failures.
 
 ### 14.4 Analytics buckets
 
-Store append-only sanitized events as compressed partitioned objects with manifests. Aggregate usage in scheduled jobs into SQLite summaries for Studio. Optional columnar query adapter can be added later. Separate platform usage analytics from application events; define schemas, retention, consent configuration and project-specific access. Do not write sensitive row payloads into usage analytics.
+Store append-only sanitized events as compressed partitioned objects with manifests. Aggregate usage in scheduled jobs into PGlite summaries for Studio. Optional columnar query adapter can be added later. Separate platform usage analytics from application events; define schemas, retention, consent configuration and project-specific access. Do not write sensitive row payloads into usage analytics.
 
 ## 15. Backups, branches and replicas
 
 ### 15.1 Backups and restore
 
-Use a tested SQLite online backup or consistent snapshot mechanism, not copying only a live main file while WAL contains commits. Encrypt backup objects, checksum contents and persist schema/configuration manifests. Proposed defaults: daily full snapshots, 7 daily and 4 weekly copies; retention is operator-configurable.
+Use owner-serialized PGlite datadir exports; never copy a live database directory. Physical snapshots include authenticated engine/version metadata and require the pinned compatible runtime. Snapshot export/import materializes the datadir; archive cryptography streams in bounded chunks. Encrypt backup objects, checksum contents and persist schema/configuration manifests. Proposed defaults: daily full snapshots, 7 daily and 4 weekly copies; retention is operator-configurable.
 
 Restore into a new isolated branch first, run integrity/foreign-key checks and compare expected migration/schema versions. Switching production traffic requires an explicit cutover operation, rollback checkpoint and old-owner fencing. Auth/session and secret restore behavior must be visible. Database snapshots do not restore object bytes unless object-version backups are enabled.
 
-MVP recovery objective target: RPO 24 hours and RTO 60 minutes on the reference dataset, verified by drills. Continuous recoverable replication/backup is a P2 adapter with separately measured objectives. The API outbox alone is not sufficient for point-in-time recovery of every SQLite operation.
+MVP recovery objective target: RPO 24 hours and RTO 60 minutes on the reference dataset, verified by drills. Continuous recoverable replication/backup is a P2 adapter with separately measured objectives. The API outbox alone is not sufficient for point-in-time recovery of every PGlite operation.
 
 ### 15.2 Branching
 
@@ -367,7 +360,7 @@ States: requested, snapshotting, validating, provisioning, ready, failed, deleti
 
 ### 15.3 Read replicas
 
-P2 baseline replicas are asynchronously refreshed consistent snapshots, reporting applied generation and age. This provides read offload, not low-latency streaming replication. For incremental replicas, choose and certify an SQLite-specific replication engine before promising latency or automatic failover; do not manually copy live WAL files between running owners.
+P2 baseline replicas are asynchronously refreshed consistent snapshots, reporting applied generation and age. This provides read offload, not low-latency streaming replication. For incremental replicas, choose and certify an PGlite-compatible replication engine before promising latency or automatic failover; do not manually copy live WAL files between running owners.
 
 Clients choose `primary` or `eventual`; writes always route to primary. Read-after-write uses primary or waits for a verified consistency token within a timeout. If policy/auth/configuration freshness cannot be guaranteed, route protected reads to primary; stale replicas must not honor revoked access. Region placement and replica residency are explicit. Never allow a read replica to become writable without owner fencing and recovery validation.
 
@@ -375,7 +368,7 @@ Clients choose `primary` or `eventual`; writes always route to primary. Read-aft
 
 ### 16.1 Vector layer
 
-Provide `VectorAdapter` operations for collection creation, upsert, delete and filtered nearest-neighbor query. sqlite-vec is a candidate requiring a Bun extension-loading, platform packaging and performance spike. Fallback exact search is allowed only for capped small collections and must be labeled. pgvector cannot run inside SQLite; an optional PostgreSQL adapter would be a separate backend.
+Provide `VectorAdapter` operations for collection creation, upsert, delete and filtered nearest-neighbor query. The previous sqlite-vec spike is retired. A PGlite-compatible vector extension requires separate packaging, authorization and performance work. Fallback exact search is allowed only for capped small collections and must be labeled. PGlite extension availability does not enable vector product APIs; pgvector integration remains planned.
 
 Collections pin embedding provider/model/version, dimensions, distance metric and normalization. Enforce dimensions and reject mixed models. Index/version changes trigger re-embedding jobs. Store document metadata and ACLs alongside chunks; embeddings link to stable chunk IDs.
 
@@ -449,7 +442,7 @@ Use a transport abstraction with timeout, AbortSignal, request IDs and normalize
 
 ### 18.2 Type generation
 
-Generate row/insert/update types, nullable relationships, enums represented by explicit metadata/check constraints, bigint conventions and registered RPC signatures. RPC types come from operation declarations; SQLite lacks PostgreSQL `SETOF` typing. Invalid table names, selected fields and RPC argument names should fail compile-time tests. Runtime validators remain mandatory.
+Generate row/insert/update types, nullable relationships, enums represented by explicit metadata/check constraints, bigint conventions and registered RPC signatures. RPC types come from operation declarations; PGlite lacks PostgreSQL `SETOF` typing. Invalid table names, selected fields and RPC argument names should fail compile-time tests. Runtime validators remain mandatory.
 
 Schema artifacts contain a hash/version. CI compares generated output with migration state. Relationship inference uses foreign keys plus explicit registry declarations; do not infer arbitrary views or dynamic SQL return types. Maintain packages in one monorepo for consistent errors and versioning, while keeping package exports modular.
 
@@ -500,6 +493,10 @@ Use Inter/system sans for UI and a legible monospace for SQL, IDs and logs. Stat
 
 Layout: top bar with organization/project/branch selectors, command search and account; left product navigation; central workspace; optional right details/assistant panel. Persistent production branch badge and explicit environment labels reduce editing mistakes. Grid and SQL layouts prioritize desktop; smaller screens use contained horizontal grids and drawers.
 
+Studio's implemented platform route guard verifies fresh cookie sessions in `beforeLoad` before protected child content loads. Private routes skip server rendering because Studio's cookies are sent directly to the API; public SSR output must contain no private account or workspace data. Sign-in confirms the browser session before success/navigation, uses a sanitized local return path, clears old identity caches and cancels stale reads. Session failures render a recoverable connection screen; missing/expired sessions return to sign-in. Local `localhost`/`127.0.0.1` API requests align with the browser hostname without weakening cookie or API authorization settings. Passkey RP hostname restrictions still apply.
+
+The implemented terminal display uses the existing redacted Elysia request hooks. Native startup waits for API, Studio and Docs readiness, then shows service URLs, runtime/engine versions, elapsed time, data directory, owner limit and worker schedule. `QB_LOG_FORMAT=auto|pretty|json` selects presentation; auto keeps production/piped logs JSON. Pretty logs color HTTP status/latency and quiet fast successful internal polling unless `QB_LOG_INTERNAL=true`; failures, slow requests and all JSON events remain visible. `NO_COLOR`, `FORCE_COLOR` and dumb terminals control ANSI styling. Both formats retain the field allowlist and redact query/reset tokens; metrics use actual returned response statuses.
+
 ### 21.2 Studio tabs and flows
 
 | Tab | Required capabilities |
@@ -522,7 +519,7 @@ Core onboarding: create organization → project/region → primary branch → t
 
 ## 22. Security and isolation requirements
 
-TLS on public and internal remote traffic; scoped internal service authentication; encryption at rest through encrypted volumes and object backend plus encrypted secret envelopes. Stock SQLite is not automatically encrypted. SQLCipher would require a separately certified integration and must not be assumed available in `bun:sqlite`.
+TLS on public and internal remote traffic; scoped internal service authentication; encryption at rest through encrypted volumes and object backend plus encrypted secret envelopes. Stock PGlite is not automatically encrypted. SQLCipher would require a separately certified integration and must not be assumed available in `@electric-sql/pglite`.
 
 Run API/database/jobs/functions under distinct least-privilege permissions where feasible. Public database files and backend object endpoints are never directly downloadable. Reserved tables and secrets are inaccessible through generated APIs. Disable arbitrary extension loading and ATTACH/PRAGMA operations from untrusted inputs. Install only operator-approved signed/verified extension artifacts.
 
@@ -532,7 +529,7 @@ Threat-model gates: cross-project ID substitution, SQL injection, broken policy 
 
 ## 23. Observability and operational behavior
 
-Propagate request/trace IDs through Studio, API, owners and jobs. Metrics include REST/GraphQL latency/error rate, write queue age, SQLite busy errors, WAL bytes, disk capacity, schema refresh failures, outbox lag, webhook retries, WebSocket connections/drops, upload failures, function resource use, provider latency/tokens and replica age.
+Propagate request/trace IDs through Studio, API, owners and jobs. Metrics include REST/GraphQL latency/error rate, write queue age, PGlite busy errors, WAL bytes, disk capacity, schema refresh failures, outbox lag, webhook retries, WebSocket connections/drops, upload failures, function resource use, provider latency/tokens and replica age.
 
 Logs contain actor/resource identifiers, operation and redacted errors. Payload logging is off by default. Proposed retention: request logs 7 days, job logs 14 days, audit logs 90 days; configurable with explicit storage quotas. Never log passwords, OTPs, auth headers or raw AI prompts by default.
 
@@ -614,7 +611,7 @@ Inject master encryption keys, S3 credentials, SMTP passwords, signing material 
 
 ## 28. Required developer documentation
 
-Deliver quickstart, self-host guide, project lifecycle, supported SQLite SQL/API subset, RLS semantics, auth connector setup, realtime consistency, S3/tus adapters, function permissions, AI data handling, SDK/CLI references, Management OpenAPI, GraphQL schema, MCP OAuth scopes, backup/restore runbooks and Supabase migration differences.
+Deliver quickstart, self-host guide, project lifecycle, supported PGlite SQL/API subset, RLS semantics, auth connector setup, realtime consistency, S3/tus adapters, function permissions, AI data handling, SDK/CLI references, Management OpenAPI, GraphQL schema, MCP OAuth scopes, backup/restore runbooks and Supabase migration differences.
 
 Maintain architecture decision records for per-branch ownership, application RLS, event capture, vector engine, auth isolation, replica strategy and function sandbox. Document experimental modules plainly and expose supported capabilities through a machine-readable feature endpoint.
 
@@ -631,22 +628,22 @@ Maintain architecture decision records for per-branch ownership, application RLS
 9. Choose initial hosting regions, external delivery/CDN providers and their operating costs.
 10. Define a compatibility statement before releasing any Supabase import adapter.
 
-These decisions affect adapters and delivery estimates. They do not change the requested Bun, TanStack, Elysia, SQLite or monochrome product direction.
+These decisions affect adapters and delivery estimates. They do not change the requested Bun, TanStack, Elysia, PGlite or monochrome product direction.
 
 ## 30. Source notes and references
 
 Architecture and feature choices above are proposed QB Flex requirements. They are not claims that third-party libraries already provide the complete platform. Official documentation was consulted on 5 October 2026; pin and retest actual dependencies before shipping.
 
-- [SQLite WAL](https://www.sqlite.org/wal.html): concurrent reads, one writer, checkpoint/durability tradeoffs and local-host constraints. This is the basis for the single-primary branch design.
-- [Bun SQLite](https://bun.sh/docs/runtime/sqlite): native SQLite integration and runtime API; verify required backup/cancellation/extension features against the pinned release.
-- [TanStack DB overview](https://github.com/TanStack/db/blob/main/docs/overview.md): client reactive collections/local queries; does not replace project SQLite persistence.
+- [PGlite filesystems](https://pglite.dev/docs/filesystems): persistent Node/Bun filesystem storage; exclusive database ownership remains a QB Flex deployment contract.
+- [PGlite API](https://pglite.dev/docs/api): asynchronous PostgreSQL queries, transactions and datadir export/import; verify behavior against the pinned release.
+- [TanStack DB overview](https://github.com/TanStack/db/blob/main/docs/overview.md): client reactive collections/local queries; does not replace project PGlite persistence.
 - [Better Auth OAuth provider](https://better-auth.com/docs/plugins/oauth-provider): candidate OAuth authorization server integration; realm isolation and deployment security remain QB requirements.
 - [Better Auth generic OAuth](https://better-auth.com/docs/plugins/generic-oauth): provider adapter option; each requested social provider needs certification.
-- [Supabase repository](https://github.com/supabase/supabase): PostgreSQL-based product reference; PostgreSQL-specific capabilities require adaptation for SQLite.
+- [Supabase repository](https://github.com/supabase/supabase): PostgreSQL-based product reference; PostgreSQL-specific capabilities require adaptation for PGlite.
 - [blocks.so](https://blocks.so/): requested React/ShadCN component reference.
 - [Supabase Library](https://supabase.com/library): requested UI/library reference.
 - [bklit.com](https://bklit.com/): requested UI reference; site inspection was unavailable during preparation.
-- [sqlite-vec](https://github.com/asg017/sqlite-vec): vector adapter candidate, pending compatibility certification.
+- [PGlite](https://pglite.dev/docs/): the current embedded PostgreSQL engine; extension-based vector APIs remain planned.
 - [GraphQL Yoga](https://the-guild.dev/graphql/yoga-server): GraphQL adapter candidate, pending Elysia/Bun integration certification.
 - [tus protocol](https://tus.io/protocols/resumable-upload): resumable upload contract to pin during implementation.
 - [MCP specification](https://modelcontextprotocol.io/specification): protocol/authorization contract to pin and verify with target clients.
@@ -656,7 +653,7 @@ Architecture and feature choices above are proposed QB Flex requirements. They a
 
 ### 31.1 Existing, required, deferred
 
-**Existing, source-backed:** organizations/projects, isolated branch identity realms, native SQLite owners, reviewed migrations, default-private exposure and column allowlists, shared CRUD/RPC/realtime policy enforcement, password/TOTP/passkey server plugins, authorized realtime, S3-compatible storage, encrypted local snapshots, CLI, browser/React SDKs, Studio and Docs. Backend/provider configuration and physical ceremonies still require deployment-specific verification. Existing code/tests, not this specification, establish availability.
+**Existing, source-backed:** organizations/projects, isolated branch identity realms, native PGlite owners, reviewed migrations, default-private exposure and column allowlists, shared CRUD/RPC/realtime policy enforcement, password/TOTP/passkey server plugins, authorized realtime, S3-compatible storage, encrypted local snapshots, CLI, browser/React SDKs, Studio and Docs. Backend/provider configuration and physical ceremonies still require deployment-specific verification. Existing code/tests, not this specification, establish availability.
 
 **Required:** the twelve features in section 32, native SDK and complete push integration in section 33, and all four optional browser WASM integrations in section 34. This is one expanded release. Dependency order does not authorize removing later work or declaring an early foundation complete.
 
@@ -664,10 +661,10 @@ Architecture and feature choices above are proposed QB Flex requirements. They a
 
 ### 31.2 Invariants and shared contracts
 
-- Retain native SQLite, one writable owner per immutable branch, fenced lifecycle, local persistent disks, separate control/application identities, default-private tables and actual shared policy enforcement. Never share writable SQLite files across API instances.
+- Retain native PGlite, one writable owner per immutable branch, fenced lifecycle, local persistent disks, separate control/application identities, default-private tables and actual shared policy enforcement. Never share writable PGlite files across API instances.
 - Preserve `QB_*`, ports 7610/7611/7612, existing response envelopes, public SDK signatures, routes, quotas, asynchronous operation conventions and legacy archive restore. Additive contracts may not silently change existing behavior.
 - Project/branch resources require membership and existing scoped-management-token checks. Viewer reads; developer configuration where permitted; owner/admin plus existing MFA for production push/credential changes. Application users cannot inherit management privileges.
-- New internal executors authenticate to owner-mediated APIs. They do not mount SQLite or directly mutate databases. The Node push principal can claim/complete only push jobs; the maintenance principal cannot mint application sessions.
+- New internal executors authenticate to owner-mediated APIs. They do not mount PGlite or directly mutate databases. The Node push principal can claim/complete only push jobs; the maintenance principal cannot mint application sessions.
 - Durable jobs contain encrypted bounded payloads, transactional submissions/checkpoints, stable deduplication identities, expiring leases with fencing tokens, recorded attempts, bounded retries, dead letters and explicit replay. Expired leases may cause duplicate side effects: receivers must deduplicate stable event IDs. Cancellation stops unsent work, not effects already accepted externally.
 - Proposed management resources: recovery destinations/inventory/drills, findings/acknowledgments, diagnostics, operations summaries, query inspection, reviews, previews, jobs, webhooks, search configuration and notifications. Add typed management helpers; `client.search(...)` remains application-policy-enforced. Exact routes must enter executable contracts when implemented, never as mock-success endpoints.
 - Every section inherits redacted logging, bounded input/concurrency/retention, cancellation, capability reporting, audit requirements and fail-closed authorization. Unknown external delivery is not success.
@@ -730,7 +727,7 @@ Architecture and feature choices above are proposed QB Flex requirements. They a
 
 **Authorization/API/state:** developer project/branch inspection, no unrestricted application explain API. Summaries use fingerprints without parameter values. Plans are diagnostic and not stable application wire types. Requests `queued → planned | failed` with bounded owner work.
 
-**Configuration/limits/failure/compatibility:** bounded samples/time/retention; redact sensitive SQL literals. Use native EXPLAIN QUERY PLAN for generated statements, not execute arbitrary supplied SQL. Unsupported plans are explained rather than guessed. [SQLite documentation](https://www.sqlite.org/eqp.html).
+**Configuration/limits/failure/compatibility:** bounded samples/time/retention; redact sensitive SQL literals. Use PostgreSQL EXPLAIN (FORMAT JSON) for generated statements, not execute arbitrary supplied SQL. Unsupported plans are explained rather than guessed. [PostgreSQL EXPLAIN documentation](https://www.postgresql.org/docs/current/sql-explain.html).
 
 **Acceptance:** policy predicates present; no persisted bindings; limit/time bounds; suggestions never mutate schema; plans respect identity/exposure; before/after reproducible fixtures.
 
@@ -766,7 +763,7 @@ Architecture and feature choices above are proposed QB Flex requirements. They a
 
 ### LAB-01 Local Data Lab
 
-**Purpose/workflows:** independent Studio workspace for explicitly imported CSV/JSON/Parquet/SQLite; schema preview, bounded queries/profiling/export using optional workers. No automatic upload. Local SQL cannot fetch remote URLs or install extensions.
+**Purpose/workflows:** independent Studio workspace for explicitly imported CSV/JSON/Parquet/PGlite; schema preview, bounded queries/profiling/export using optional workers. No automatic upload. Local SQL cannot fetch remote URLs or install extensions.
 
 **Authorization/API/state:** browser-local consent, no management secret sent to workers; explicit export/upload remains separate authorized action. `idle → loading → ready → running → ready | cancelled | failed`. Ephemeral default; persistent storage only with consent and visible deletion.
 
@@ -786,11 +783,11 @@ Architecture and feature choices above are proposed QB Flex requirements. They a
 
 ### SEA-01 Permission-aware search
 
-**Purpose/workflows:** explicitly registered FTS5 collections over exposed allowed text columns, private indexes maintained transactionally. Native FTS5 only, no vector fallback.
+**Purpose/workflows:** explicitly registered PostgreSQL full-text collections over exposed allowed text columns, private indexes maintained transactionally. A PostgreSQL full-text adapter is planned; no vector fallback.
 
 **Authorization/API/state:** management collection registration/rebuild; typed application `client.search(...)` passes current SELECT policies before projection/counts/paging/snippets. Collections `building → ready → invalidated → rebuilding | unsupported | failed`. Schema/exposure changes invalidate before further reads.
 
-**Configuration/limits/failure/compatibility:** bounded literal-term queries, deterministic cursors, private internal indexes. No vocabulary endpoints or global ranking/corpus statistics. Unsupported FTS5 is explicit. [SQLite FTS5 documentation](https://www.sqlite.org/fts5.html).
+**Configuration/limits/failure/compatibility:** bounded literal-term queries, deterministic cursors, private internal indexes. No vocabulary endpoints or global ranking/corpus statistics. Unavailable search capabilities are explicit; the former FTS5 design requires a PostgreSQL adapter before implementation.
 
 **Acceptance:** cross-user hidden rows/counts/snippets/columns; unsupported extension; transaction rollback; rebuild/schema changes; bounded queries and cursor scope.
 
@@ -818,7 +815,7 @@ Use expo-notifications permissions/Expo tokens/responses/channels/badges/local n
 
 ### PSH-02 Delivery, API, worker and Studio
 
-Distinct development/staging/production EAS projects and native app IDs; separate iOS/Android Test Lab. Dedicated Node24LTS worker with expo-server-sdk7.2.0, no SQLite mount. APNs/FCM credentials stay in Expo/EAS; Expo access tokens encrypted server-side. Disabled by default; optional Compose service; restricted worker credential and health checks. Configuration contracts `QB_PUSH_ENABLED`, `QB_PUSH_WORKER_TOKEN`, `QB_PUSH_INTERNAL_API_URL` remain proposed until validated implementation exists.
+Distinct development/staging/production EAS projects and native app IDs; separate iOS/Android Test Lab. Dedicated Node24LTS worker with expo-server-sdk7.2.0, no PGlite mount. APNs/FCM credentials stay in Expo/EAS; Expo access tokens encrypted server-side. Disabled by default; optional Compose service; restricted worker credential and health checks. Configuration contracts `QB_PUSH_ENABLED`, `QB_PUSH_WORKER_TOKEN`, `QB_PUSH_INTERNAL_API_URL` remain proposed until validated implementation exists.
 
 Studio operators/scoped trusted-server sends only; users manage own installations/preferences. Developers test dev/staging; production send and credential changes owner/admin plus existing MFA. `202` campaign ID; drafts/templates, dry-run audience, single installation/user, filtered bulk, UTC schedules, unsent cancellation and explicit failed-recipient retry. Snapshot/deduplicate recipients; recheck current ownership/activity/preferences/environment before each dispatch.
 
@@ -828,7 +825,7 @@ Add `/notifications`: Overview, Tokens & Users, Composer, Campaigns, Test Lab, C
 
 ## 34. Optional WASM capabilities and portability
 
-All four are required in expanded release, but optional at runtime, lazy-loaded browser workers with pinned self-hosted assets. They never replace native server SQLite or become Hermes dependencies. No secrets enter workers; login/CRUD/normal uploads work when unsupported. Single-thread baseline; do not globally enable isolation headers that break OAuth/embeds.
+All four are required in expanded release, but optional at runtime, lazy-loaded browser workers with pinned self-hosted assets. They never replace native server PGlite or become Hermes dependencies. No secrets enter workers; login/CRUD/normal uploads work when unsupported. Single-thread baseline; do not globally enable isolation headers that break OAuth/embeds.
 
 | ID | Library / capability | Required controls and acceptance |
 | --- | --- | --- |
@@ -874,3 +871,13 @@ Completion requires every expanded feature and acceptance evidence. Run `bun run
 ## 37. Authorization boundary
 
 This implementation does not authorize external deployment, EAS credential provisioning, store submissions, production notifications, npm publication, automatic recovery cutover, multi-region operation, vector/AI services or integrated object-byte backup. Tests use isolated fixtures. Do not read/log live keys or erase unrelated working-tree changes. Product version remains0.1.0 until a separate authorized release change.
+
+## Database engine conversion contract
+
+The platform uses embedded PGlite PostgreSQL for the catalog, branch data, auth, storage metadata, jobs and policy simulation. New SQL is PostgreSQL; SQLite SQL compatibility is not a runtime feature. REST/SDK scalar representations remain 0/1 booleans, UTC timestamps, JSON text, base64 binary values and strings for unsafe integers.
+
+`qb db migrate-engine --from sqlite --to pglite --data-dir SOURCE --output-dir DESTINATION [--check]` requires stopped writers and exclusive ownership, including the legacy SQLite ownership lock. Paths must not overlap and the destination must be empty. Preflight inventories every referenced branch, rejects custom views/triggers, virtual/generated objects, unsafe defaults/constraints and mixed-type values, and reports blockers rather than omitting data. Convert ordinary tables, supported defaults/constraints/indexes and values, then verify row counts, canonical content hashes, foreign keys, catalog references and identity sequences. Historical migration SQL/checksums remain unchanged; engine migration baselines are separate. Preserve encrypted keys, credentials, sessions, durable jobs/checkpoints and archive bytes; do not produce new row events during copying. Preserve source databases and original key custody. Publish `engine.json` only after complete validation. Switching `QB_DATA_DIR` is a separately scheduled activation; rollback after accepting writes requires reconciliation.
+
+Legacy branch/control archive restoration uses the same converter and keeps its recovery sanitization/revocation contracts. Control swaps have a recovery journal and encrypted rollback snapshot. The original encrypted archive format remains readable; new snapshots authenticate PGlite version metadata. PostgreSQL wire access, new vector/search features and browser/native database accelerators remain outside this migration.
+
+Historical SQLite/Linux throughput and native-extension evidence predates this engine migration. Current PGlite validation must be reported separately; Linux/Compose requires a working Docker daemon and is not implied by local macOS results.

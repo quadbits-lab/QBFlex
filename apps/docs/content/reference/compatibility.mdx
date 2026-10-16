@@ -4,7 +4,7 @@ export const frontmatter = {"title": "Compatibility and implementation status", 
 
 ## Verified locally
 
-Bun 1.4.2, Elysia, worker-owned SQLite, Better Auth realm isolation, MFA enrollment/challenges, generated TypeScript, React Strict Mode lifecycle tests, realtime reconnect, MinIO storage and encrypted restore have executable tests in this repository. Consult `VERIFICATION.md` for the actual build/browser/Linux results and environment.
+Bun 1.4.2, Elysia, worker-owned PGlite, Better Auth realm isolation, MFA enrollment/challenges, generated TypeScript, React Strict Mode lifecycle tests, realtime reconnect, S3-compatible storage and encrypted restore have executable tests in this repository. Consult `VERIFICATION.md` for the actual build/browser/Linux results and environment.
 
 ## Deployment certification
 
@@ -16,18 +16,26 @@ On 6 October 2026, a Linux ARM64 container on an Apple M5 Pro host ran a one-mil
 
 The temporary filesystem was Docker OverlayFS on the local VM disk. The shared VM reported 8,317,267,968 bytes of physical memory; the container's 8 GiB setting was a configured ceiling. These short virtualized runs do not certify sustained scale, multi-tenant fairness, power-loss recovery or production disks. [Download the raw result and environment metadata](/benchmark.json). The reproducible source is `scripts/benchmark.ts` in the repository.
 
-## Native extensions
+## Database engine transition
 
-The macOS system SQLite rejects the tested dynamic vector extension. The bounded spike reports the result separately on each OS. Vector product features remain planned even when the Linux extension loads successfully.
+The current engine is PGlite 0.5.10 with Kysely 0.29.6 on Bun. Historical SQLite/Linux throughput and extension results above do not establish PGlite performance or compatibility. New regression tests cover PGlite transactions, conversion, authentication and archive recovery. Platform-specific gates must be rerun for the new engine.
+
+Vector/search product APIs remain planned. Installing PGlite does not enable pgvector, PostgreSQL wire access, Supabase compatibility or browser database workflows.
 
 ## Current boundaries
 
 Public APIs support ordinary tables, scalar filters, keyset pagination, atomic batches, upsert, registered foreign-key relationships, relationship existence policies and reviewed structured RPC. Relationship expansion is one level deep and capped at three relationships, 100 parent rows and 50 child rows. Policies reject recursive relationship cycles.
 
-Storage has owner/private and public-read rules with bounded gateway uploads. Custom storage-policy expressions, resumable transfers and image processing are planned. Management tokens grant selected projects; server service keys require explicit branch/table/method scopes. SQL developer privileges are trusted schema administration.
+Storage has owner/private and public-read rules with bounded disk-staged streaming gateway uploads with optional SHA-256. Custom storage-policy expressions, resumable transfers and image processing are planned. Management tokens grant selected projects; server service keys require explicit branch/table/method scopes. SQL developer privileges are trusted schema administration.
 
-The deployment owns all writable databases from one API process. It does not provide distributed owners, automatic failover, SQLCipher, point-in-time recovery or external OAuth certification. Metrics cover HTTP traffic, active owners and disk capacity; complete distributed tracing and advanced feature metrics are future work.
+The deployment owns all writable databases from one API process. It does not provide distributed owners, automatic failover, SQLCipher, point-in-time recovery or external OAuth certification. Metrics cover HTTP traffic, active owners and disk capacity; contract-labeled private latency histograms are implemented, while the full Operations Dashboard, alerts, distributed tracing and advanced feature metrics remain incomplete.
 
 ## Supported clients
 
-The initial supported application tracks are React 19 and Vanilla JavaScript browser ESM. SSR must create a client and QueryClient per request; browser effects start after hydration. Other framework adapters and React Native remain deferred.
+The initial supported application tracks are React 19 and Vanilla JavaScript browser ESM. SSR must create a client and QueryClient per request; browser effects start after hydration. Other framework adapters remain deferred; React Native/offline/background/push are required by the expanded specification but are not implemented or certified yet.
+
+## Expanded compatibility targets and evidence boundaries
+
+Linux AMD64/ARM64 containers, macOS development, Windows through WSL2/Docker, Chromium/Firefox/WebKit and real mobile-browser smoke checks are the expanded targets—not an assertion all gates pass today. Native Windows remains experimental until equivalent gates pass. Current browser regression evidence is Chromium; do not infer Firefox/WebKit or real-device certification from it.
+
+The current foundation has executable tests for encrypted/fenced durable jobs, policy-fixture isolation, revision guards, streaming archives/legacy restore, upload checksums/cancellation, redacted Doctor output and private histograms. Test coverage is not a substitute for running those tests on a deployment. Native/push/WASM, full recovery/Advisor/operations and developer workflows remain [incomplete](/docs/roadmap/expanded-release). Physical passkey, biometric, background and real-push gates are opt-in and are not proven by mocks.

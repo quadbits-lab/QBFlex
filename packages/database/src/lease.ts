@@ -1,24 +1,25 @@
-import { Database } from 'bun:sqlite';
-import { writeFileSync, readFileSync, unlinkSync } from 'node:fs';
+import { dlopen, FFIType } from 'bun:ffi';
+import { openSync, closeSync, mkdirSync, writeFileSync, readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { QBError } from '@qb-flex/contracts';
-/** An OS-managed SQLite file lock fences one local API process. A crash releases the lock automatically. */
-export function acquireLease(directory: string) {
-  const database = new Database(join(directory, '.owner.sqlite'), { create: true });
-  try {
-    database.exec(
-      'PRAGMA busy_timeout=0; BEGIN EXCLUSIVE; CREATE TABLE IF NOT EXISTS lease(id INTEGER PRIMARY KEY);',
-    );
-  } catch {
-    database.close();
-    throw new QBError('OWNER_LOCK', 'Another API process owns this data directory', 503);
+
+// flock is released by the kernel on process death; a lockfile's age is never ownership evidence.
+const libc = dlopen(process.platform === 'darwin' ? '/usr/lib/libSystem.B.dylib' : 'libc.so.6', {
+  flock: { args: [FFIType.i32, FFIType.i32], returns: FFIType.i32 },
+});
+export function acquireLease(directory: string, marker = true) {
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const fd = openSync(join(directory, '.owner.flock'), 'a', 0o600);
+  if (libc.symbols.flock(fd, 2 | 4) !== 0) {
+    closeSync(fd);
+    throw new QBError('OWNER_LOCK', 'Another process owns this data directory', 503);
   }
   const path = join(directory, 'owner.lock'),
     nonce = crypto.randomUUID();
   try {
-    writeFileSync(path, JSON.stringify({ pid: process.pid, nonce }), { mode: 0o600 });
+    if (marker) writeFileSync(path, JSON.stringify({ pid: process.pid, nonce }), { mode: 0o600 });
   } catch (error) {
-    database.close();
+    closeSync(fd);
     throw error;
   }
   let released = false;
@@ -26,8 +27,8 @@ export function acquireLease(directory: string) {
     if (released) return;
     released = true;
     try {
-      if (JSON.parse(readFileSync(path, 'utf8')).nonce === nonce) unlinkSync(path);
+      if (marker && JSON.parse(readFileSync(path, 'utf8')).nonce === nonce) unlinkSync(path);
     } catch {}
-    database.close();
+    closeSync(fd);
   };
 }

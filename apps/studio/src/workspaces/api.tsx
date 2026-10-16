@@ -1,6 +1,4 @@
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import { useQueryClient } from '@tanstack/react-query';
 import { useQuery as useReactQuery } from '@tanstack/react-query';
 import { Check, Copy, Download, KeyRound, Plus } from 'lucide-react';
 import {
@@ -15,8 +13,13 @@ import {
   toast,
 } from '@qb-flex/ui';
 import { management, docsURL, apiURL } from '../api';
-import { download } from './shared';
-import { SettingsBanner, SettingsPanel, SettingsSection, SettingsSectionGroup } from './settings-layout';
+import { download, useWrite } from './shared';
+import {
+  SettingsBanner,
+  SettingsPanel,
+  SettingsSection,
+  SettingsSectionGroup,
+} from './settings-layout';
 
 export function APIWorkspace({
   base,
@@ -33,21 +36,7 @@ export function APIWorkspace({
     queryKey: ['keys', project.id],
     queryFn: () => management.request<any[]>(`/projects/${project.id}/keys`),
   });
-  const cache = useQueryClient();
-  const write = useMutation({
-    mutationFn: ({
-      path,
-      method = 'POST',
-      body,
-      headers,
-    }: {
-      path: string;
-      method?: string;
-      body?: unknown;
-      headers?: Record<string, string>;
-    }) => management.request(path, method, body, undefined, headers),
-    onSuccess: () => cache.invalidateQueries(),
-  });
+  const write = useWrite();
   const [types, setTypes] = useState('');
   const [copied, setCopied] = useState(false);
   const branchId = base.split('/').pop() ?? 'primary';
@@ -74,10 +63,16 @@ export function APIWorkspace({
         title="Connect your application"
       >
         <SettingsSectionGroup>
-          <SettingsSection description="Branch-scoped Management and application API base." title="API endpoint">
+          <SettingsSection
+            description="Branch-scoped Management and application API base."
+            title="API endpoint"
+          >
             <Input id="api-endpoint" className="font-mono text-xs" value={endpoint} readOnly />
           </SettingsSection>
-          <SettingsSection description="Starter client configuration for this project." title="SDK snippet">
+          <SettingsSection
+            description="Starter client configuration for this project."
+            title="SDK snippet"
+          >
             <pre className="overflow-auto rounded-lg border border-border bg-background/60 p-4 font-mono text-xs leading-relaxed">
               {`import { createClient } from '@qb-flex/client';\n\nconst qb = createClient({\n  url: '${apiURL}',\n  projectId: '${project.id}',\n  branch: '${branchId}',\n  publishableKey: 'YOUR_PUBLISHABLE_KEY',\n});`}
             </pre>

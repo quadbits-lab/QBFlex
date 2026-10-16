@@ -12,13 +12,8 @@ import {
   readdirSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import {
-  createHash,
-  randomBytes,
-  createCipheriv,
-  createDecipheriv,
-  timingSafeEqual,
-} from 'node:crypto';
+import { isIP } from 'node:net';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import {
   configuration,
   normalizeOrigins,
@@ -27,21 +22,84 @@ import {
   BranchOwner,
 } from '@qb-flex/database';
 import { createRealm, realmSecret, encryption } from '@qb-flex/auth';
-import { QBError, capabilities, routes, type Identity, type Role } from '@qb-flex/contracts';
+import {
+  QBError,
+  capabilities,
+  routes,
+  jobKinds,
+  type Identity,
+  type Role,
+} from '@qb-flex/contracts';
 import { normalize, cursorCodec } from '@qb-flex/query-engine';
 import { ObjectBackend } from '@qb-flex/storage';
+import { stageTransfer } from '../../../packages/storage/src/transfer';
 import { acquireLease } from '../../../packages/database/src/lease';
-import { writeControlSnapshot } from '../../../packages/database/src/control-backup';
+import {
+  writeControlSnapshot,
+  cleanupControlStaging,
+} from '../../../packages/database/src/control-backup';
+import { encryptArchive, decryptArchive } from '../../../packages/database/src/archive';
+import { Database, restoreDatabase } from '@qb-flex/database';
+import { databaseBytes } from '../../../packages/database/src/connection';
 import { log, Metrics } from '@qb-flex/observability';
+import {
+  webhookURL,
+  publicAddress,
+  parseInternalAllowlist,
+} from '../../worker/src/webhook-delivery';
+import { controlFindings } from '../../../packages/database/src/security-advisor';
+import {
+  loadRecoverySettings,
+  saveRecoverySettings,
+  validateDestinationInput,
+  destinationSummary,
+  buildInventory,
+  drillSummary,
+  applyRetention,
+  uploadBackupReplicas,
+  executeDrill,
+  scheduledBackupsEnabled,
+} from './recovery';
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 const now = () => new Date().toISOString();
-
 export async function createService(override?: Partial<ReturnType<typeof configuration>>) {
   const config = { ...configuration(), ...override };
   config.origins = normalizeOrigins(config.origins);
+  if (existsSync(join(config.dataDir, 'engine.migrating.json')))
+    throw new QBError(
+      'ENGINE_MIGRATION_REQUIRED',
+      'Incomplete engine conversion; validate or rerun conversion before startup',
+      409,
+    );
+  if (existsSync(join(config.dataDir, 'control.sqlite')))
+    throw new QBError(
+      'ENGINE_MIGRATION_REQUIRED',
+      'Run offline db migrate-engine into a separate directory',
+      409,
+    );
   const release = acquireLease(config.dataDir);
   try {
-    const db = openDatabase(join(config.dataDir, 'control.sqlite'), false);
+    cleanupControlStaging(config.dataDir);
+    const transferDirectory = join(config.dataDir, 'transfers');
+    // Exclusive data-volume lease is held: these are abandoned staging files, never object bytes.
+    if (existsSync(transferDirectory))
+      for (const entry of readdirSync(transferDirectory))
+        if (/^transfer-[a-zA-Z0-9]+$/.test(entry))
+          rmSync(join(transferDirectory, entry), { recursive: true, force: true });
+    const backupsDirectory = join(config.dataDir, 'backups');
+    if (existsSync(backupsDirectory))
+      for (const entry of readdirSync(backupsDirectory))
+        if (/^[a-f0-9-]{36}\.(?:sqlite|pglite\.tar)(?:\.enc\.partial-[a-f0-9-]{36})?$/.test(entry))
+          rmSync(join(backupsDirectory, entry), { force: true });
+    const recoveryDrillsDirectory = join(config.dataDir, 'recovery-drills');
+    if (existsSync(recoveryDrillsDirectory))
+      for (const entry of readdirSync(recoveryDrillsDirectory))
+        if (/^[a-f0-9-]{36}$/.test(entry))
+          rmSync(join(recoveryDrillsDirectory, entry), { recursive: true, force: true });
+    const db = openDatabase(join(config.dataDir, 'control.pglite'), false);
+    await db.exec(
+      'CREATE TABLE IF NOT EXISTS engine_migrations(id TEXT PRIMARY KEY,checksum TEXT NOT NULL,applied_at TEXT NOT NULL)',
+    );
     const cipher = encryption(config.master);
     const platform = await createRealm(db, {
       secret: realmSecret(config.master, 'platform'),
@@ -50,27 +108,38 @@ export async function createService(override?: Partial<ReturnType<typeof configu
       origins: normalizeOrigins([config.studioURL]),
       platform: true,
     });
-    for (const id of ['001-foundation', '002-credentials']) {
+    for (const id of [
+      '001-foundation',
+      '002-credentials',
+      '003-delivery-security',
+      '004-workspace-lifecycle',
+      '005-recovery',
+    ]) {
       const migration = readFileSync(
-        new URL(`../../../migrations/control/${id}.sql`, import.meta.url),
+        new URL(`../../../migrations/pglite/${id}.sql`, import.meta.url),
         'utf8',
       );
       const checksum = sha(migration);
-      const hasRegistry = db
-        .query("SELECT 1 FROM sqlite_schema WHERE name='control_migrations'")
+      const hasRegistry = await db
+        .query(
+          "SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname='engine_migrations'",
+        )
         .get();
       const existing = hasRegistry
-        ? (db.query('SELECT checksum FROM control_migrations WHERE id=?').get(id) as any)
+        ? ((await db.query('SELECT checksum FROM engine_migrations WHERE id=?').get(id)) as any)
         : null;
       if (existing && existing.checksum !== checksum)
         throw new Error('Control migration checksum mismatch');
       if (!existing)
-        db.transaction(() => {
-          db.exec(migration);
-          db.query('INSERT INTO control_migrations VALUES(?,?,?)').run(id, checksum, now());
-        }).immediate();
+        await db
+          .transaction(async (tx) => {
+            await tx.exec(migration);
+            await tx.query('INSERT INTO engine_migrations VALUES(?,?,?)').run(id, checksum, now());
+          })
+          .immediate();
     }
     const metrics = new Metrics();
+    const webhookAllowlist = parseInternalAllowlist(process.env.QB_WEBHOOK_INTERNAL_ALLOWLIST);
     const starts = new WeakMap<Request, number>();
     const transfers = new WeakSet<Request>();
     let activeTransfers = 0,
@@ -80,12 +149,13 @@ export async function createService(override?: Partial<ReturnType<typeof configu
     }
     const fenced = new Set<string>();
     const owners = new Map<string, BranchOwner>();
+    const executorOnly = new Set<string>();
     const lastUsed = new Map<string, number>();
     const backend = new ObjectBackend();
     const timers = new Set<ReturnType<typeof setInterval>>();
     const bootstrapFile = join(config.dataDir, 'bootstrap.token');
     let bootstrap = process.env.QB_BOOTSTRAP_TOKEN;
-    if (!bootstrap && !db.query('SELECT id FROM _qb_auth_users LIMIT 1').get()) {
+    if (!bootstrap && !(await db.query('SELECT id FROM _qb_auth_users LIMIT 1').get())) {
       if (process.env.NODE_ENV === 'production')
         throw new Error('QB_BOOTSTRAP_TOKEN is required for first-owner setup');
       if (!existsSync(bootstrapFile))
@@ -97,7 +167,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
       meta: { requestId: request.headers.get('x-request-id') ?? crypto.randomUUID(), ...meta },
     });
     const managementCursor = cursorCodec(realmSecret(config.master, 'management-cursors'));
-    function controlList(
+    async function controlList(
       sql: string,
       values: unknown[],
       request: Request,
@@ -120,13 +190,13 @@ export async function createService(override?: Partial<ReturnType<typeof configu
       }
       const direction = descending ? 'DESC' : 'ASC',
         comparison = descending ? '<' : '>';
-      const rows = db
+      const rows = (await db
         .query(
           `SELECT * FROM (${sql}) ${after ? `WHERE ("${key}","${tie}") ${comparison} (?,?)` : ''} ORDER BY "${key}" ${direction},"${tie}" ${direction} LIMIT ?`,
         )
         .all(
           ...([...values, ...(after ? [after.key, after.tie] : []), limit + 1] as any[]),
-        ) as any[];
+        )) as any[];
       const data = rows.slice(0, limit),
         last = data.at(-1);
       return success(data, request, {
@@ -136,7 +206,13 @@ export async function createService(override?: Partial<ReturnType<typeof configu
             : undefined,
       });
     }
-    const audit = (
+    const workspaceStorageConfigured = () =>
+      !!(
+        process.env.QB_S3_ENDPOINT &&
+        process.env.QB_S3_ACCESS_KEY &&
+        process.env.QB_S3_SECRET_KEY
+      );
+    const audit = async (
       actor: string,
       action: string,
       resource: string,
@@ -144,7 +220,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
       request: Request,
       result = 'success',
     ) =>
-      db
+      await db
         .query('INSERT INTO audit_events VALUES(?,?,?,?,?,?,?,?,?)')
         .run(
           crypto.randomUUID(),
@@ -160,17 +236,17 @@ export async function createService(override?: Partial<ReturnType<typeof configu
     async function user(request: Request) {
       const token = request.headers.get('authorization')?.replace(/^Bearer /i, '');
       if (token?.startsWith('qb_mt_')) {
-        const row = db
+        const row = (await db
           .query(
             'SELECT user_id FROM management_tokens WHERE hash=? AND revoked_at IS NULL AND expires_at>?',
           )
-          .get(sha(token), now()) as any;
+          .get(sha(token), now())) as any;
         if (row) {
-          const scope = db
+          const scope = (await db
             .query(
               'SELECT definition FROM token_scopes WHERE token_id=(SELECT id FROM management_tokens WHERE hash=?)',
             )
-            .get(sha(token)) as any;
+            .get(sha(token))) as any;
           const resolvedScope = scope
             ? JSON.parse(scope.definition)
             : { readOnly: true, projects: [], organizations: [] };
@@ -199,10 +275,10 @@ export async function createService(override?: Partial<ReturnType<typeof configu
       return { ...session.user, tokenScope: null };
     }
     const ranks: Record<Role, number> = { viewer: 0, developer: 1, admin: 2, owner: 3 };
-    function member(org: string, id: string, min: Role = 'viewer') {
-      const row = db
+    async function member(org: string, id: string, min: Role = 'viewer') {
+      const row = (await db
         .query('SELECT role FROM memberships WHERE org_id=? AND user_id=?')
-        .get(org, id) as any;
+        .get(org, id)) as any;
       if (!row || ranks[row.role as Role] < ranks[min])
         throw new QBError('DENIED', 'Organization permission required', 403);
       if (
@@ -212,9 +288,9 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         ranks[min] >= 1 &&
         ranks[row.role as Role] >= 2
       ) {
-        const account = db
-          .query('SELECT twoFactorEnabled FROM _qb_auth_users WHERE id=?')
-          .get(id) as any;
+        const account = (await db
+          .query('SELECT "twoFactorEnabled" FROM _qb_auth_users WHERE id=?')
+          .get(id)) as any;
         if (!account?.twoFactorEnabled)
           throw new QBError(
             'MFA_ENROLLMENT_REQUIRED',
@@ -228,9 +304,9 @@ export async function createService(override?: Partial<ReturnType<typeof configu
       const actor = await user(request);
       if (request.method !== 'GET' && fenced.has(id))
         throw new QBError('OWNER_UNAVAILABLE', 'Branch cutover is in progress', 503, true);
-      const p = db.query('SELECT * FROM projects WHERE id=?').get(id) as any;
+      const p = (await db.query('SELECT * FROM projects WHERE id=?').get(id)) as any;
       if (!p) throw new QBError('NOT_FOUND', 'Project not available', 404);
-      member(p.org_id, actor.id, min);
+      await member(p.org_id, actor.id, min);
       if (
         actor.tokenScope &&
         ((!actor.tokenScope.projects.includes(id) &&
@@ -240,23 +316,178 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         throw new QBError('TOKEN_SCOPE', 'Management token does not grant this operation', 403);
       return { p, actor };
     }
-    function branch(project: string, id: string) {
-      const b = db
+    async function branch(project: string, id: string) {
+      const b = (await db
         .query('SELECT * FROM branches WHERE project_id=? AND (id=? OR name=?)')
-        .get(project, id, id === 'primary' ? 'main' : id) as any;
+        .get(project, id, id === 'primary' ? 'main' : id)) as any;
       if (!b || b.status !== 'ready')
         throw new QBError('OWNER_UNAVAILABLE', 'Branch not ready', 503, true);
       return b;
     }
+
+    async function releaseProjectOwners(project: any) {
+      const branches = (await db
+        .query('SELECT * FROM branches WHERE project_id=?')
+        .all(project.id)) as any[];
+      for (const branch of branches) {
+        if (owners.has(branch.id)) {
+          await owners
+            .get(branch.id)!
+            .close()
+            .catch(() => {});
+          owners.delete(branch.id);
+          executorOnly.delete(branch.id);
+          lastUsed.delete(branch.id);
+        }
+      }
+      return branches;
+    }
+    async function purgeProjectStorage(project: any, branches: any[]) {
+      if (!workspaceStorageConfigured()) return;
+      for (const branch of branches) {
+        try {
+          const o = owner(project, branch, false);
+          try {
+            const objects = (await o.call('purge-storage-keys')) as any[];
+            for (const object of objects)
+              await backend.delete(`${project.id}/${branch.id}/${object.id}`);
+          } finally {
+            await o.close().catch(() => {});
+          }
+        } catch (error) {
+          // Storage cleanup only applies to the configured project prefix.
+          if ((error as any)?.code !== 'STORAGE_UNCONFIGURED') throw error;
+        }
+      }
+    }
+    function removeProjectFiles(project: any) {
+      rmSync(join(config.dataDir, 'functions', project.id), { recursive: true, force: true });
+      rmSync(join(config.dataDir, 'projects', project.id), { recursive: true, force: true });
+    }
+    async function purgeProjectArtifacts(project: any) {
+      const branches = await releaseProjectOwners(project);
+      await purgeProjectStorage(project, branches);
+      removeProjectFiles(project);
+    }
+    async function deleteProjectCatalog(project: any) {
+      const projectId = project.id;
+      await db.transaction(async (tx) => {
+        await tx.query('DELETE FROM secret_versions WHERE project_id=?').run(projectId);
+        await tx.query('DELETE FROM project_config_versions WHERE project_id=?').run(projectId);
+        await tx
+          .query(
+            'DELETE FROM project_key_metadata WHERE key_id IN(SELECT id FROM project_keys WHERE project_id=?)',
+          )
+          .run(projectId);
+        await tx
+          .query(
+            'DELETE FROM credential_scopes WHERE key_id IN(SELECT id FROM project_keys WHERE project_id=?)',
+          )
+          .run(projectId);
+        await tx.query('DELETE FROM project_keys WHERE project_id=?').run(projectId);
+        await tx.query('DELETE FROM backups WHERE project_id=?').run(projectId);
+        await tx
+          .query(
+            'DELETE FROM branch_job_targets WHERE branch_id IN(SELECT id FROM branches WHERE project_id=?)',
+          )
+          .run(projectId);
+        await tx.query('DELETE FROM branches WHERE project_id=?').run(projectId);
+        await tx.query('DELETE FROM operations WHERE project_id=?').run(projectId);
+        await tx.query('DELETE FROM audit_events WHERE project_id=?').run(projectId);
+        await tx.query('DELETE FROM projects WHERE id=?').run(projectId);
+      })();
+    }
+    async function deleteProjectArtifacts(project: any) {
+      const backupRows = (await db
+        .query('SELECT path FROM backups WHERE project_id=?')
+        .all(project.id)) as any[];
+      const branches = await releaseProjectOwners(project);
+      await purgeProjectStorage(project, branches);
+      await deleteProjectCatalog(project);
+      for (const backup of backupRows) rmSync(backup.path, { force: true });
+      removeProjectFiles(project);
+    }
+    async function deleteWorkspaceData(orgId: string, projects: any[]) {
+      const projectIds = projects.map((project) => project.id),
+        placeholders = projectIds.map(() => '?').join(',') || 'NULL';
+      await db.transaction(async (tx) => {
+        if (projectIds.length) {
+          await tx
+            .query(`DELETE FROM secret_versions WHERE project_id IN(${placeholders})`)
+            .run(...projectIds);
+          await tx
+            .query(`DELETE FROM project_config_versions WHERE project_id IN(${placeholders})`)
+            .run(...projectIds);
+          await tx
+            .query(
+              `DELETE FROM project_key_metadata WHERE key_id IN(SELECT id FROM project_keys WHERE project_id IN(${placeholders}))`,
+            )
+            .run(...projectIds);
+          await tx
+            .query(
+              `DELETE FROM credential_scopes WHERE key_id IN(SELECT id FROM project_keys WHERE project_id IN(${placeholders}))`,
+            )
+            .run(...projectIds);
+          await tx
+            .query(`DELETE FROM project_keys WHERE project_id IN(${placeholders})`)
+            .run(...projectIds);
+          await tx
+            .query(`DELETE FROM backups WHERE project_id IN(${placeholders})`)
+            .run(...projectIds);
+          await tx
+            .query(
+              `DELETE FROM branch_job_targets WHERE branch_id IN(SELECT id FROM branches WHERE project_id IN(${placeholders}))`,
+            )
+            .run(...projectIds);
+          await tx
+            .query(`DELETE FROM branches WHERE project_id IN(${placeholders})`)
+            .run(...projectIds);
+          await tx
+            .query(`DELETE FROM operations WHERE project_id IN(${placeholders})`)
+            .run(...projectIds);
+          await tx
+            .query(`DELETE FROM audit_events WHERE org_id=? OR project_id IN(${placeholders})`)
+            .run(orgId, ...projectIds);
+          await tx.query(`DELETE FROM projects WHERE id IN(${placeholders})`).run(...projectIds);
+        } else {
+          await tx.query('DELETE FROM audit_events WHERE org_id=?').run(orgId);
+        }
+        await tx.query('DELETE FROM memberships WHERE org_id=?').run(orgId);
+        await tx.query('DELETE FROM organizations WHERE id=?').run(orgId);
+      })();
+    }
+    async function deleteWorkspaceArtifacts(orgId: string) {
+      const projects = (await db
+        .query('SELECT * FROM projects WHERE org_id=?')
+        .all(orgId)) as any[];
+      const backupRows = (await db
+        .query(
+          `SELECT path FROM backups WHERE project_id IN(${projects.map(() => '?').join(',') || 'NULL'})`,
+        )
+        .all(...projects.map((project) => project.id))) as any[];
+      // Close owners and purge remote storage before catalog deletion.
+      const branchMap = new Map<string, any[]>();
+      for (const project of projects) {
+        branchMap.set(project.id, await releaseProjectOwners(project));
+        await purgeProjectStorage(project, branchMap.get(project.id)!);
+      }
+      // Commit catalog removal first so a later filesystem failure cannot leave live rows.
+      await deleteWorkspaceData(orgId, projects);
+      for (const backup of backupRows) rmSync(backup.path, { force: true });
+      for (const project of projects) removeProjectFiles(project);
+    }
     function owner(p: any, b: any, touch = true) {
-      if (touch) lastUsed.set(b.id, Date.now());
+      if (touch) {
+        lastUsed.set(b.id, Date.now());
+        executorOnly.delete(b.id);
+      }
       let o = owners.get(b.id);
       if (o && !o.available) {
         owners.delete(b.id);
         o = undefined;
       }
       if (!o) {
-        if (owners.size >= 32)
+        if (owners.size >= config.maxBranchOwners)
           throw new QBError('OWNER_LIMIT', 'Active branch limit reached', 503, true);
         const projectConfig = cipher.open(p.config);
         if (b.status === 'ready' && !existsSync(branchPath(config.dataDir, p.id, b.id)))
@@ -268,6 +499,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         const secret = realmSecret(config.master, b.id);
         o = new BranchOwner(branchPath(config.dataDir, p.id, b.id), {
           secret,
+          branchId: b.id,
           auth: {
             secret,
             baseURL: config.publicURL,
@@ -284,15 +516,17 @@ export async function createService(override?: Partial<ReturnType<typeof configu
     async function application(request: Request, id: string, bid: string) {
       if (fenced.has(id))
         throw new QBError('OWNER_UNAVAILABLE', 'Branch cutover is in progress', 503, true);
-      const p = db.query("SELECT * FROM projects WHERE id=? AND status='ready'").get(id) as any;
+      const p = (await db
+        .query("SELECT * FROM projects WHERE id=? AND status='ready'")
+        .get(id)) as any;
       if (!p) throw new QBError('NOT_FOUND', 'Project not available', 404);
       const key = request.headers.get('x-qb-key');
       const credential = key
-        ? (db
+        ? ((await db
             .query(
               'SELECT id,scope FROM project_keys WHERE project_id=? AND hash=? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?)',
             )
-            .get(id, sha(key), now()) as any)
+            .get(id, sha(key), now())) as any)
         : null;
       if (!credential || !['publishable', 'service'].includes(credential.scope))
         throw new QBError('UNAUTHORIZED', 'Valid project key required', 401);
@@ -301,7 +535,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
       const projectOrigins = normalizeOrigins(settings.origins ?? config.origins);
       if (origin && !projectOrigins.includes(origin))
         throw new QBError('DENIED', 'Origin not allowed for this project', 403);
-      const b = branch(id, bid);
+      const b = await branch(id, bid);
       const o = owner(p, b);
       if (
         request.method !== 'GET' &&
@@ -309,10 +543,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         !new URL(request.url).pathname.endsWith('/query')
       ) {
         const file = branchPath(config.dataDir, p.id, b.id),
-          bytes = [file, file + '-wal'].reduce(
-            (sum, path) => sum + (existsSync(path) ? statSync(path).size : 0),
-            0,
-          );
+          bytes = databaseBytes(file);
         if (bytes >= (settings.quotas?.databaseBytes ?? 1073741824))
           throw new QBError('QUOTA', 'Branch database quota exceeded', 429);
       }
@@ -327,9 +558,9 @@ export async function createService(override?: Partial<ReturnType<typeof configu
       if (credential.scope === 'service') {
         if (request.headers.has('origin'))
           throw new QBError('DENIED', 'Service keys are server-only', 403);
-        const record = db
+        const record = (await db
           .query('SELECT definition FROM credential_scopes WHERE key_id=?')
-          .get(credential.id) as any;
+          .get(credential.id)) as any;
         const scope = record ? JSON.parse(record.definition) : null;
         const url = new URL(request.url);
         const resource = url.pathname.match(/\/data\/([^/]+)/)?.[1];
@@ -341,15 +572,15 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           !scope.methods.includes(request.method)
         )
           throw new QBError('KEY_SCOPE', 'Service key does not grant this operation', 403);
-        identity = { sub: credential.id, role: 'service' };
+        identity = { sub: credential.id, role: 'service', roles: [] };
         bypass = scope.bypass === true;
-        if (bypass) audit(credential.id, 'service.bypass', resource, p, request);
+        if (bypass) await audit(credential.id, 'service.bypass', resource, p, request);
       }
       return {
         p,
         b,
         o,
-        identity: (identity ?? { sub: null, role: 'anonymous' }) as Identity,
+        identity: (identity ?? { sub: null, role: 'anonymous', roles: [] }) as Identity,
         privileged: bypass,
       };
     }
@@ -357,7 +588,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
       const access = await projectAccess(request, id, min);
       if (request.method !== 'GET' && fenced.has(id))
         throw new QBError('OWNER_UNAVAILABLE', 'Branch cutover is in progress', 503, true);
-      const b = branch(id, bid);
+      const b = await branch(id, bid);
       return { ...access, b, o: owner(access.p, b) };
     }
     async function backup(p: any, b: any, actor: string, request: Request) {
@@ -366,87 +597,136 @@ export async function createService(override?: Partial<ReturnType<typeof configu
       activeBackups++;
       try {
         const id = crypto.randomUUID();
-        const raw = join(config.dataDir, 'backups', id + '.sqlite');
-        await owner(p, b, false).call('snapshot', { path: raw }, 60000);
-        const bytes = readFileSync(raw);
-        const iv = randomBytes(12);
-        const enc = createCipheriv(
-          'aes-256-gcm',
-          Buffer.from(realmSecret(config.master, 'backups'), 'hex'),
-          iv,
-        );
-        const encrypted = Buffer.concat([iv, enc.update(bytes), enc.final(), enc.getAuthTag()]);
+        const raw = join(config.dataDir, 'backups', id + '.pglite.tar');
+        mkdirSync(join(raw, '..'), { recursive: true, mode: 0o700 });
+        const snapshotResult = await owner(p, b, false).call('snapshot', { path: raw }, 60000);
         const path = raw + '.enc';
-        writeFileSync(path, encrypted, { mode: 0o600 });
-        unlinkSync(raw);
-        const info = await owner(p, b, false).call('schema', { privileged: true });
-        db.query('INSERT INTO backups VALUES(?,?,?,?,?,?,?)').run(
-          id,
-          p.id,
-          b.id,
-          sha(bytes.toString('base64')),
-          path,
-          info.schemaVersion,
-          now(),
-        );
-        audit(actor, 'backup.create', id, p, request);
-        return { id, createdAt: now(), schemaVersion: info.schemaVersion };
+        let archive;
+        let schemaVersion: number;
+        try {
+          schemaVersion = snapshotResult.schemaVersion;
+          archive = await encryptArchive(
+            raw,
+            path,
+            Buffer.from(realmSecret(config.master, 'backups'), 'hex'),
+            {
+              signal: AbortSignal.any([request.signal, AbortSignal.timeout(120000)]),
+              // Recovery must remain possible when operators lower a branch's write quota.
+              maxBytes: Math.max(1073741824, cipher.open(p.config).quotas?.databaseBytes ?? 0),
+              engine: { name: 'pglite', version: '0.5.10' },
+            },
+          );
+        } finally {
+          rmSync(raw, { force: true });
+        }
+        await db
+          .query('INSERT INTO backups VALUES(?,?,?,?,?,?,?)')
+          .run(id, p.id, b.id, archive.checksum, path, schemaVersion, now());
+        await uploadBackupReplicas(db, p, id, path, cipher, config.dataDir, request.signal);
+        await audit(actor, 'backup.create', id, p, request);
+        return { id, createdAt: now(), schemaVersion, format: archive.format };
       } finally {
         activeBackups--;
       }
     }
+    async function enqueueRecoveryDrill(
+      p: any,
+      b: any,
+      backupId: string,
+      o: BranchOwner,
+      actor: string,
+      request: Request,
+    ) {
+      const open = (await db
+        .query(
+          "SELECT id FROM recovery_drills WHERE project_id=? AND state IN('queued','restoring','validating') LIMIT 1",
+        )
+        .get(p.id)) as any;
+      if (open) throw new QBError('CONFLICT', 'A recovery drill is already in progress', 409);
+      const backup = (await db
+        .query('SELECT id FROM backups WHERE id=? AND project_id=?')
+        .get(backupId, p.id)) as any;
+      if (!backup) throw new QBError('NOT_FOUND', 'Backup not available', 404);
+      const id = crypto.randomUUID();
+      const created = now();
+      await db
+        .query(
+          'INSERT INTO recovery_drills(id,project_id,backup_id,branch_id,job_id,state,database_result,objects_result,key_result,report,created_at,updated_at,finished_at) VALUES(?,?,?,?,NULL,?,NULL,NULL,NULL,NULL,?,?,NULL)',
+        )
+        .run(id, p.id, backupId, b.id, 'queued', created, created);
+      await db.query('INSERT INTO branch_job_targets VALUES(?) ON CONFLICT DO NOTHING').run(b.id);
+      const job = await o.call('jobs-submit', {
+        kind: 'recovery.drill',
+        deduplicationKey: 'recovery-drill:' + id,
+        eventId: id,
+        payload: { drillId: id, projectId: p.id, backupId },
+      });
+      await db
+        .query('UPDATE recovery_drills SET job_id=?,updated_at=? WHERE id=?')
+        .run(job.id, now(), id);
+      await audit(actor, 'recovery.drill', id, p, request);
+      return drillSummary(
+        (await db.query('SELECT * FROM recovery_drills WHERE id=?').get(id)) as any,
+      );
+    }
     // Single control-plane owner resumes pending provision operations after a restart.
     async function tick() {
-      const operations = db
+      const operations = (await db
         .query(
           "SELECT o.*,p.config,p.org_id FROM operations o JOIN projects p ON p.id=o.project_id WHERE o.status IN('requested','running') AND o.type='provision' LIMIT 8",
         )
-        .all() as any[];
+        .all()) as any[];
       for (const operation of operations) {
-        db.query("UPDATE operations SET status='running',progress=25 WHERE id=?").run(operation.id);
+        await db
+          .query("UPDATE operations SET status='running',progress=25 WHERE id=?")
+          .run(operation.id);
         try {
-          const p = db.query('SELECT * FROM projects WHERE id=?').get(operation.project_id) as any;
-          const b = db
+          const p = (await db
+            .query('SELECT * FROM projects WHERE id=?')
+            .get(operation.project_id)) as any;
+          const b = (await db
             .query("SELECT * FROM branches WHERE project_id=? AND name='main'")
-            .get(p.id) as any;
+            .get(p.id)) as any;
           await owner(p, b).call('schema', { privileged: true });
-          db.transaction(() => {
-            db.query("UPDATE branches SET status='ready' WHERE id=?").run(b.id);
-            db.query("UPDATE projects SET status='ready' WHERE id=?").run(p.id);
-            db.query("UPDATE operations SET status='succeeded',progress=100 WHERE id=?").run(
-              operation.id,
-            );
+          await db.transaction(async (tx) => {
+            await tx.query("UPDATE branches SET status='ready' WHERE id=?").run(b.id);
+            await tx.query("UPDATE projects SET status='ready' WHERE id=?").run(p.id);
+            await tx
+              .query("UPDATE operations SET status='succeeded',progress=100 WHERE id=?")
+              .run(operation.id);
           })();
         } catch (error) {
           if (
             error instanceof QBError &&
             ['OWNER_LIMIT', 'OWNER_UNAVAILABLE', 'QUEUE_FULL'].includes(error.code)
           ) {
-            db.query("UPDATE operations SET status='requested',progress=0 WHERE id=?").run(
-              operation.id,
-            );
+            await db
+              .query("UPDATE operations SET status='requested',progress=0 WHERE id=?")
+              .run(operation.id);
             continue;
           }
-          db.query("UPDATE operations SET status='failed',error=? WHERE id=?").run(
-            'Provisioning failed; inspect operator logs',
-            operation.id,
-          );
-          db.query("UPDATE projects SET status='failed' WHERE id=?").run(operation.project_id);
-          db.query("UPDATE branches SET status='failed' WHERE project_id=?").run(
-            operation.project_id,
-          );
+          await db
+            .query("UPDATE operations SET status='failed',error=? WHERE id=?")
+            .run('Provisioning failed; inspect operator logs', operation.id);
+          await db
+            .query("UPDATE projects SET status='failed' WHERE id=?")
+            .run(operation.project_id);
+          await db
+            .query("UPDATE branches SET status='failed' WHERE project_id=?")
+            .run(operation.project_id);
           log({ action: 'provision.failed' });
         }
       }
     }
     let ticking = false;
-    const tickTimer = setInterval(() => {
+    const tickTimer = setInterval(async () => {
       if (ticking) return;
       ticking = true;
       void tick().finally(() => (ticking = false));
     }, 1000);
     timers.add(tickTimer);
-    let maintenanceBusy = false;
+    let maintenanceTask: Promise<unknown> | undefined;
+    let closing = false;
     const workerFile = join(config.dataDir, 'worker.token');
     let workerToken = process.env.QB_WORKER_TOKEN;
     if (!workerToken) {
@@ -458,30 +738,130 @@ export async function createService(override?: Partial<ReturnType<typeof configu
     }
     function internal(request: Request) {
       const supplied = request.headers.get('authorization')?.replace(/^Bearer /, '') ?? '';
+      const suppliedBytes = Buffer.from(supplied),
+        expectedBytes = Buffer.from(workerToken!);
       if (
-        supplied.length !== workerToken!.length ||
-        !timingSafeEqual(Buffer.from(supplied), Buffer.from(workerToken!))
+        suppliedBytes.length !== expectedBytes.length ||
+        !timingSafeEqual(suppliedBytes, expectedBytes)
       )
         throw new QBError('UNAUTHORIZED', 'Worker authentication required', 401);
     }
+    const pushToken = process.env.QB_PUSH_WORKER_TOKEN;
+    const pushEnabled = process.env.QB_PUSH_ENABLED === 'true';
+    if (pushEnabled && (!pushToken || pushToken.length < 32 || pushToken === workerToken))
+      throw new Error(
+        'Push job executor requires a distinct QB_PUSH_WORKER_TOKEN of at least 32 characters',
+      );
+    function executorKinds(request: Request) {
+      const supplied = request.headers.get('authorization')?.replace(/^Bearer /, '') ?? '';
+      if (
+        pushEnabled &&
+        pushToken &&
+        Buffer.byteLength(supplied) === Buffer.byteLength(pushToken) &&
+        timingSafeEqual(Buffer.from(supplied), Buffer.from(pushToken))
+      )
+        return jobKinds.filter((k) => k.startsWith('push.'));
+      internal(request);
+      return jobKinds.filter((k) => !k.startsWith('push.'));
+    }
+    async function executorTarget(input: any) {
+      if (
+        !input ||
+        ![input.projectId, input.branchId].every(
+          (value) => typeof value === 'string' && /^[a-f0-9-]{36}$/.test(value),
+        )
+      )
+        throw new QBError(
+          'VALIDATION',
+          'Executor requires project and immutable branch identifiers',
+        );
+      const p = (await db
+        .query("SELECT * FROM projects WHERE id=? AND status='ready'")
+        .get(input.projectId)) as any;
+      if (!p) throw new QBError('NOT_FOUND', 'Project not available', 404);
+      const b = await branch(p.id, input.branchId);
+      if (fenced.has(b.id) || fenced.has(p.id))
+        throw new QBError('OWNER_UNAVAILABLE', 'Branch is fenced', 503, true);
+      const existing = owners.get(b.id)?.available === true,
+        selected = owner(p, b, false);
+      if (!existing) executorOnly.add(b.id);
+      return selected;
+    }
+    async function webhookScope(projectId: string, branchId: string, keyId: string, table: string) {
+      if (
+        typeof keyId !== 'string' ||
+        !/^[a-f0-9-]{36}$/.test(keyId) ||
+        typeof table !== 'string' ||
+        table.length > 100
+      )
+        throw new QBError('VALIDATION', 'Webhook requires a service key ID and table');
+      const row = (await db
+        .query('SELECT scope,revoked_at,expires_at FROM project_keys WHERE id=? AND project_id=?')
+        .get(keyId, projectId)) as any;
+      if (
+        !row ||
+        row.scope !== 'service' ||
+        row.revoked_at ||
+        (row.expires_at &&
+          (!Number.isFinite(Date.parse(row.expires_at)) ||
+            Date.parse(row.expires_at) <= Date.now()))
+      )
+        return 'KEY_REVOKED' as const;
+      const record = (await db
+        .query('SELECT definition FROM credential_scopes WHERE key_id=?')
+        .get(keyId)) as any;
+      const scope = record ? JSON.parse(record.definition) : null;
+      if (
+        !scope ||
+        scope.branch !== branchId ||
+        scope.bypass === true ||
+        !scope.tables?.includes(table) ||
+        !scope.methods?.includes('GET')
+      )
+        return 'KEY_SCOPE' as const;
+      return null;
+    }
     async function maintain() {
-      if (maintenanceBusy) return { running: true };
-      maintenanceBusy = true;
+      if (closing)
+        return Promise.reject(new QBError('UNAVAILABLE', 'API is shutting down', 503, true));
+      if (maintenanceTask) return Promise.resolve({ running: true });
+      const task = performMaintenance();
+      maintenanceTask = task;
+      // Preserve caller errors without leaving an unhandled rejection from cleanup.
+      void task.then(
+        () => {
+          maintenanceTask = undefined;
+        },
+        () => {
+          maintenanceTask = undefined;
+        },
+      );
+      return task;
+    }
+    async function performMaintenance() {
       let cleaned = 0,
         backedUp = 0;
-      try {
+      {
         const request = new Request(config.publicURL + '/internal/maintenance');
-        const branches = db
+        const branches = (await db
           .query(
             "SELECT b.*,p.org_id,p.config FROM branches b JOIN projects p ON p.id=b.project_id WHERE b.status='ready' AND p.status='ready'",
           )
-          .all() as any[];
+          .all()) as any[];
         for (const b of branches) {
-          const p = db.query('SELECT * FROM projects WHERE id=?').get(b.project_id) as any;
+          const p = (await db.query('SELECT * FROM projects WHERE id=?').get(b.project_id)) as any;
           const existing = owners.has(b.id);
-          if (!existing && owners.size >= 32) continue;
+          if (!existing && owners.size >= config.maxBranchOwners) continue;
           const o = owner(p, b, false);
           try {
+            try {
+              await o.call('webhooks-produce');
+            } catch (error) {
+              // Delivery backpressure must not disable cleanup or scheduled recovery.
+              // The producer transaction preserved its checkpoint for a later retry.
+              if (!(error instanceof QBError) || error.code !== 'QUEUE_FULL') throw error;
+              log({ action: 'webhooks.backpressure' });
+            }
             await o.call('cleanup');
             cleaned++;
             const pending = await o.call('object-maintenance');
@@ -493,16 +873,50 @@ export async function createService(override?: Partial<ReturnType<typeof configu
                 log({ action: 'storage.cleanup.failed' });
               }
             }
-            if (b.name === 'main' && process.env.QB_SCHEDULED_BACKUPS !== 'false') {
-              const latest = db
-                .query(
-                  'SELECT created_at FROM backups WHERE branch_id=? ORDER BY created_at DESC LIMIT 1',
-                )
-                .get(b.id) as any;
-              if (!latest || Date.parse(latest.created_at) < Date.now() - 86400000) {
-                await backup(p, b, 'system', request);
-                backedUp++;
+            if (b.name === 'main' && scheduledBackupsEnabled()) {
+              const settings = await loadRecoverySettings(db, p.id);
+              if (settings.enabled) {
+                const latest = (await db
+                  .query(
+                    'SELECT created_at FROM backups WHERE branch_id=? ORDER BY created_at DESC LIMIT 1',
+                  )
+                  .get(b.id)) as any;
+                const intervalMs = settings.intervalHours * 3600000;
+                if (!latest || Date.parse(latest.created_at) < Date.now() - intervalMs) {
+                  await backup(p, b, 'system', request);
+                  backedUp++;
+                }
+                if (settings.drillIntervalHours > 0) {
+                  const open = (await db
+                    .query(
+                      "SELECT id FROM recovery_drills WHERE project_id=? AND state IN('queued','restoring','validating') LIMIT 1",
+                    )
+                    .get(p.id)) as any;
+                  const lastDrill = (await db
+                    .query(
+                      'SELECT created_at FROM recovery_drills WHERE project_id=? ORDER BY created_at DESC LIMIT 1',
+                    )
+                    .get(p.id)) as any;
+                  const due =
+                    !lastDrill ||
+                    Date.parse(lastDrill.created_at) <
+                      Date.now() - settings.drillIntervalHours * 3600000;
+                  if (!open && due) {
+                    const archive = (await db
+                      .query(
+                        `SELECT b.id FROM backups b
+                         LEFT JOIN backup_replicas r ON r.backup_id=b.id AND r.state='verified'
+                         WHERE b.branch_id=?
+                         ORDER BY b.created_at DESC LIMIT 1`,
+                      )
+                      .get(b.id)) as any;
+                    if (archive) {
+                      await enqueueRecoveryDrill(p, b, archive.id, o, 'system', request);
+                    }
+                  }
+                }
               }
+              await applyRetention(db, p.id, settings, cipher, config.dataDir);
             }
           } finally {
             if (!existing) {
@@ -520,34 +934,15 @@ export async function createService(override?: Partial<ReturnType<typeof configu
             0,
             Math.min(52, Number(process.env.QB_BACKUP_RETENTION_WEEKS ?? 4)),
           );
-        const retainedWeeks = new Map<string, Set<number>>();
-        for (const record of db
-          .query(
-            'SELECT id,path,branch_id,created_at FROM backups ORDER BY created_at DESC,id DESC',
-          )
-          .all() as any[]) {
-          const age = Date.now() - Date.parse(record.created_at),
-            week = Math.floor(Date.parse(record.created_at) / (7 * 86400000));
-          const weeks = retainedWeeks.get(record.branch_id) ?? new Set<number>();
-          retainedWeeks.set(record.branch_id, weeks);
-          const weekly =
-            !weeks.has(week) &&
-            weeks.size < weeklyCopies &&
-            age < (weeklyCopies + 1) * 7 * 86400000;
-          if (weekly) weeks.add(week);
-          if (age < dailyDays * 86400000 || weekly) continue;
-          rmSync(record.path, { force: true });
-          db.query('DELETE FROM backups WHERE id=?').run(record.id);
-        }
-        if (process.env.QB_SCHEDULED_BACKUPS !== 'false') {
+        if (scheduledBackupsEnabled()) {
           const folder = join(config.dataDir, 'backups', 'control');
           mkdirSync(folder, { recursive: true, mode: 0o700 });
           const files = readdirSync(folder)
-            .filter((name) => name.endsWith('.sqlite.enc'))
+            .filter((name) => name.endsWith('.sqlite.enc') || name.endsWith('.pglite.tar.enc'))
             .sort()
             .reverse();
           if (!files.some((name) => name.startsWith(now().slice(0, 10))))
-            writeControlSnapshot(db, config.dataDir, config.master);
+            await writeControlSnapshot(db, config.dataDir, config.master);
           const weeks = new Set<number>();
           for (const name of files) {
             const timestamp = statSync(join(folder, name)).mtimeMs,
@@ -561,9 +956,9 @@ export async function createService(override?: Partial<ReturnType<typeof configu
             if (age >= dailyDays * 86400000 && !weekly) rmSync(join(folder, name), { force: true });
           }
         }
-        db.query('DELETE FROM audit_events WHERE time<?').run(
-          new Date(Date.now() - 90 * 86400000).toISOString(),
-        );
+        await db
+          .query('DELETE FROM audit_events WHERE time<?')
+          .run(new Date(Date.now() - 90 * 86400000).toISOString());
         for (const [id, time] of lastUsed)
           if (time < Date.now() - 600000) {
             await owners.get(id)?.close();
@@ -571,14 +966,18 @@ export async function createService(override?: Partial<ReturnType<typeof configu
             lastUsed.delete(id);
           }
         return { cleaned, backedUp };
-      } finally {
-        maintenanceBusy = false;
       }
     }
     let setupBusy = false;
-    const limits = new Map<string, { count: number; reset: number }>();
+    const limits = new Map<
+      string,
+      {
+        count: number;
+        reset: number;
+      }
+    >();
     const app = new Elysia({ serve: { maxRequestBodySize: 104857600 } })
-      .onRequest(({ request, set }) => {
+      .onRequest(async ({ request, set }) => {
         starts.set(request, performance.now());
         set.headers['x-request-id'] =
           request.headers.get('x-request-id')?.slice(0, 100) ?? crypto.randomUUID();
@@ -588,7 +987,9 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         let requestLimit = 600;
         const projectId = path.match(/^\/v1\/projects\/([^/]+)/)?.[1];
         if (projectId) {
-          const project = db.query('SELECT config FROM projects WHERE id=?').get(projectId) as any;
+          const project = (await db
+            .query('SELECT config FROM projects WHERE id=?')
+            .get(projectId)) as any;
           if (project) {
             const settings = cipher.open(project.config);
             allowed = settings.origins ? normalizeOrigins(settings.origins) : allowed;
@@ -607,7 +1008,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         const length = Number(request.headers.get('content-length') ?? 0);
         const objectUpload = request.method === 'PUT' && path.endsWith('/content');
         const avatarUpload = request.method === 'POST' && path === '/platform/avatar';
-        if (avatarUpload && length > 3_276_800)
+        if (avatarUpload && length > 3276800)
           throw new QBError('SIZE_LIMIT', 'Avatar uploads are limited to 3 MiB', 413);
         if (length > 65536 && !objectUpload && !avatarUpload)
           throw new QBError('SIZE_LIMIT', 'JSON request bodies are limited to 64 KiB', 413);
@@ -639,10 +1040,15 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           transfers.add(request);
         }
       })
-      .onAfterHandle(({ request, set }) => {
+      .onAfterHandle(({ request, set, response }) => {
         releaseTransfer(request);
         const durationMs = performance.now() - (starts.get(request) ?? performance.now());
-        const status = typeof set.status === 'number' ? set.status : 200;
+        const status =
+          response instanceof Response
+            ? response.status
+            : typeof set.status === 'number'
+              ? set.status
+              : 200;
         const path = new URL(request.url).pathname;
         metrics.record(request.method, path, status, durationMs);
         if (!['/health', '/ready'].includes(path))
@@ -690,8 +1096,8 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         };
       })
       .get('/health', () => ({ status: 'ok' }))
-      .get('/ready', () => {
-        db.query('SELECT 1').get();
+      .get('/ready', async () => {
+        await db.query('SELECT 1').get();
         const disk = statfsSync(config.dataDir);
         if (disk.bavail * disk.bsize < Number(process.env.QB_MIN_DISK_BYTES ?? 67108864))
           throw new QBError(
@@ -706,6 +1112,131 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         internal(request);
         return success(await maintain(), request);
       })
+      .post('/internal/jobs/claim', async ({ request, body }) => {
+        const kinds = executorKinds(request),
+          input = body as any;
+        const allowed =
+          input?.executor === 'webhooks'
+            ? kinds.filter((kind) => kind === 'webhook.delivery')
+            : input?.executor === 'recovery'
+              ? kinds.filter((kind) => kind === 'recovery.drill')
+              : kinds;
+        if (!allowed.length)
+          throw new QBError('DENIED', 'Executor cannot claim the requested jobs', 403);
+        return success(
+          await (
+            await executorTarget(input)
+          ).call('jobs-claim', {
+            kinds: allowed,
+            leaseMs: Number.isInteger(input?.leaseMs) ? input.leaseMs : undefined,
+          }),
+          request,
+        );
+      })
+      .post('/internal/recovery/execute', async ({ request, body }) => {
+        internal(request);
+        const input = body as any;
+        if (!input || typeof input.drillId !== 'string' || typeof input.projectId !== 'string')
+          throw new QBError('VALIDATION', 'Recovery execute requires drill and project identifiers');
+        const p = (await db
+          .query("SELECT * FROM projects WHERE id=? AND status='ready'")
+          .get(input.projectId)) as any;
+        if (!p) throw new QBError('NOT_FOUND', 'Project not available', 404);
+        if (activeBackups >= 2)
+          throw new QBError(
+            'BACKUP_BUSY',
+            'Backup/restore capacity reached; retry later',
+            503,
+            true,
+          );
+        activeBackups++;
+        try {
+          return success(
+            await executeDrill({
+              db,
+              drillId: input.drillId,
+              project: p,
+              dataDir: config.dataDir,
+              master: config.master,
+              cipher,
+              backend,
+              openOwner: (project, branch) => owner(project, branch, false),
+              signal: AbortSignal.any([request.signal, AbortSignal.timeout(120000)]),
+            }),
+            request,
+          );
+        } finally {
+          activeBackups--;
+        }
+      })
+      .get('/internal/jobs/targets', async ({ request }) => {
+        executorKinds(request);
+        return await controlList(
+          'SELECT b.id AS "branchId",b.project_id AS "projectId",b.id FROM branch_job_targets t JOIN branches b ON b.id=t.branch_id JOIN projects p ON p.id=b.project_id WHERE b.status=\'ready\' AND p.status=\'ready\'',
+          [],
+          request,
+          'executor-targets',
+        );
+      })
+      .post('/internal/jobs/release', async ({ request, body }) => {
+        internal(request);
+        const input = body as any;
+        if (!input || typeof input.projectId !== 'string' || typeof input.branchId !== 'string')
+          throw new QBError('VALIDATION', 'Invalid executor target');
+        const b = await branch(input.projectId, input.branchId);
+        if (executorOnly.delete(b.id)) {
+          const o = owners.get(b.id);
+          await o?.close();
+          if (owners.get(b.id) === o) {
+            owners.delete(b.id);
+            lastUsed.delete(b.id);
+          }
+        }
+        return success({ released: true }, request);
+      })
+      .post('/internal/webhooks/prepare', async ({ request, body }) => {
+        internal(request);
+        const input = body as any,
+          o = await executorTarget(input);
+        const ref = await o.call('webhooks-reference', {
+          id: input.id,
+          leaseToken: input.leaseToken,
+        });
+        const denied = await webhookScope(
+          input.projectId,
+          input.branchId,
+          ref.serviceKeyId,
+          ref.table,
+        );
+        if (denied) return success({ skipped: true, code: denied }, request);
+        return success(
+          await o.call('webhooks-prepare', {
+            id: input.id,
+            leaseToken: input.leaseToken,
+            serviceKeyId: ref.serviceKeyId,
+          }),
+          request,
+        );
+      })
+      .post('/internal/webhooks/produce', async ({ request, body }) => {
+        internal(request);
+        return success(await (await executorTarget(body)).call('webhooks-produce'), request);
+      })
+      .post('/internal/jobs/finish', async ({ request, body }) => {
+        const kinds = executorKinds(request),
+          input = body as any;
+        return success(
+          await (
+            await executorTarget(input)
+          ).call('jobs-finish', {
+            id: input.id,
+            leaseToken: input.leaseToken,
+            result: input.result,
+            kinds,
+          }),
+          request,
+        );
+      })
       .get('/internal/metrics', ({ request }) => {
         internal(request);
         const disk = statfsSync(config.dataDir);
@@ -717,8 +1248,11 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           { headers: { 'content-type': 'text/plain; version=0.0.4' } },
         );
       })
-      .get('/setup', ({ request }) =>
-        success({ required: !db.query('SELECT id FROM _qb_auth_users LIMIT 1').get() }, request),
+      .get('/setup', async ({ request }) =>
+        success(
+          { required: !(await db.query('SELECT id FROM _qb_auth_users LIMIT 1').get()) },
+          request,
+        ),
       )
       .post('/setup', async ({ body, request }) => {
         const input = body as any;
@@ -729,7 +1263,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           !timingSafeEqual(Buffer.from(supplied), Buffer.from(bootstrap))
         )
           throw new QBError('DENIED', 'Valid bootstrap token required', 403);
-        if (setupBusy || db.query('SELECT id FROM _qb_auth_users LIMIT 1').get())
+        if (setupBusy || (await db.query('SELECT id FROM _qb_auth_users LIMIT 1').get()))
           throw new QBError('SETUP_COMPLETE', 'First owner is already configured', 409);
         setupBusy = true;
         try {
@@ -737,13 +1271,15 @@ export async function createService(override?: Partial<ReturnType<typeof configu
             body: { email: input.email, password: input.password, name: input.name },
           });
           const id = crypto.randomUUID();
-          db.transaction(() => {
-            db.query('INSERT INTO organizations VALUES(?,?,?)').run(
-              id,
-              input.organization ?? 'Personal workspace',
-              now(),
-            );
-            db.query('INSERT INTO memberships VALUES(?,?,?)').run(id, result.user.id, 'owner');
+          await db.transaction(async (tx) => {
+            await tx
+              .query(
+                'INSERT INTO organizations(id,name,created_at,image,archived_at,deleted_at) VALUES(?,?,?,?,NULL,NULL)',
+              )
+              .run(id, input.organization ?? 'Personal workspace', now(), '');
+            await tx
+              .query('INSERT INTO memberships VALUES(?,?,?)')
+              .run(id, result.user.id, 'owner');
           })();
           bootstrap = undefined;
           if (existsSync(bootstrapFile)) unlinkSync(bootstrapFile);
@@ -759,9 +1295,16 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         const form = await request.formData();
         const entry = form.get('file');
         // Bun/FormData may yield File or Blob; reject bare strings.
-        if (!entry || typeof entry === 'string' || typeof (entry as Blob).arrayBuffer !== 'function')
+        if (
+          !entry ||
+          typeof entry === 'string' ||
+          typeof (entry as Blob).arrayBuffer !== 'function'
+        )
           throw new QBError('VALIDATION', 'Choose an image file to upload');
-        const file = entry as Blob & { type?: string; name?: string };
+        const file = entry as Blob & {
+          type?: string;
+          name?: string;
+        };
         const mime = String(file.type || '').toLowerCase();
         const allowed = new Map([
           ['image/jpeg', 'jpg'],
@@ -771,7 +1314,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         ]);
         const ext = allowed.get(mime);
         if (!ext) throw new QBError('VALIDATION', 'Use a JPEG, PNG, WebP, or GIF image');
-        if (file.size < 1 || file.size > 3_145_728)
+        if (file.size < 1 || file.size > 3145728)
           throw new QBError('VALIDATION', 'Avatar must be between 1 byte and 3 MiB');
         const bytes = Buffer.from(await file.arrayBuffer());
         const folder = join(config.dataDir, 'platform-avatars');
@@ -784,7 +1327,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         const image = `${config.publicURL}/platform/avatars/${actor.id}?v=${Date.now()}`;
         // Persist on the platform user row directly. Forwarding the multipart
         // request into Better Auth updateUser corrupts the session body parse.
-        const updated = db
+        const updated = await db
           .query('UPDATE _qb_auth_users SET image=? WHERE id=?')
           .run(image, actor.id);
         if (!updated.changes) {
@@ -795,7 +1338,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           }
           throw new QBError('NOT_FOUND', 'Platform user not found', 404);
         }
-        audit(actor.id, 'platform.avatar.upload', 'user:' + actor.id, null, request, 'ok');
+        await audit(actor.id, 'platform.avatar.upload', 'user:' + actor.id, null, request, 'ok');
         return success({ image }, request);
       })
       .delete('/platform/avatar', async ({ request }) => {
@@ -808,8 +1351,8 @@ export async function createService(override?: Partial<ReturnType<typeof configu
             if (existing.startsWith(`${actor.id}.`)) unlinkSync(join(folder, existing));
           }
         }
-        db.query('UPDATE _qb_auth_users SET image=? WHERE id=?').run(null, actor.id);
-        audit(actor.id, 'platform.avatar.delete', 'user:' + actor.id, null, request, 'ok');
+        await db.query('UPDATE _qb_auth_users SET image=? WHERE id=?').run(null, actor.id);
+        await audit(actor.id, 'platform.avatar.delete', 'user:' + actor.id, null, request, 'ok');
         return success({ image: null }, request);
       })
       .get('/platform/avatars/:userId', ({ params, set }) => {
@@ -857,19 +1400,20 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           path.endsWith('/two-factor/verify-totp') &&
           (await response.clone().json()).status !== false
         ) {
-          const account = db
-            .query('SELECT twoFactorEnabled FROM _qb_auth_users WHERE id=?')
-            .get(before.user.id) as any;
+          const account = (await db
+            .query('SELECT "twoFactorEnabled" FROM _qb_auth_users WHERE id=?')
+            .get(before.user.id)) as any;
           if (account?.twoFactorEnabled) {
             const newToken = response.headers.get('set-auth-token');
             if (newToken)
-              db.query('DELETE FROM _qb_auth_sessions WHERE userId=? AND token<>?').run(
-                before.user.id,
-                newToken,
-              );
-            db.query(
-              'UPDATE management_tokens SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL',
-            ).run(now(), before.user.id);
+              await db
+                .query('DELETE FROM _qb_auth_sessions WHERE "userId"=? AND token<>?')
+                .run(before.user.id, newToken);
+            await db
+              .query(
+                'UPDATE management_tokens SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL',
+              )
+              .run(now(), before.user.id);
           }
         }
         return response;
@@ -883,7 +1427,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
       .get('/management/v1/organizations', async ({ request }) => {
         const actor = await user(request);
         const scope = actor.tokenScope?.organizations as string[] | undefined;
-        return controlList(
+        return await controlList(
           `SELECT o.*,m.role FROM organizations o JOIN memberships m ON m.org_id=o.id WHERE m.user_id=?${scope ? ` AND o.id IN(${scope.map(() => '?').join(',') || 'NULL'})` : ''}`,
           [actor.id, ...(scope ?? [])],
           request,
@@ -898,8 +1442,11 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           (process.env.QB_REQUIRE_ADMIN_MFA === 'true' ||
             (process.env.NODE_ENV === 'production' &&
               process.env.QB_REQUIRE_ADMIN_MFA !== 'false')) &&
-          !(db.query('SELECT twoFactorEnabled FROM _qb_auth_users WHERE id=?').get(actor.id) as any)
-            ?.twoFactorEnabled
+          !(
+            (await db
+              .query('SELECT "twoFactorEnabled" FROM _qb_auth_users WHERE id=?')
+              .get(actor.id)) as any
+          )?.twoFactorEnabled
         )
           throw new QBError(
             'MFA_ENROLLMENT_REQUIRED',
@@ -910,18 +1457,77 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         if (!name || name.length > 100)
           throw new QBError('VALIDATION', 'Organization name required');
         const id = crypto.randomUUID();
-        db.transaction(() => {
-          db.query('INSERT INTO organizations VALUES(?,?,?)').run(id, name, now());
-          db.query('INSERT INTO memberships VALUES(?,?,?)').run(id, actor.id, 'owner');
+        await db.transaction(async (tx) => {
+          await tx
+            .query(
+              'INSERT INTO organizations(id,name,created_at,image,archived_at,deleted_at) VALUES(?,?,?,?,NULL,NULL)',
+            )
+            .run(id, name, now(), '');
+          await tx.query('INSERT INTO memberships VALUES(?,?,?)').run(id, actor.id, 'owner');
         })();
-        audit(actor.id, 'organization.create', id, { org_id: id }, request);
-        return success({ id, name }, request);
+        await audit(actor.id, 'organization.create', id, { org_id: id }, request);
+        return success({ id, name, image: '', archived_at: null }, request);
+      })
+      .get('/management/v1/organizations/:id', async ({ params, request }) => {
+        const actor = await user(request);
+        await member(params.id, actor.id);
+        const org = (await db
+          .query('SELECT * FROM organizations WHERE id=?')
+          .get(params.id)) as any;
+        if (!org) throw new QBError('NOT_FOUND', 'Workspace not available', 404);
+        return success(org, request);
+      })
+      .patch('/management/v1/organizations/:id', async ({ params, request, body }) => {
+        const actor = await user(request);
+        await member(params.id, actor.id, 'admin');
+        const org = (await db
+          .query('SELECT * FROM organizations WHERE id=?')
+          .get(params.id)) as any;
+        if (!org) throw new QBError('NOT_FOUND', 'Workspace not available', 404);
+        const input = body as any;
+        const name = input.name === undefined ? org.name : String(input.name ?? '').trim();
+        if (!name) throw new QBError('VALIDATION', 'Workspace name is required');
+        if (name.length > 100)
+          throw new QBError('VALIDATION', 'Workspace name is at most 100 characters');
+        const image =
+          input.image === null ? '' : input.image === undefined ? org.image : String(input.image);
+        if (image && !/^data:image\/(?:png|jpeg|webp);base64,/.test(image))
+          throw new QBError('VALIDATION', 'Provide a PNG, JPEG or WebP image data URI');
+        if (image.length > 1536000) throw new QBError('VALIDATION', 'Image must be under 1.5 MB');
+        await db
+          .query('UPDATE organizations SET name=?,image=? WHERE id=?')
+          .run(name, image, params.id);
+        await audit(actor.id, 'workspace.update', params.id, { org_id: params.id }, request);
+        return success({ name, image }, request);
+      })
+      .post('/management/v1/organizations/:id/archive', async ({ params, request }) => {
+        const actor = await user(request);
+        await member(params.id, actor.id, 'admin');
+        await db.query('UPDATE organizations SET archived_at=? WHERE id=?').run(now(), params.id);
+        await audit(actor.id, 'workspace.archive', params.id, { org_id: params.id }, request);
+        return success({ archived: true }, request);
+      })
+      .post('/management/v1/organizations/:id/unarchive', async ({ params, request }) => {
+        const actor = await user(request);
+        await member(params.id, actor.id, 'admin');
+        await db.query('UPDATE organizations SET archived_at=NULL WHERE id=?').run(params.id);
+        await audit(actor.id, 'workspace.unarchive', params.id, { org_id: params.id }, request);
+        return success({ archived: false }, request);
+      })
+      .delete('/management/v1/organizations/:id', async ({ params, request, set }) => {
+        const actor = await user(request);
+        await member(params.id, actor.id, 'owner');
+        // Isolated cleanup: only projects under this organization, their branch dirs,
+        // function trees, backup files, and storage keys under project/branch prefixes.
+        await deleteWorkspaceArtifacts(params.id);
+        set.status = 204;
+        return '';
       })
       .get('/management/v1/organizations/:id/members', async ({ params, request }) => {
         const actor = await user(request);
-        member(params.id, actor.id);
+        await member(params.id, actor.id);
         return success(
-          db
+          await db
             .query(
               'SELECT m.user_id,m.role,u.email,u.name FROM memberships m JOIN _qb_auth_users u ON u.id=m.user_id WHERE m.org_id=?',
             )
@@ -931,43 +1537,47 @@ export async function createService(override?: Partial<ReturnType<typeof configu
       })
       .post('/management/v1/organizations/:id/members', async ({ params, request, body }) => {
         const actor = await user(request);
-        member(params.id, actor.id, 'admin');
+        await member(params.id, actor.id, 'admin');
         const input = body as any;
         if (!['admin', 'developer', 'viewer'].includes(input.role))
           throw new QBError('VALIDATION', 'Invalid member role');
-        const account = db
+        const account = (await db
           .query('SELECT id FROM _qb_auth_users WHERE email=?')
-          .get(input.email) as any;
+          .get(input.email)) as any;
         if (!account)
           throw new QBError('NOT_FOUND', 'Create the invited platform account first', 404);
-        const existingRole = db
+        const existingRole = (await db
           .query('SELECT role FROM memberships WHERE org_id=? AND user_id=?')
-          .get(params.id, account.id) as any;
+          .get(params.id, account.id)) as any;
         if (existingRole?.role === 'owner')
           throw new QBError(
             'DENIED',
             'Ownership transfer requires an explicit owner workflow',
             403,
           );
-        db.query(
-          'INSERT INTO memberships VALUES(?,?,?) ON CONFLICT(org_id,user_id) DO UPDATE SET role=excluded.role',
-        ).run(params.id, account.id, input.role);
-        audit(actor.id, 'membership.update', account.id, { org_id: params.id }, request);
+        await db
+          .query(
+            'INSERT INTO memberships VALUES(?,?,?) ON CONFLICT(org_id,user_id) DO UPDATE SET role=excluded.role',
+          )
+          .run(params.id, account.id, input.role);
+        await audit(actor.id, 'membership.update', account.id, { org_id: params.id }, request);
         return success({ userId: account.id, role: input.role }, request);
       })
       .post('/management/v1/invitations', async ({ request, body }) => {
         const actor = await user(request);
         const input = body as any;
-        member(input.organizationId, actor.id, 'admin');
+        await member(input.organizationId, actor.id, 'admin');
         const account = await platform.api.signUpEmail({
           body: { name: input.name, email: input.email, password: input.temporaryPassword },
         });
-        db.query('INSERT INTO memberships VALUES(?,?,?)').run(
-          input.organizationId,
-          account.user.id,
-          ['admin', 'developer', 'viewer'].includes(input.role) ? input.role : 'viewer',
-        );
-        audit(
+        await db
+          .query('INSERT INTO memberships VALUES(?,?,?)')
+          .run(
+            input.organizationId,
+            account.user.id,
+            ['admin', 'developer', 'viewer'].includes(input.role) ? input.role : 'viewer',
+          );
+        await audit(
           actor.id,
           'membership.invite',
           account.user.id,
@@ -985,38 +1595,38 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         if (organizations.length > 100)
           throw new QBError('VALIDATION', 'Too many organization scopes');
         for (const org of organizations)
-          member(org, actor.id, input?.readOnly ? 'viewer' : 'developer');
+          await member(org, actor.id, input?.readOnly ? 'viewer' : 'developer');
         const projects = Array.isArray(input?.projects)
           ? input.projects
-          : db
-              .query(
-                'SELECT p.id FROM projects p JOIN memberships m ON m.org_id=p.org_id WHERE m.user_id=?',
-              )
-              .all(actor.id)
-              .map((p: any) => p.id);
+          : (
+              await db
+                .query(
+                  'SELECT p.id FROM projects p JOIN memberships m ON m.org_id=p.org_id WHERE m.user_id=?',
+                )
+                .all(actor.id)
+            ).map((p: any) => p.id);
         for (const id of projects)
           await projectAccess(request, id, input?.readOnly ? 'viewer' : 'developer');
         const token = 'qb_mt_' + randomBytes(32).toString('base64url');
         const id = crypto.randomUUID();
-        db.transaction(() => {
-          db.query('INSERT INTO management_tokens VALUES(?,?,?,?,NULL)').run(
-            id,
-            actor.id,
-            sha(token),
-            new Date(Date.now() + 86400000 * 30).toISOString(),
-          );
-          db.query('INSERT INTO token_scopes VALUES(?,?)').run(
-            id,
-            JSON.stringify({ projects, organizations, readOnly: input?.readOnly === true }),
-          );
+        await db.transaction(async (tx) => {
+          await tx
+            .query('INSERT INTO management_tokens VALUES(?,?,?,?,NULL)')
+            .run(id, actor.id, sha(token), new Date(Date.now() + 86400000 * 30).toISOString());
+          await tx
+            .query('INSERT INTO token_scopes VALUES(?,?)')
+            .run(
+              id,
+              JSON.stringify({ projects, organizations, readOnly: input?.readOnly === true }),
+            );
         })();
-        audit(actor.id, 'management-token.create', id, null, request);
+        await audit(actor.id, 'management-token.create', id, null, request);
         return success({ id, token, projects, organizations }, request);
       })
       .get('/management/v1/tokens', async ({ request }) => {
         const actor = await user(request);
         return success(
-          db
+          await db
             .query('SELECT id,expires_at,revoked_at FROM management_tokens WHERE user_id=?')
             .all(actor.id),
           request,
@@ -1024,17 +1634,15 @@ export async function createService(override?: Partial<ReturnType<typeof configu
       })
       .delete('/management/v1/tokens/:token', async ({ request, params }) => {
         const actor = await user(request);
-        db.query('UPDATE management_tokens SET revoked_at=? WHERE id=? AND user_id=?').run(
-          now(),
-          params.token,
-          actor.id,
-        );
+        await db
+          .query('UPDATE management_tokens SET revoked_at=? WHERE id=? AND user_id=?')
+          .run(now(), params.token, actor.id);
         return success({ revoked: true }, request);
       })
       .get('/management/v1/projects', async ({ request }) => {
         const actor = await user(request);
         const scope = actor.tokenScope?.projects as string[] | undefined;
-        return controlList(
+        return await controlList(
           `SELECT p.id,p.org_id,p.name,p.slug,p.status,p.region,p.created_at FROM projects p JOIN memberships m ON m.org_id=p.org_id WHERE m.user_id=?${scope ? ` AND (p.id IN(${scope.map(() => '?').join(',') || 'NULL'}) OR p.org_id IN(${(actor.tokenScope.organizations as string[]).map(() => '?').join(',') || 'NULL'}))` : ''}`,
           [actor.id, ...(scope ?? []), ...(actor.tokenScope?.organizations ?? [])],
           request,
@@ -1057,7 +1665,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
             'Token requires an explicit writable organization scope',
             403,
           );
-        member(input.organizationId, actor.id, 'developer');
+        await member(input.organizationId, actor.id, 'developer');
         if (
           !/^[a-z0-9][a-z0-9-]{0,62}$/.test(input.slug) ||
           !input.name ||
@@ -1068,9 +1676,9 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         const scope = idem ? sha(actor.id + input.organizationId + idem) : null;
         const digest = sha(JSON.stringify(input));
         if (scope) {
-          const old = db
+          const old = (await db
             .query('SELECT * FROM management_idempotency WHERE scope=?')
-            .get(scope) as any;
+            .get(scope)) as any;
           if (old) {
             if (old.hash !== digest)
               throw new QBError('IDEMPOTENCY_CONFLICT', 'Idempotency key changed', 409);
@@ -1082,53 +1690,68 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           bid = crypto.randomUUID(),
           operationId = crypto.randomUUID();
         const result = { id, branchId: bid, operationId };
-        db.transaction(() => {
-          db.query('INSERT INTO projects VALUES(?,?,?,?,?,?,?,?)').run(
-            id,
-            input.organizationId,
-            input.name,
-            input.slug,
-            'provisioning',
-            'local',
-            cipher.seal({ origins: config.origins, providers: {}, verifyEmail: false }),
-            now(),
-          );
-          db.query('INSERT INTO branches VALUES(?,?,?,?,?,?)').run(
-            bid,
-            id,
-            'main',
-            'provisioning',
-            1,
-            now(),
-          );
-          db.query('INSERT INTO operations VALUES(?,?,?,?,?,?,?)').run(
-            operationId,
-            id,
-            'provision',
-            'requested',
-            0,
-            null,
-            now(),
-          );
-          if (scope)
-            db.query('INSERT INTO management_idempotency VALUES(?,?,?)').run(
-              scope,
-              digest,
-              JSON.stringify(result),
+        await db.transaction(async (tx) => {
+          await tx
+            .query('INSERT INTO projects VALUES(?,?,?,?,?,?,?,?)')
+            .run(
+              id,
+              input.organizationId,
+              input.name,
+              input.slug,
+              'provisioning',
+              'local',
+              cipher.seal({ origins: config.origins, providers: {}, verifyEmail: false }),
+              now(),
             );
+          await tx
+            .query('INSERT INTO branches VALUES(?,?,?,?,?,?)')
+            .run(bid, id, 'main', 'provisioning', 1, now());
+          await tx
+            .query('INSERT INTO operations VALUES(?,?,?,?,?,?,?)')
+            .run(operationId, id, 'provision', 'requested', 0, null, now());
+          if (scope)
+            await tx
+              .query('INSERT INTO management_idempotency VALUES(?,?,?)')
+              .run(scope, digest, JSON.stringify(result));
         })();
-        audit(actor.id, 'project.create', id, { id, org_id: input.organizationId }, request);
+        await audit(actor.id, 'project.create', id, { id, org_id: input.organizationId }, request);
         set.status = 202;
         return success(result, request);
       })
+      .patch('/management/v1/projects/:id', async ({ request, params, body }) => {
+        const { p, actor } = await projectAccess(request, params.id, 'admin');
+        const input = body as { name?: unknown; region?: unknown };
+        if (input?.name === undefined && input?.region === undefined)
+          throw new QBError('VALIDATION', 'Provide a project name or region');
+        const name = input?.name === undefined ? String(p.name) : String(input.name ?? '').trim();
+        if (!name || name.length > 100)
+          throw new QBError('VALIDATION', 'Project name is required and at most 100 characters');
+        const region =
+          input?.region === undefined ? String(p.region) : String(input.region ?? '').trim();
+        if (input?.region !== undefined && region !== 'local')
+          throw new QBError('VALIDATION', 'This release places projects in the local region');
+        await db.query('UPDATE projects SET name=?,region=? WHERE id=?').run(name, region, p.id);
+        await audit(actor.id, 'project.update', p.id, { id: p.id, org_id: p.org_id }, request);
+        return success({ id: p.id, name, slug: p.slug, region, status: p.status }, request);
+      })
+      .delete('/management/v1/projects/:id', async ({ request, params, set }) => {
+        const { p, actor } = await projectAccess(request, params.id, 'admin');
+        // Isolated cleanup: only this project's branches, storage prefix, functions, and catalog rows.
+        await deleteProjectArtifacts(p);
+        await audit(actor.id, 'project.delete', p.id, { id: p.id, org_id: p.org_id }, request);
+        set.status = 204;
+        return '';
+      })
       .get('/management/v1/operations/:id', async ({ request, params }) => {
-        const row = db.query('SELECT * FROM operations WHERE id=?').get(params.id) as any;
+        const row = (await db.query('SELECT * FROM operations WHERE id=?').get(params.id)) as any;
         if (!row) throw new QBError('NOT_FOUND', 'Operation not available', 404);
         await projectAccess(request, row.project_id);
         return success(row, request);
       })
       .post('/management/v1/operations/:id/cancel', async ({ request, params }) => {
-        const operation = db.query('SELECT * FROM operations WHERE id=?').get(params.id) as any;
+        const operation = (await db
+          .query('SELECT * FROM operations WHERE id=?')
+          .get(params.id)) as any;
         if (!operation) throw new QBError('NOT_FOUND', 'Operation not available', 404);
         const { p, actor } = await projectAccess(request, operation.project_id, 'developer');
         if (operation.status === 'cancelled') return success(operation, request);
@@ -1138,19 +1761,19 @@ export async function createService(override?: Partial<ReturnType<typeof configu
             'Only provisioning operations that have not started can be cancelled',
             409,
           );
-        db.transaction(() => {
-          db.query(
-            "UPDATE operations SET status='cancelled' WHERE id=? AND status='requested'",
-          ).run(operation.id);
-          db.query("UPDATE projects SET status='cancelled' WHERE id=?").run(p.id);
-          db.query("UPDATE branches SET status='cancelled' WHERE project_id=?").run(p.id);
+        await db.transaction(async (tx) => {
+          await tx
+            .query("UPDATE operations SET status='cancelled' WHERE id=? AND status='requested'")
+            .run(operation.id);
+          await tx.query("UPDATE projects SET status='cancelled' WHERE id=?").run(p.id);
+          await tx.query("UPDATE branches SET status='cancelled' WHERE project_id=?").run(p.id);
         })();
-        audit(actor.id, 'operation.cancel', operation.id, p, request);
+        await audit(actor.id, 'operation.cancel', operation.id, p, request);
         return success({ id: operation.id, status: 'cancelled' }, request);
       })
       .get('/management/v1/projects/:id/branches', async ({ request, params }) => {
         const { actor } = await projectAccess(request, params.id);
-        return controlList(
+        return await controlList(
           'SELECT * FROM branches WHERE project_id=?',
           [params.id],
           request,
@@ -1159,7 +1782,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
       })
       .get('/management/v1/projects/:id/keys', async ({ request, params }) => {
         const { actor } = await projectAccess(request, params.id);
-        return controlList(
+        return await controlList(
           'SELECT id,scope,prefix,expires_at,revoked_at FROM project_keys WHERE project_id=?',
           [params.id],
           request,
@@ -1184,16 +1807,12 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         const key =
           (scope === 'service' ? 'qb_sk_' : 'qb_pk_') + randomBytes(32).toString('base64url');
         const id = crypto.randomUUID();
-        db.query('INSERT INTO project_keys VALUES(?,?,?,?,?,?,NULL)').run(
-          id,
-          p.id,
-          scope,
-          sha(key),
-          key.slice(0, 15),
-          input?.expiresAt ?? null,
-        );
+        await db
+          .query('INSERT INTO project_keys VALUES(?,?,?,?,?,?,NULL)')
+          .run(id, p.id, scope, sha(key), key.slice(0, 15), input?.expiresAt ?? null);
+        await db.query('INSERT INTO project_key_metadata VALUES(?,?)').run(id, now());
         if (scope === 'service')
-          db.query('INSERT INTO credential_scopes VALUES(?,?)').run(
+          await db.query('INSERT INTO credential_scopes VALUES(?,?)').run(
             id,
             JSON.stringify({
               branch: input.branch,
@@ -1202,17 +1821,15 @@ export async function createService(override?: Partial<ReturnType<typeof configu
               bypass: input.bypass === true,
             }),
           );
-        audit(actor.id, 'key.create', id, p, request);
+        await audit(actor.id, 'key.create', id, p, request);
         return success({ id, key }, request);
       })
       .delete('/management/v1/projects/:id/keys/:key', async ({ request, params }) => {
         const { p, actor } = await projectAccess(request, params.id, 'admin');
-        db.query('UPDATE project_keys SET revoked_at=? WHERE id=? AND project_id=?').run(
-          now(),
-          params.key,
-          p.id,
-        );
-        audit(actor.id, 'key.revoke', params.key, p, request);
+        await db
+          .query('UPDATE project_keys SET revoked_at=? WHERE id=? AND project_id=?')
+          .run(now(), params.key, p.id);
+        await audit(actor.id, 'key.revoke', params.key, p, request);
         return success({ revoked: true }, request);
       })
       .get('/management/v1/projects/:id/config', async ({ request, params }) => {
@@ -1230,9 +1847,9 @@ export async function createService(override?: Partial<ReturnType<typeof configu
             providers: Object.keys(c.providers ?? {}),
             version: Number(
               (
-                db
+                (await db
                   .query('SELECT version FROM project_config_versions WHERE project_id=?')
-                  .get(p.id) as any
+                  .get(p.id)) as any
               )?.version ?? 1,
             ),
           },
@@ -1245,9 +1862,9 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         const old = cipher.open(p.config);
         const version = Number(
           (
-            db
+            (await db
               .query('SELECT version FROM project_config_versions WHERE project_id=?')
-              .get(p.id) as any
+              .get(p.id)) as any
           )?.version ?? 1,
         );
         if (Number(request.headers.get('if-match')) !== version)
@@ -1299,7 +1916,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         )
           throw new QBError(
             'VALIDATION',
-            'Quotas require positive integer databaseBytes, storageBytes or requestsPerMinute',
+            'Quotas require positive BIGINT databaseBytes, storageBytes or requestsPerMinute',
           );
         const next = {
           ...old,
@@ -1308,18 +1925,22 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           quotas: { ...old.quotas, ...input.quotas },
           providers: { ...old.providers, ...input.providers },
         };
-        db.transaction(() => {
-          db.query('UPDATE projects SET config=? WHERE id=?').run(cipher.seal(next), p.id);
-          db.query(
-            'INSERT INTO project_config_versions VALUES(?,?) ON CONFLICT(project_id) DO UPDATE SET version=excluded.version',
-          ).run(p.id, version + 1);
+        await db.transaction(async (tx) => {
+          await tx.query('UPDATE projects SET config=? WHERE id=?').run(cipher.seal(next), p.id);
+          await tx
+            .query(
+              'INSERT INTO project_config_versions VALUES(?,?) ON CONFLICT(project_id) DO UPDATE SET version=excluded.version',
+            )
+            .run(p.id, version + 1);
         })();
-        for (const b of db.query('SELECT id FROM branches WHERE project_id=?').all(p.id) as any[])
+        for (const b of (await db
+          .query('SELECT id FROM branches WHERE project_id=?')
+          .all(p.id)) as any[])
           if (owners.has(b.id)) {
             await owners.get(b.id)!.close();
             owners.delete(b.id);
           }
-        audit(actor.id, 'config.update', p.id, p, request);
+        await audit(actor.id, 'config.update', p.id, p, request);
         return success({ updated: true, version: version + 1 }, request);
       })
       .put('/management/v1/projects/:id/secrets/:name', async ({ request, params, body }) => {
@@ -1327,22 +1948,18 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         if (!/^[A-Z][A-Z0-9_]{0,63}$/.test(params.name) || typeof (body as any).value !== 'string')
           throw new QBError('VALIDATION', 'Provide an uppercase secret name and string value');
         const id = crypto.randomUUID();
-        db.query('INSERT INTO secret_versions VALUES(?,?,?,?,?)').run(
-          id,
-          p.id,
-          params.name,
-          cipher.seal({ value: (body as any).value }),
-          now(),
-        );
-        audit(actor.id, 'secret.rotate', params.name, p, request);
+        await db
+          .query('INSERT INTO secret_versions VALUES(?,?,?,?,?)')
+          .run(id, p.id, params.name, cipher.seal({ value: (body as any).value }), now());
+        await audit(actor.id, 'secret.rotate', params.name, p, request);
         return success({ id, name: params.name }, request);
       })
       .get('/management/v1/projects/:id/secrets', async ({ request, params }) => {
         await projectAccess(request, params.id, 'admin');
         return success(
-          db
+          await db
             .query(
-              'SELECT name,MAX(created_at) AS updatedAt FROM secret_versions WHERE project_id=? GROUP BY name',
+              'SELECT name,MAX(created_at) AS "updatedAt" FROM secret_versions WHERE project_id=? GROUP BY name',
             )
             .all(params.id),
           request,
@@ -1381,7 +1998,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
             privileged: true,
             idempotency: request.headers.get('idempotency-key'),
           });
-          audit(actor.id, 'row.insert', params.table, p, request);
+          await audit(actor.id, 'row.insert', params.table, p, request);
           return success(r.data, request, r.meta);
         },
       )
@@ -1396,7 +2013,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
             key: params.key,
             privileged: true,
           });
-          audit(actor.id, 'row.update', params.table, p, request);
+          await audit(actor.id, 'row.update', params.table, p, request);
           return success(r.data, request, r.meta);
         },
       )
@@ -1410,7 +2027,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
             key: params.key,
             privileged: true,
           });
-          audit(actor.id, 'row.delete', params.table, p, request);
+          await audit(actor.id, 'row.delete', params.table, p, request);
           return success(r.data, request, r.meta);
         },
       )
@@ -1433,7 +2050,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           const input = body as any;
           if (/\b(drop|alter|delete)\b/i.test(input.sql)) await backup(p, b, actor.id, request);
           const result = await o.call('migration', { ...input, author: actor.id });
-          audit(actor.id, 'migration.apply', input.id, p, request);
+          await audit(actor.id, 'migration.apply', input.id, p, request);
           return success(result, request);
         },
       )
@@ -1451,7 +2068,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
             throw new QBError('VALIDATION', 'Invalid SQL');
           if (!/^\s*(select|with)\b/i.test(sql)) await backup(p, b, actor.id, request);
           const result = await o.call('sql', { sql, author: actor.id });
-          audit(actor.id, 'sql.execute', b.id, p, request);
+          await audit(actor.id, 'sql.execute', b.id, p, request);
           return success(result, request);
         },
       )
@@ -1459,12 +2076,157 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         const { o } = await management(request, params.id, params.branch);
         return success(await o.call('policies'), request);
       })
+      .get('/management/v1/projects/:id/branches/:branch/webhooks', async ({ request, params }) => {
+        const { o } = await management(request, params.id, params.branch);
+        return success(await o.call('webhooks-list'), request);
+      })
+      .get('/management/v1/projects/:id/branches/:branch/security', async ({ request, params }) => {
+        const { o, p } = await management(request, params.id, params.branch);
+        return success(
+          await o.call('security-scan', { additional: await controlFindings(db, p.id, p.org_id) }),
+          request,
+        );
+      })
+      .post(
+        '/management/v1/projects/:id/branches/:branch/security/:finding/acknowledge',
+        async ({ request, params, body }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'admin');
+          const result = await o.call('security-acknowledge', {
+            id: params.finding,
+            expiresAt: (body as any)?.expiresAt,
+            actor: actor.id,
+            additional: await controlFindings(db, p.id, p.org_id),
+          });
+          await audit(actor.id, 'security.acknowledge', params.finding, p, request);
+          return success(result, request);
+        },
+      )
+      .delete(
+        '/management/v1/projects/:id/branches/:branch/security/:finding/acknowledge',
+        async ({ request, params }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'admin');
+          const result = await o.call('security-clear', { id: params.finding });
+          await audit(actor.id, 'security.clear', params.finding, p, request);
+          return success(result, request);
+        },
+      )
+      .post(
+        '/management/v1/projects/:id/branches/:branch/webhooks',
+        async ({ request, params, body }) => {
+          const { o, b, p, actor } = await management(request, params.id, params.branch, 'admin');
+          const input = body as any,
+            url = webhookURL(input?.url);
+          // Literal IPs are validated immediately; DNS policy is checked/pinned on each dispatch.
+          const host = url.hostname.replace(/^\[|\]$/g, '');
+          if (isIP(host) && !webhookAllowlist[url.origin] && !publicAddress(host))
+            throw new QBError('DESTINATION_DENIED', 'Webhook destination is not public', 400);
+          const denied = await webhookScope(p.id, b.id, input.serviceKeyId, input.table);
+          if (denied)
+            throw new QBError(
+              denied,
+              'Webhook requires an active non-bypass GET key scoped to this immutable branch and table',
+              403,
+            );
+          // Write the poll marker first: a crash cannot hide a successfully committed subscription.
+          await db
+            .query('INSERT INTO branch_job_targets VALUES(?) ON CONFLICT DO NOTHING')
+            .run(b.id);
+          const result = await o.call('webhooks-create', input);
+          await audit(actor.id, 'webhook.create', result.id, p, request);
+          return success(result, request);
+        },
+      )
+      .post(
+        '/management/v1/projects/:id/branches/:branch/webhooks/:webhook/state',
+        async ({ request, params, body }) => {
+          const { o, p, b, actor } = await management(request, params.id, params.branch, 'admin');
+          const result = await o.call('webhooks-state', {
+            id: params.webhook,
+            state: (body as any)?.state,
+          });
+          const remaining = await o.call('webhooks-list');
+          if (!remaining.some((hook: any) => hook.state !== 'revoked'))
+            await db.query('DELETE FROM branch_job_targets WHERE branch_id=?').run(b.id);
+          await audit(actor.id, 'webhook.state', params.webhook, p, request);
+          return success(result, request);
+        },
+      )
+      .post(
+        '/management/v1/projects/:id/branches/:branch/webhooks/:webhook/rotate',
+        async ({ request, params }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'admin');
+          const result = await o.call('webhooks-rotate', { id: params.webhook });
+          await audit(actor.id, 'webhook.rotate', params.webhook, p, request);
+          return success(result, request);
+        },
+      )
+      .get('/management/v1/projects/:id/branches/:branch/jobs', async ({ request, params }) => {
+        const { o, b, actor } = await management(request, params.id, params.branch);
+        const url = new URL(request.url);
+        const scope = sha(url.pathname + b.id + actor.id);
+        const cursor = url.searchParams.get('cursor');
+        let before;
+        if (cursor) {
+          const decoded = managementCursor.decode(cursor);
+          if (decoded.scope !== scope)
+            throw new QBError('INVALID_CURSOR', 'Job cursor belongs to another branch');
+          before = { createdAt: decoded.createdAt, id: decoded.id };
+        }
+        const limit = Number(url.searchParams.get('limit') ?? 100);
+        const rows = await o.call('jobs-list', { limit, before });
+        const last = rows.at(-1);
+        return success(rows, request, {
+          cursor:
+            rows.length === limit && last
+              ? managementCursor.encode({
+                  scope,
+                  createdAt: last.createdAt,
+                  id: last.id,
+                })
+              : undefined,
+        });
+      })
+      .get(
+        '/management/v1/projects/:id/branches/:branch/jobs/:job',
+        async ({ request, params }) => {
+          const { o } = await management(request, params.id, params.branch);
+          return success(await o.call('jobs-get', { id: params.job }), request);
+        },
+      )
+      .post(
+        '/management/v1/projects/:id/branches/:branch/jobs/:job/cancel',
+        async ({ request, params }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'admin');
+          const job = await o.call('jobs-cancel', { id: params.job });
+          await audit(actor.id, 'job.cancel', job.id, p, request);
+          return success(job, request);
+        },
+      )
+      .post(
+        '/management/v1/projects/:id/branches/:branch/jobs/:job/replay',
+        async ({ request, params }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'admin');
+          const idempotencyKey = request.headers.get('idempotency-key');
+          if (!idempotencyKey)
+            throw new QBError('VALIDATION', 'Replay requires an Idempotency-Key');
+          const original = await o.call('jobs-get', { id: params.job });
+          if (original.kind.startsWith('push.'))
+            throw new QBError(
+              'JOB_STATE',
+              'Push jobs require recipient revalidation through the campaign retry workflow',
+              409,
+            );
+          const job = await o.call('jobs-replay', { id: params.job, idempotencyKey });
+          await audit(actor.id, 'job.replay', job.id, p, request);
+          return success(job, request);
+        },
+      )
       .put(
         '/management/v1/projects/:id/branches/:branch/policies',
         async ({ request, params, body }) => {
           const { o, p, actor } = await management(request, params.id, params.branch, 'developer');
           const result = await o.call('policy', { policy: body });
-          audit(actor.id, 'policy.update', (body as any).resource, p, request);
+          await audit(actor.id, 'policy.update', (body as any).resource, p, request);
           return success(result, request);
         },
       )
@@ -1475,7 +2237,33 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           const input = body as any;
           if (!['anonymous', 'authenticated'].includes(input.identity?.role))
             throw new QBError('VALIDATION', 'Invalid simulated identity');
-          const result = await o.call('read', { ...input, query: input.query ?? { limit: 10 } });
+          // Only explicitly supported fields cross the boundary: never privileged/service bypass flags.
+          const roles = Array.isArray(input.identity.roles)
+            ? input.identity.roles.filter((r: unknown) => typeof r === 'string')
+            : [];
+          const identity = {
+            role: input.identity.role,
+            sub: input.identity.sub ?? null,
+            roles,
+          };
+          if (input.operation !== undefined || input.fixtures !== undefined) {
+            const result = await o.call('policy-simulate', {
+              table: input.table,
+              operation: input.operation ?? 'select',
+              identity,
+              fixtures: input.fixtures,
+              query: input.query,
+              input: input.input,
+              key: input.key,
+              revision: input.revision,
+            });
+            return success(result, request);
+          }
+          const result = await o.call('read', {
+            table: input.table,
+            identity,
+            query: input.query ?? { limit: 10 },
+          });
           return success(result.data, request, result.meta);
         },
       )
@@ -1484,7 +2272,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         async ({ request, params, body }) => {
           const { o, p, actor } = await management(request, params.id, params.branch, 'developer');
           await o.call('expose', { ...(body as object), table: params.table });
-          audit(actor.id, 'exposure.update', params.table, p, request);
+          await audit(actor.id, 'exposure.update', params.table, p, request);
           return success({ updated: true }, request);
         },
       )
@@ -1493,7 +2281,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         async ({ request, params, body }) => {
           const { o, p, actor } = await management(request, params.id, params.branch, 'developer');
           const result = await o.call('relationship', { relationship: body });
-          audit(actor.id, 'relationship.register', result.name, p, request);
+          await audit(actor.id, 'relationship.register', result.name, p, request);
           return success(result, request);
         },
       )
@@ -1502,7 +2290,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         async ({ request, params, body }) => {
           const { o, p, actor } = await management(request, params.id, params.branch, 'developer');
           const result = await o.call('rpc-register', { operation: body });
-          audit(actor.id, 'rpc.register', result.name, p, request);
+          await audit(actor.id, 'rpc.register', result.name, p, request);
           return success(result, request);
         },
       )
@@ -1518,18 +2306,116 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         const { o } = await management(request, params.id, params.branch, 'admin');
         return success(await o.call('users'), request);
       })
+      .post(
+        '/management/v1/projects/:id/branches/:branch/users',
+        async ({ request, params, body }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'admin');
+          const input = body as {
+            email?: string;
+            password?: string;
+            name?: string;
+            emailVerified?: boolean;
+            roles?: string[];
+          };
+          const user = await o.call('user-create', input);
+          await audit(actor.id, 'user.create', user.id, p, request);
+          return success(user, request);
+        },
+      )
+      .patch(
+        '/management/v1/projects/:id/branches/:branch/users/:user',
+        async ({ request, params, body }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'admin');
+          const user = await o.call('user-update', { userId: params.user, ...(body as object) });
+          await audit(actor.id, 'user.update', params.user, p, request);
+          return success(user, request);
+        },
+      )
+      .delete(
+        '/management/v1/projects/:id/branches/:branch/users/:user',
+        async ({ request, params }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'admin');
+          const result = await o.call('user-delete', { userId: params.user });
+          await audit(actor.id, 'user.delete', params.user, p, request);
+          return success(result, request);
+        },
+      )
+      .post(
+        '/management/v1/projects/:id/branches/:branch/users/:user/ban',
+        async ({ request, params, body }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'admin');
+          const user = await o.call('user-ban', {
+            userId: params.user,
+            reason: (body as { reason?: string })?.reason,
+          });
+          await audit(actor.id, 'user.ban', params.user, p, request);
+          return success(user, request);
+        },
+      )
+      .delete(
+        '/management/v1/projects/:id/branches/:branch/users/:user/ban',
+        async ({ request, params }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'admin');
+          const user = await o.call('user-unban', { userId: params.user });
+          await audit(actor.id, 'user.unban', params.user, p, request);
+          return success(user, request);
+        },
+      )
+      .put(
+        '/management/v1/projects/:id/branches/:branch/users/:user/roles',
+        async ({ request, params, body }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'admin');
+          const result = await o.call('user-roles', {
+            userId: params.user,
+            roles: (body as { roles?: string[] })?.roles ?? [],
+          });
+          await audit(actor.id, 'user.roles', params.user, p, request);
+          return success(result, request);
+        },
+      )
       .delete(
         '/management/v1/projects/:id/branches/:branch/users/:user/sessions',
         async ({ request, params }) => {
           const { o, p, actor } = await management(request, params.id, params.branch, 'admin');
           await o.call('revoke', { userId: params.user });
-          audit(actor.id, 'session.revoke', params.user, p, request);
+          await audit(actor.id, 'session.revoke', params.user, p, request);
           return success({ revoked: true }, request);
+        },
+      )
+      .get('/management/v1/projects/:id/branches/:branch/roles', async ({ request, params }) => {
+        const { o } = await management(request, params.id, params.branch, 'developer');
+        return success(await o.call('roles'), request);
+      })
+      .post(
+        '/management/v1/projects/:id/branches/:branch/roles',
+        async ({ request, params, body }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'admin');
+          const role = await o.call('role-create', body as object);
+          await audit(actor.id, 'role.create', role.id, p, request);
+          return success(role, request);
+        },
+      )
+      .patch(
+        '/management/v1/projects/:id/branches/:branch/roles/:role',
+        async ({ request, params, body }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'admin');
+          const role = await o.call('role-update', { roleId: params.role, ...(body as object) });
+          await audit(actor.id, 'role.update', params.role, p, request);
+          return success(role, request);
+        },
+      )
+      .delete(
+        '/management/v1/projects/:id/branches/:branch/roles/:role',
+        async ({ request, params }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'admin');
+          const result = await o.call('role-delete', { roleId: params.role });
+          await audit(actor.id, 'role.delete', params.role, p, request);
+          return success(result, request);
         },
       )
       .get('/management/v1/projects/:id/backups', async ({ request, params }) => {
         const { actor } = await projectAccess(request, params.id);
-        return controlList(
+        return await controlList(
           'SELECT id,branch_id,checksum,schema_version,created_at FROM backups WHERE project_id=?',
           [params.id],
           request,
@@ -1539,73 +2425,271 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           'id',
         );
       })
+      .get('/management/v1/projects/:id/recovery', async ({ request, params }) => {
+        await projectAccess(request, params.id);
+        return success(await loadRecoverySettings(db, params.id), request);
+      })
+      .put('/management/v1/projects/:id/recovery', async ({ request, params, body }) => {
+        const { p, actor } = await projectAccess(request, params.id, 'admin');
+        const version = Number(request.headers.get('if-match'));
+        if (!Number.isSafeInteger(version))
+          throw new QBError('VALIDATION', 'Send the recovery settings version in If-Match');
+        const settings = await saveRecoverySettings(db, p.id, body, version);
+        await audit(actor.id, 'recovery.update', p.id, p, request);
+        return success(settings, request);
+      })
+      .get('/management/v1/projects/:id/recovery/destinations', async ({ request, params }) => {
+        await projectAccess(request, params.id);
+        const rows = (await db
+          .query(
+            'SELECT id,name,endpoint,region,bucket,prefix,state,created_at,updated_at FROM recovery_destinations WHERE project_id=? ORDER BY created_at DESC',
+          )
+          .all(params.id)) as any[];
+        return success(rows.map(destinationSummary), request);
+      })
+      .post(
+        '/management/v1/projects/:id/recovery/destinations',
+        async ({ request, params, body }) => {
+          const { p, actor } = await projectAccess(request, params.id, 'admin');
+          const input = validateDestinationInput(body);
+          const count = Number(
+            (
+              (await db
+                .query('SELECT COUNT(*) AS n FROM recovery_destinations WHERE project_id=?')
+                .get(p.id)) as any
+            ).n,
+          );
+          if (count >= 8)
+            throw new QBError('VALIDATION', 'At most eight recovery destinations are allowed');
+          const id = crypto.randomUUID();
+          const created = now();
+          await db
+            .query(
+              'INSERT INTO recovery_destinations(id,project_id,name,endpoint,region,bucket,prefix,credentials,state,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+            )
+            .run(
+              id,
+              p.id,
+              input.name,
+              input.endpoint,
+              input.region,
+              input.bucket,
+              input.prefix ?? '',
+              cipher.seal({
+                accessKeyId: input.accessKeyId,
+                secretAccessKey: input.secretAccessKey,
+              }),
+              'active',
+              created,
+              created,
+            );
+          await audit(actor.id, 'recovery.destination', id, p, request);
+          return success(
+            destinationSummary({
+              id,
+              name: input.name,
+              endpoint: input.endpoint,
+              region: input.region,
+              bucket: input.bucket,
+              prefix: input.prefix ?? '',
+              state: 'active',
+              created_at: created,
+              updated_at: created,
+            }),
+            request,
+          );
+        },
+      )
+      .post(
+        '/management/v1/projects/:id/recovery/destinations/:destination/state',
+        async ({ request, params, body }) => {
+          const { p, actor } = await projectAccess(request, params.id, 'admin');
+          const state = (body as any)?.state;
+          if (state !== 'active' && state !== 'disabled')
+            throw new QBError('VALIDATION', 'Destination state must be active or disabled');
+          const row = (await db
+            .query('SELECT * FROM recovery_destinations WHERE id=? AND project_id=?')
+            .get(params.destination, p.id)) as any;
+          if (!row) throw new QBError('NOT_FOUND', 'Destination not available', 404);
+          await db
+            .query('UPDATE recovery_destinations SET state=?,updated_at=? WHERE id=?')
+            .run(state, now(), row.id);
+          await audit(actor.id, 'recovery.destination', row.id, p, request);
+          return success(destinationSummary({ ...row, state, updated_at: now() }), request);
+        },
+      )
+      .get('/management/v1/projects/:id/recovery/inventory', async ({ request, params }) => {
+        await projectAccess(request, params.id);
+        return success(await buildInventory(db, params.id), request);
+      })
+      .get('/management/v1/projects/:id/recovery/drills', async ({ request, params }) => {
+        await projectAccess(request, params.id);
+        const rows = (await db
+          .query(
+            'SELECT * FROM recovery_drills WHERE project_id=? ORDER BY created_at DESC,id DESC LIMIT 50',
+          )
+          .all(params.id)) as any[];
+        return success(rows.map(drillSummary), request);
+      })
+      .post('/management/v1/projects/:id/recovery/drills', async ({ request, params, body }) => {
+        const { p, actor } = await projectAccess(request, params.id, 'admin');
+        const backupId = (body as any)?.backupId;
+        if (typeof backupId !== 'string')
+          throw new QBError('VALIDATION', 'Provide backupId for the drill');
+        const backup = (await db
+          .query('SELECT * FROM backups WHERE id=? AND project_id=?')
+          .get(backupId, p.id)) as any;
+        if (!backup) throw new QBError('NOT_FOUND', 'Backup not available', 404);
+        const b = await branch(p.id, backup.branch_id);
+        const o = owner(p, b, false);
+        try {
+          return success(await enqueueRecoveryDrill(p, b, backupId, o, actor.id, request), request);
+        } finally {
+          /* Keep the owner warm for subsequent maintenance; do not close here. */
+        }
+      })
+      .post(
+        '/management/v1/projects/:id/recovery/drills/:drill/cancel',
+        async ({ request, params }) => {
+          const { p, actor } = await projectAccess(request, params.id, 'admin');
+          const drill = (await db
+            .query('SELECT * FROM recovery_drills WHERE id=? AND project_id=?')
+            .get(params.drill, p.id)) as any;
+          if (!drill) throw new QBError('NOT_FOUND', 'Drill not available', 404);
+          if (!['queued', 'restoring', 'validating'].includes(drill.state))
+            throw new QBError('CONFLICT', 'Drill is no longer cancellable', 409);
+          await db
+            .query(
+              "UPDATE recovery_drills SET state='cancelled',updated_at=?,finished_at=? WHERE id=?",
+            )
+            .run(now(), now(), drill.id);
+          if (drill.job_id && drill.branch_id) {
+            try {
+              const b = await branch(p.id, drill.branch_id);
+              await owner(p, b, false).call('jobs-cancel', { id: drill.job_id });
+            } catch {
+              /* Job may already be finished or cancelled. */
+            }
+          }
+          await audit(actor.id, 'recovery.drill', drill.id, p, request);
+          return success(
+            drillSummary({
+              ...drill,
+              state: 'cancelled',
+              updated_at: now(),
+              finished_at: now(),
+            }),
+            request,
+          );
+        },
+      )
       .post('/management/v1/projects/:id/branches/:branch/backups', async ({ request, params }) => {
         const { p, b, actor } = await management(request, params.id, params.branch, 'admin');
         return success(await backup(p, b, actor.id, request), request);
       })
       .post('/management/v1/projects/:id/backups/:backup/restore', async ({ request, params }) => {
         const { p, actor } = await projectAccess(request, params.id, 'admin');
-        const record = db
-          .query('SELECT * FROM backups WHERE id=? AND project_id=?')
-          .get(params.backup, p.id) as any;
-        if (!record) throw new QBError('NOT_FOUND', 'Backup not available', 404);
-        let bytes: Buffer;
-        try {
-          const encrypted = readFileSync(record.path);
-          if (encrypted.length < 28) throw new Error('Invalid envelope');
-          const dec = createDecipheriv(
-            'aes-256-gcm',
-            Buffer.from(realmSecret(config.master, 'backups'), 'hex'),
-            encrypted.subarray(0, 12),
+        if (activeBackups >= 2)
+          throw new QBError(
+            'BACKUP_BUSY',
+            'Backup/restore capacity reached; retry later',
+            503,
+            true,
           );
-          dec.setAuthTag(encrypted.subarray(-16));
-          bytes = Buffer.concat([dec.update(encrypted.subarray(12, -16)), dec.final()]);
-        } catch {
-          throw new QBError('BACKUP_CORRUPT', 'Backup integrity validation failed', 409);
-        }
-        if (sha(bytes.toString('base64')) !== record.checksum)
-          throw new QBError('BACKUP_CORRUPT', 'Backup checksum failed', 409);
-        const id = crypto.randomUUID();
-        const path = branchPath(config.dataDir, p.id, id);
-        mkdirSync(join(path, '..'), { recursive: true });
-        writeFileSync(path, bytes, { mode: 0o600 });
-        const restored = openDatabase(path);
+        activeBackups++;
         try {
-          if (
-            (restored.query('PRAGMA integrity_check').get() as any).integrity_check !== 'ok' ||
-            restored.query('PRAGMA foreign_key_check').all().length
-          )
-            throw new QBError('RESTORE_INVALID', 'Restored database validation failed', 409);
-          if (
-            Number(
-              (restored.query("SELECT value FROM _qb_meta WHERE key='schema_version'").get() as any)
-                .value,
-            ) !== Number(record.schema_version)
-          )
-            throw new QBError(
-              'RESTORE_INVALID',
-              'Snapshot schema version differs from its manifest',
-              409,
+          const record = (await db
+            .query('SELECT * FROM backups WHERE id=? AND project_id=?')
+            .get(params.backup, p.id)) as any;
+          if (!record) throw new QBError('NOT_FOUND', 'Backup not available', 404);
+          const id = crypto.randomUUID();
+          const path = branchPath(config.dataDir, p.id, id);
+          mkdirSync(join(path, '..'), { recursive: true, mode: 0o700 });
+          try {
+            await decryptArchive(
+              record.path,
+              path + '.snapshot',
+              Buffer.from(realmSecret(config.master, 'backups'), 'hex'),
+              record.checksum,
+              {
+                signal: AbortSignal.any([request.signal, AbortSignal.timeout(120000)]),
+                // Recovery must remain possible when operators lower a branch's write quota.
+                maxBytes: Math.max(1073741824, cipher.open(p.config).quotas?.databaseBytes ?? 0),
+              },
             );
-          restored.exec(
-            "DELETE FROM _qb_auth_sessions; DELETE FROM _qb_auth_verifications; UPDATE _qb_objects SET state='unavailable';",
-          );
-          restored.exec(
-            'UPDATE _qb_auth_accounts SET accessToken=NULL,refreshToken=NULL,idToken=NULL;',
-          );
+          } catch (error) {
+            rmSync(join(path, '..'), { recursive: true, force: true });
+            throw error;
+          }
+          let restored: ReturnType<typeof openDatabase> | undefined;
+          try {
+            await restoreDatabase(path + '.snapshot', path);
+            rmSync(path + '.snapshot', { force: true });
+            restored = openDatabase(path);
+            await restored.exec('SET CONSTRAINTS ALL IMMEDIATE');
+            if (
+              Number(
+                (
+                  (await restored
+                    .query("SELECT value FROM _qb_meta WHERE key='schema_version'")
+                    .get()) as any
+                ).value,
+              ) !== Number(record.schema_version)
+            )
+              throw new QBError(
+                'RESTORE_INVALID',
+                'Snapshot schema version differs from its manifest',
+                409,
+              );
+            await restored.exec(
+              "DELETE FROM _qb_auth_sessions; DELETE FROM _qb_auth_verifications; UPDATE _qb_objects SET state='unavailable';",
+            );
+            await restored.exec(
+              'UPDATE _qb_auth_accounts SET "accessToken"=NULL,"refreshToken"=NULL,"idToken"=NULL;',
+            );
+            if (
+              await restored
+                .query(
+                  "SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname='_qb_jobs'",
+                )
+                .get()
+            )
+              await restored.exec('DELETE FROM _qb_jobs;');
+            if (
+              await restored
+                .query(
+                  "SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname='_qb_webhooks'",
+                )
+                .get()
+            )
+              await restored.exec('DELETE FROM _qb_webhooks;');
+            if (
+              await restored
+                .query(
+                  "SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname='_qb_security_acknowledgments'",
+                )
+                .get()
+            )
+              await restored.exec('DELETE FROM _qb_security_acknowledgments;');
+          } catch (error) {
+            try {
+              await restored?.close(true);
+            } catch {}
+            rmSync(join(path, '..'), { recursive: true, force: true });
+            throw error;
+          } finally {
+            try {
+              await restored?.close(true);
+            } catch {}
+          }
+          await db
+            .query('INSERT INTO branches VALUES(?,?,?,?,?,?)')
+            .run(id, p.id, 'restore-' + id.slice(0, 8), 'ready', 1, now());
+          await audit(actor.id, 'backup.restore', id, p, request);
+          return success({ branchId: id, status: 'ready', sessionsExcluded: true }, request);
         } finally {
-          restored.close(true);
+          activeBackups--;
         }
-        db.query('INSERT INTO branches VALUES(?,?,?,?,?,?)').run(
-          id,
-          p.id,
-          'restore-' + id.slice(0, 8),
-          'ready',
-          1,
-          now(),
-        );
-        audit(actor.id, 'backup.restore', id, p, request);
-        return success({ branchId: id, status: 'ready', sessionsExcluded: true }, request);
       })
       .post(
         '/management/v1/projects/:id/branches/:branch/cutover',
@@ -1613,7 +2697,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           const { p, b, actor } = await management(request, params.id, params.branch, 'owner');
           if ((body as any).confirm !== p.slug)
             throw new QBError('VALIDATION', 'Confirm the project slug');
-          const old = branch(p.id, 'primary');
+          const old = await branch(p.id, 'primary');
           if (old.id === b.id) throw new QBError('CONFLICT', 'Branch is already primary', 409);
           if (fenced.has(p.id))
             throw new QBError('CONFLICT', 'Another cutover is in progress', 409);
@@ -1624,15 +2708,17 @@ export async function createService(override?: Partial<ReturnType<typeof configu
               await owners.get(old.id)!.close();
               owners.delete(old.id);
             }
-            db.transaction(() => {
-              db.query(
-                "UPDATE branches SET name=?,status='retired',generation=generation+1 WHERE id=?",
-              ).run('previous-' + old.id.slice(0, 8), old.id);
-              db.query("UPDATE branches SET name='main',generation=generation+1 WHERE id=?").run(
-                b.id,
-              );
+            await db.transaction(async (tx) => {
+              await tx
+                .query(
+                  "UPDATE branches SET name=?,status='retired',generation=generation+1 WHERE id=?",
+                )
+                .run('previous-' + old.id.slice(0, 8), old.id);
+              await tx
+                .query("UPDATE branches SET name='main',generation=generation+1 WHERE id=?")
+                .run(b.id);
             })();
-            audit(actor.id, 'branch.cutover', b.id, p, request);
+            await audit(actor.id, 'branch.cutover', b.id, p, request);
             return success({ branchId: b.id, previousBranchId: old.id }, request);
           } finally {
             fenced.delete(p.id);
@@ -1644,7 +2730,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           scope = actor.tokenScope;
         const projects: string[] = scope?.projects ?? [],
           organizations: string[] = scope?.organizations ?? [];
-        return controlList(
+        return await controlList(
           `SELECT a.* FROM audit_events a JOIN memberships m ON m.org_id=a.org_id WHERE m.user_id=?${scope ? ` AND (a.project_id IN(${projects.map(() => '?').join(',') || 'NULL'}) OR a.org_id IN(${organizations.map(() => '?').join(',') || 'NULL'}))` : ''}`,
           [actor.id, ...projects, ...organizations],
           request,
@@ -1663,7 +2749,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         async ({ request, params, body }) => {
           const { o, p, actor } = await management(request, params.id, params.branch, 'developer');
           const r = await o.call('bucket-create', body);
-          audit(actor.id, 'bucket.create', r.id, p, request);
+          await audit(actor.id, 'bucket.create', r.id, p, request);
           return success(r, request);
         },
       )
@@ -1685,11 +2771,11 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           const result = await o.call('upload-intent', {
             ...(body as object),
             bucket: params.bucket,
-            identity: { sub: actor.id, role: 'authenticated' },
+            identity: { sub: actor.id, role: 'authenticated', roles: [] },
             idempotency: request.headers.get('idempotency-key'),
             maxStorageBytes: cipher.open(p.config).quotas?.storageBytes ?? 1073741824,
           });
-          audit(actor.id, 'storage.intent', result.id, p, request);
+          await audit(actor.id, 'storage.intent', result.id, p, request);
           return success(result, request);
         },
       )
@@ -1706,11 +2792,17 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           if (!['pending', 'failed', 'ready'].includes(obj.state))
             throw new QBError('CONFLICT', 'Object already finalized', 409);
           if (obj.state !== 'ready') await o.call('upload-claim', { id: obj.id });
+          let staged: Awaited<ReturnType<typeof stageTransfer>> | undefined;
           try {
-            const bytes = new Uint8Array(await request.arrayBuffer());
-            if (bytes.length !== Number(obj.size))
-              throw new QBError('UPLOAD_MISMATCH', 'File size does not match intent', 409);
-            const contentSha = createHash('sha256').update(bytes).digest('hex');
+            const signal = AbortSignal.any([request.signal, AbortSignal.timeout(120000)]);
+            staged = await stageTransfer(
+              request.body,
+              transferDirectory,
+              Number(obj.size),
+              obj.expected_sha,
+              signal,
+            );
+            const contentSha = staged.checksum;
             if (obj.state === 'ready') {
               if (obj.content_sha !== contentSha)
                 throw new QBError(
@@ -1720,11 +2812,12 @@ export async function createService(override?: Partial<ReturnType<typeof configu
                 );
               return success({ id: obj.id, state: 'ready' }, request);
             }
-            const result = await backend.put(
+            const result = await backend.putFile(
               `${p.id}/${b.id}/${obj.id}`,
-              bytes,
-              bytes.length,
+              staged.path,
+              staged.size,
               obj.mime,
+              signal,
             );
             await o.call('object-state', {
               id: obj.id,
@@ -1732,12 +2825,14 @@ export async function createService(override?: Partial<ReturnType<typeof configu
               etag: result.etag,
               contentSha,
             });
-            audit(actor.id, 'storage.upload', obj.id, p, request);
+            await audit(actor.id, 'storage.upload', obj.id, p, request);
             return success({ id: obj.id, state: 'ready' }, request);
           } catch (error) {
             if (obj.state !== 'ready')
               await o.call('object-state', { id: obj.id, state: 'failed' });
             throw error;
+          } finally {
+            await staged?.dispose();
           }
         },
         { parse: 'none' },
@@ -1771,7 +2866,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           await o.call('object-state', { id: obj.id, state: 'deleting' });
           await backend.delete(`${p.id}/${b.id}/${obj.id}`);
           await o.call('object-state', { id: obj.id, state: 'deleted' });
-          audit(actor.id, 'storage.delete', obj.id, p, request);
+          await audit(actor.id, 'storage.delete', obj.id, p, request);
           return success({ deleted: true }, request);
         },
       )
@@ -1782,15 +2877,18 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           /\/auth\/(?:callback\/(?:google|github)|verify-email|reset-password\/[^/]+)$/.test(
             url.pathname,
           );
-        let access: { o: BranchOwner; b: any };
+        let access: {
+          o: BranchOwner;
+          b: any;
+        };
         if (callback) {
           if (fenced.has(params.id))
             throw new QBError('OWNER_UNAVAILABLE', 'Branch cutover is in progress', 503, true);
-          const p = db
+          const p = (await db
             .query("SELECT * FROM projects WHERE id=? AND status='ready'")
-            .get(params.id) as any;
+            .get(params.id)) as any;
           if (!p) throw new QBError('NOT_FOUND', 'Project not available', 404);
-          const b = branch(p.id, params.branch);
+          const b = await branch(p.id, params.branch);
           access = { b, o: owner(p, b) };
         } else access = await application(request, params.id, params.branch);
         const { o, b } = access;
@@ -1918,6 +3016,9 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           method: 'delete',
           key: params.key,
           idempotency: request.headers.get('idempotency-key'),
+          revision: request.headers.has('if-match')
+            ? Number(request.headers.get('if-match'))
+            : undefined,
         });
         return success(r.data, request, r.meta);
       })
@@ -1961,11 +3062,17 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           if (!['pending', 'failed', 'ready'].includes(obj.state))
             throw new QBError('CONFLICT', 'Object is already finalized', 409);
           if (obj.state !== 'ready') await o.call('upload-claim', { id: obj.id });
+          let staged: Awaited<ReturnType<typeof stageTransfer>> | undefined;
           try {
-            const bytes = new Uint8Array(await request.arrayBuffer());
-            if (bytes.length !== Number(obj.size))
-              throw new QBError('UPLOAD_MISMATCH', 'File size does not match intent', 409);
-            const contentSha = createHash('sha256').update(bytes).digest('hex');
+            const signal = AbortSignal.any([request.signal, AbortSignal.timeout(120000)]);
+            staged = await stageTransfer(
+              request.body,
+              transferDirectory,
+              Number(obj.size),
+              obj.expected_sha,
+              signal,
+            );
+            const contentSha = staged.checksum;
             if (obj.state === 'ready') {
               if (obj.content_sha !== contentSha)
                 throw new QBError(
@@ -1975,11 +3082,12 @@ export async function createService(override?: Partial<ReturnType<typeof configu
                 );
               return success({ id: obj.id, state: 'ready' }, request);
             }
-            const result = await backend.put(
+            const result = await backend.putFile(
               `${p.id}/${b.id}/${obj.id}`,
-              bytes,
-              bytes.length,
+              staged.path,
+              staged.size,
               obj.mime,
+              signal,
             );
             await o.call('object-state', {
               id: obj.id,
@@ -1992,6 +3100,8 @@ export async function createService(override?: Partial<ReturnType<typeof configu
             if (obj.state !== 'ready')
               await o.call('object-state', { id: obj.id, state: 'failed' });
             throw error;
+          } finally {
+            await staged?.dispose();
           }
         },
         { parse: 'none' },
@@ -2036,9 +3146,11 @@ export async function createService(override?: Partial<ReturnType<typeof configu
       tick,
       maintain,
       async close() {
+        closing = true;
         for (const t of timers) clearInterval(t);
+        await maintenanceTask?.catch(() => {});
         await Promise.allSettled([...owners.values()].map((o) => o.close()));
-        db.close(true);
+        await db.close(true);
         release();
       },
       timers,

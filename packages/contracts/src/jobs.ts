@@ -1,7 +1,11 @@
 /** Additive metadata contract. Payloads and lease credentials are internal-only. */
 export const jobKinds = [
-  'recovery.drill', 'webhook.delivery', 'alert.email',
-  'push.dispatch', 'push.receipts', 'maintenance',
+  'recovery.drill',
+  'webhook.delivery',
+  'alert.email',
+  'push.dispatch',
+  'push.receipts',
+  'maintenance',
 ] as const;
 export type JobKind = (typeof jobKinds)[number];
 export type JobState = 'queued' | 'leased' | 'retry_wait' | 'succeeded' | 'dead' | 'cancelled';

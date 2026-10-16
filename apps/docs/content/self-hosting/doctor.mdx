@@ -1,0 +1,35 @@
+export const frontmatter = {"title": "Deployment Doctor", "description": "Run read-only redacted checks without silently probing or changing services.", "section": "Operations", "slug": "self-hosting/doctor", "order": 64};
+
+# Deployment Doctor
+
+## Run local inventory
+
+```sh
+bun run qb doctor --directory .
+```
+
+From a built CLI installation, use `qb doctor --directory <checkout-or-application>`. This inspects runtime/source compatibility and redacted configuration presence. It does not write files, read secret/key contents or load a target dotenv file. If you need checks for a deployment's configuration, securely inject its environment into the invoking process; copying an `.env` file alone is not evidence that Doctor used it.
+
+## Explicit readiness probe
+
+```sh
+bun run qb doctor --directory . --probe-url https://api.example.com
+```
+
+Only this option requests network access: a bounded three-second GET to `/ready`. Supply a bare HTTP(S) origin without credentials, path, query or fragment. Redirects are refused. A successful readiness response is not an S3, mail or push delivery certification.
+
+## Findings and exit codes
+
+The structured report includes inventory and findings with code, severity, status, message and remediation. Checks include pinned runtime/source SDK compatibility, HTTPS/exact origins in production, secret presence, unsafe public secret names, disk capacity/permission observations and S3/mail/push configuration presence.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | No blocking inventory errors. Unknown/unconfigured checks may remain. |
+| `1` | Blocking findings need remediation. |
+| `2` | Invalid invocation, such as an unsafe probe URL. |
+
+Owner health is reported unknown when it cannot be verified; a lock file is not assumed to prove a healthy owner. Do not interpret unknown or unconfigured findings as passed checks. Reports omit secret values and private paths.
+
+## Current limitations
+
+Live storage probes, test email/push, backup-destination checks and native device configuration certification are not implemented. Doctor never sends a notification, creates an object or changes deployment configuration. These remain [expanded-release requirements](/docs/roadmap/expanded-release). Use [monitoring](/docs/self-hosting/monitoring) and your provider-specific runbook for separately authorized checks.

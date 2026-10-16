@@ -1,4 +1,5 @@
-import type { Database } from 'bun:sqlite';
+import type { Database } from './connection';
+import { safeSQL } from './sql-guard';
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -23,34 +24,55 @@ import { compilePolicies, compileExpression, identifier } from '@qb-flex/policie
 import { compileQuery, cursorCodec, normalize, sqlValue, columnValue } from '@qb-flex/query-engine';
 const hash = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
 export class BranchEngine {
+  private catalog: TableSchema[] = [];
+  private policyCatalog: Policy[] = [];
+  private relationCatalog: Awaited<ReturnType<typeof relationships>> = [];
+  async refresh() {
+    this.catalog = await schema(this.db);
+    this.policyCatalog = await policies(this.db);
+    this.relationCatalog = await relationships(this.db);
+  }
   constructor(
     public db: Database,
     private secret: string,
-  ) {
-    if (!db.query("SELECT value FROM _qb_meta WHERE key='physical_schema_hash'").get())
-      this.stampSchema();
+  ) {}
+  async initialize() {
+    if (!(await this.db.query("SELECT value FROM _qb_meta WHERE key='physical_schema_hash'").get()))
+      await this.stampSchema();
+    await this.refresh();
+    return this;
   }
-  private physicalSchema() {
+  private async physicalSchema() {
     return hash(
-      this.db
+      await this.db
         .query(
-          "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' AND name NOT LIKE '_qb_%' AND tbl_name NOT LIKE '_qb_%' ORDER BY type,name",
+          `SELECT c.relkind AS type,c.relname AS name,
+          (SELECT json_agg(json_build_array(a.attname,format_type(a.atttypid,a.atttypmod),a.attnotnull,a.attidentity,a.attgenerated,pg_get_expr(d.adbin,d.adrelid),(SELECT json_agg(e.enumlabel ORDER BY e.enumsortorder) FROM pg_enum e WHERE e.enumtypid=a.atttypid)) ORDER BY a.attnum)::text
+           FROM pg_attribute a LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
+           WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped) AS columns,
+          (SELECT json_agg(pg_get_constraintdef(k.oid) ORDER BY k.conname)::text FROM pg_constraint k WHERE k.conrelid=c.oid) AS constraints,
+          (SELECT json_agg(pg_get_indexdef(i.indexrelid) ORDER BY i.indexrelid::regclass::text)::text FROM pg_index i WHERE i.indrelid=c.oid) AS indexes,
+          (SELECT json_agg(pg_get_triggerdef(t.oid) ORDER BY t.tgname)::text FROM pg_trigger t WHERE t.tgrelid=c.oid AND NOT t.tgisinternal AND left(t.tgname,12)<>'_qb_capture_') AS triggers,
+          CASE WHEN c.relkind='v' THEN pg_get_viewdef(c.oid) ELSE NULL END AS view
+          FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+          WHERE n.nspname='public' AND c.relkind IN('r','v') AND left(c.relname,4)<>'_qb_' ORDER BY c.relkind,c.relname`,
         )
         .all(),
     );
   }
-  private stampSchema() {
-    this.db
+  private async stampSchema() {
+    await this.db
       .query(
         "INSERT INTO _qb_meta VALUES('physical_schema_hash',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
       )
-      .run(this.physicalSchema());
+      .run(await this.physicalSchema());
   }
-  assertSchema() {
-    const expected = this.db
+  async assertSchema() {
+    await this.refresh();
+    const expected = (await this.db
       .query("SELECT value FROM _qb_meta WHERE key='physical_schema_hash'")
-      .get() as any;
-    if (expected?.value !== this.physicalSchema())
+      .get()) as any;
+    if (expected?.value !== (await this.physicalSchema()))
       throw new QBError(
         'SCHEMA_STALE',
         'Physical schema changed outside migrations; reconcile with a reviewed migration',
@@ -58,8 +80,7 @@ export class BranchEngine {
       );
   }
   table(name: string, publicOnly = true) {
-    if (publicOnly) this.assertSchema();
-    const table = schema(this.db).find((t) => t.name === name);
+    const table = this.catalog.find((t) => t.name === name);
     if (!table || (publicOnly && !table.exposed))
       throw new QBError('NOT_FOUND', 'Table not available', 404);
     return table;
@@ -68,10 +89,18 @@ export class BranchEngine {
     const alias = `qb_row_${stack.length}`;
     return {
       alias,
-      exists: (expression: Extract<Expression, { op: 'exists' }>) => {
+      columnTypes: Object.fromEntries(table.columns.map((c) => [c.name, c.type])),
+      exists: (
+        expression: Extract<
+          Expression,
+          {
+            op: 'exists';
+          }
+        >,
+      ) => {
         if (stack.length >= 4 || stack.includes(table.name))
           throw new QBError('INVALID_POLICY', 'Cyclic or deep relationship policy');
-        const relation = relationships(this.db).find(
+        const relation = this.relationCatalog.find(
           (r) => r.source === table.name && r.name === expression.relationship,
         );
         if (!relation) throw new QBError('INVALID_POLICY', 'Relationship is not approved');
@@ -86,7 +115,7 @@ export class BranchEngine {
           options,
         );
         const policy = compilePolicies(
-          policies(this.db),
+          this.policyCatalog,
           target.name,
           'select',
           target.columns.map((c) => c.name),
@@ -108,7 +137,7 @@ export class BranchEngine {
     phase: 'using' | 'check' = 'using',
   ) {
     return compilePolicies(
-      policies(this.db),
+      this.policyCatalog,
       table.name,
       operation,
       table.columns.map((c) => c.name),
@@ -117,27 +146,31 @@ export class BranchEngine {
       this.expressionOptions(table, identity),
     );
   }
-  savePolicy(policy: any) {
+  async savePolicy(policy: any) {
+    await this.refresh();
     const table = this.table(policy.resource, false);
-    return savePolicy(this.db, policy, (expr) => {
+    return await savePolicy(this.db, policy, (expr) => {
       compileExpression(
         expr,
         table.columns.map((c) => c.name),
-        { sub: null, role: 'anonymous' },
+        { sub: null, role: 'anonymous', roles: [] },
         0,
-        this.expressionOptions(table, { sub: null, role: 'anonymous' }),
+        this.expressionOptions(table, { sub: null, role: 'anonymous', roles: [] }),
       );
     });
   }
-  read(
+  async read(
     name: string,
     q: Query,
     identity: Identity,
     privileged = false,
     budget = { remaining: 2097152 },
   ) {
+    await this.assertSchema();
     const table = this.table(name, !privileged);
-    const policy = privileged ? { sql: '1', params: [] } : this.policy(table, 'select', identity);
+    const policy = privileged
+      ? { sql: 'TRUE', params: [] }
+      : this.policy(table, 'select', identity);
     const compiled = compileQuery(
       privileged ? { ...table, allowedColumns: table.columns.map((c) => c.name) } : table,
       q,
@@ -146,12 +179,15 @@ export class BranchEngine {
     let sql = compiled.sql;
     const params = [...compiled.params];
     const codec = cursorCodec(this.secret);
-    const version = schemaVersion(this.db);
+    const version = await schemaVersion(this.db);
     const scope = codec.scope(name, q, identity, version);
     const count = q.count
       ? Number(
-          (this.db.query(`SELECT COUNT(*) AS total FROM (${sql})`).get(...(params as any[])) as any)
-            .total,
+          (
+            (await this.db
+              .query(`SELECT COUNT(*) AS total FROM (${sql})`)
+              .get(...(params as any[]))) as any
+          ).total,
         )
       : undefined;
     if (q.cursor) {
@@ -170,12 +206,12 @@ export class BranchEngine {
               decoded.values[j],
             ),
           );
-          return `${identifier(p.column)} IS ?`;
+          return `${identifier(p.column)} IS NOT DISTINCT FROM ?`;
         });
         const v = decoded.values[i];
         const col = identifier(o.column);
         let comparison: string;
-        if (v === null) comparison = o.direction === 'asc' ? `${col} IS NOT NULL` : '0';
+        if (v === null) comparison = o.direction === 'asc' ? `${col} IS NOT NULL` : 'FALSE';
         else {
           params.push(
             columnValue(
@@ -189,21 +225,23 @@ export class BranchEngine {
       });
       sql += ` AND (${terms.join(' OR ')})`;
     }
-    sql += ` ORDER BY ${compiled.order.map((o) => `${identifier(o.column)} ${o.direction.toUpperCase()}`).join(',')} LIMIT ?`;
+    sql += ` ORDER BY ${compiled.order.map((o) => `${identifier(o.column)} ${o.direction.toUpperCase()} NULLS ${o.direction === 'asc' ? 'FIRST' : 'LAST'}`).join(',')} LIMIT ?`;
     params.push(compiled.limit + 1);
-    // Measure in SQLite before materializing large values in the owner process.
+    // Measure in PostgreSQL before materializing large values in the owner process.
     // Six bytes per input byte also bounds JSON escaping and base64 overhead.
     const fetchedColumns = [
       ...new Set([...compiled.selected, ...compiled.order.map((o) => o.column)]),
     ];
     const cost = fetchedColumns
-      .map((name) => `COALESCE(octet_length(${identifier(name)}),0)*6+${name.length * 6 + 32}`)
+      .map(
+        (name) => `COALESCE(octet_length(${identifier(name)}::text),0)*6+${name.length * 6 + 32}`,
+      )
       .join('+');
     const bytes = Number(
       (
-        this.db
+        (await this.db
           .query(`SELECT COALESCE(SUM(${cost}),0) AS bytes FROM (${sql})`)
-          .get(...(params as any[])) as any
+          .get(...(params as any[]))) as any
       ).bytes,
     );
     if (bytes > budget.remaining)
@@ -213,7 +251,9 @@ export class BranchEngine {
         413,
       );
     budget.remaining -= bytes;
-    const all = normalize(this.db.query(sql).all(...(params as any[]))) as Record<string, any>[];
+    const all = (await this.db.query(sql).all(...(params as any[]))).map((row) =>
+      this.rowWire(table, row),
+    ) as Record<string, any>[];
     const hasNext = all.length > compiled.limit;
     const rows = all.slice(0, compiled.limit);
     const last = rows.at(-1);
@@ -229,7 +269,7 @@ export class BranchEngine {
           'Relations support at most three links and 100 parent rows',
         );
       for (const requested of q.relations) {
-        const relation = relationships(this.db).find(
+        const relation = this.relationCatalog.find(
           (r) => r.source === name && r.name === requested.name,
         );
         if (!relation) throw new QBError('VALIDATION', 'Relationship not registered');
@@ -242,16 +282,18 @@ export class BranchEngine {
           const related =
             value === null
               ? []
-              : this.read(
-                  relation.target,
-                  {
-                    columns: requested.columns,
-                    filters: [{ column: relation.foreignColumn, op: 'eq', value }],
-                    limit: relation.cardinality === 'one' ? 1 : (requested.limit ?? 50),
-                  },
-                  identity,
-                  privileged,
-                  budget,
+              : (
+                  await this.read(
+                    relation.target,
+                    {
+                      columns: requested.columns,
+                      filters: [{ column: relation.foreignColumn, op: 'eq', value }],
+                      limit: relation.cardinality === 'one' ? 1 : (requested.limit ?? 50),
+                    },
+                    identity,
+                    privileged,
+                    budget,
+                  )
                 ).data;
           projected[i][relation.name] =
             relation.cardinality === 'one' ? (related[0] ?? null) : related;
@@ -260,10 +302,32 @@ export class BranchEngine {
     }
     return {
       data: projected,
-      meta: { schemaVersion: version, cursor, count, consistencyToken: String(this.latest()) },
+      meta: {
+        schemaVersion: version,
+        cursor,
+        count,
+        consistencyToken: String(await this.latest()),
+      },
     };
   }
-  checkRow(
+  private rowWire(table: TableSchema, row: Record<string, any>) {
+    return Object.fromEntries(
+      Object.entries(row).map(([name, value]) => {
+        const type = table.columns.find((c) => c.name === name)?.type ?? '';
+        return [
+          name,
+          value === null
+            ? null
+            : /^(?:boolean|bool)$/i.test(type)
+              ? Number(value)
+              : /^jsonb?$/i.test(type)
+                ? JSON.stringify(value)
+                : normalize(value),
+        ];
+      }),
+    );
+  }
+  async checkRow(
     table: TableSchema,
     row: Record<string, unknown>,
     identity: Identity,
@@ -273,10 +337,10 @@ export class BranchEngine {
     if (privileged) return;
     const p = this.policy(table, operation, identity, 'check');
     const names = table.columns.map((c) => c.name);
-    const sql = `SELECT (${p.sql}) AS permitted FROM (SELECT ${names.map((n) => `? AS ${identifier(n)}`).join(',')}) AS "qb_row_0"`;
-    const result = this.db
+    const sql = `SELECT (${p.sql}) AS permitted FROM (SELECT ${names.map((n) => `?::${table.columns.find((c) => c.name === n)!.type} AS ${identifier(n)}`).join(',')}) AS "qb_row_0"`;
+    const result = (await this.db
       .query(sql)
-      .get(...([...p.params, ...names.map((n) => row[n] ?? null)] as any[])) as any;
+      .get(...([...p.params, ...names.map((n) => row[n] ?? null)] as any[]))) as any;
     if (!result?.permitted)
       throw new QBError('DENIED', 'Row does not satisfy the write policy', 403);
   }
@@ -300,7 +364,7 @@ export class BranchEngine {
       params: values.map((value, index) => columnValue(pks[index]!, value)),
     };
   }
-  mutate(
+  async mutate(
     name: string,
     method: string,
     input: any,
@@ -310,17 +374,18 @@ export class BranchEngine {
     privileged = false,
     revision?: number,
   ) {
+    await this.assertSchema();
     const table = this.table(name, !privileged);
     const columns = table.columns.filter((c) => !c.generated).map((c) => c.name);
     const allowed = privileged ? columns : table.allowedColumns;
     const digest = hash({ method, input, key, revision });
     const scope = idempotency ? hash({ identity, name, method, key, idempotency }) : undefined;
-    return this.db
-      .transaction(() => {
+    return await this.db
+      .transaction(async (tx) => {
         if (scope) {
-          const old = this.db
+          const old = (await tx
             .query('SELECT hash,response FROM _qb_idempotency WHERE scope=?')
-            .get(scope) as any;
+            .get(scope)) as any;
           if (old) {
             if (old.hash !== digest)
               throw new QBError('IDEMPOTENCY_CONFLICT', 'Key reused with different content', 409);
@@ -357,14 +422,14 @@ export class BranchEngine {
                 throw new QBError('VALIDATION', 'Upsert requires all primary key fields');
               const where = primary.map((c) => `${identifier(c.name)}=?`).join(' AND ');
               const params = primary.map((c) => columnValue(c, row[c.name]));
-              const old = this.db
+              const old = (await tx
                 .query(`SELECT * FROM ${identifier(name)} AS "qb_row_0" WHERE ${where}`)
-                .get(...(params as any[])) as Record<string, unknown> | null;
+                .get(...(params as any[]))) as Record<string, unknown> | null;
               if (old) {
                 const policy = privileged
-                  ? { sql: '1', params: [] }
+                  ? { sql: 'TRUE', params: [] }
                   : this.policy(table, 'update', identity);
-                const permitted = this.db
+                const permitted = await tx
                   .query(
                     `SELECT 1 FROM ${identifier(name)} AS "qb_row_0" WHERE ${where} AND (${policy.sql})`,
                   )
@@ -376,7 +441,7 @@ export class BranchEngine {
                 if (fields.includes('revision'))
                   throw new QBError('VALIDATION', 'Revision is managed by the server');
                 if (fields.length) {
-                  const actual = this.db
+                  const actual = (await tx
                     .query(
                       `UPDATE ${identifier(name)} AS "qb_row_0" SET ${fields.map((n) => `${identifier(n)}=?`).join(',')}${columns.includes('revision') ? ',revision=revision+1' : ''} WHERE ${where} RETURNING *`,
                     )
@@ -390,11 +455,11 @@ export class BranchEngine {
                         ),
                         ...params,
                       ] as any[]),
-                    ) as Record<string, unknown>;
-                  this.checkRow(table, actual, identity, 'update', privileged);
+                    )) as Record<string, unknown>;
+                  await this.checkRow(table, actual, identity, 'update', privileged);
                   output.push(actual);
                 } else {
-                  this.checkRow(table, old, identity, 'update', privileged);
+                  await this.checkRow(table, old, identity, 'update', privileged);
                   output.push(old);
                 }
                 continue;
@@ -403,35 +468,35 @@ export class BranchEngine {
             const statement = names.length
               ? `INSERT INTO ${identifier(name)} (${names.map(identifier).join(',')}) VALUES(${names.map(() => '?').join(',')}) RETURNING *`
               : `INSERT INTO ${identifier(name)} DEFAULT VALUES RETURNING *`;
-            const actual = this.db.query(statement).get(
+            const actual = (await tx.query(statement).get(
               ...(names.map((n) =>
                 columnValue(
                   table.columns.find((column) => column.name === n)!,
                   row[n],
                 ),
               ) as any[]),
-            ) as Record<string, unknown>;
+            )) as Record<string, unknown>;
             if (table.columns.some((c) => c.primaryKey && actual[c.name] === null))
               throw new QBError('VALIDATION', 'Primary keys cannot be null');
-            this.checkRow(table, actual, identity, 'insert', privileged);
+            await this.checkRow(table, actual, identity, 'insert', privileged);
             output.push(actual);
           }
         } else {
           if (!key) throw new QBError('VALIDATION', 'Row key is required');
           const pk = this.key(table, key);
           const p = privileged
-            ? { sql: '1', params: [] }
+            ? { sql: 'TRUE', params: [] }
             : this.policy(table, method === 'delete' ? 'delete' : 'update', identity);
           const where = `(${pk.sql}) AND (${p.sql})`;
           const params = [...pk.params, ...p.params];
-          const old = this.db
+          const old = (await tx
             .query(`SELECT * FROM ${identifier(name)} AS "qb_row_0" WHERE ${where}`)
-            .get(...(params as any[])) as Record<string, unknown> | null;
+            .get(...(params as any[]))) as Record<string, unknown> | null;
           if (!old) throw new QBError('NOT_FOUND', 'Row not available', 404);
           if (revision !== undefined && Number(old.revision) !== revision)
             throw new QBError('CONFLICT', 'Row changed since it was read', 409);
           if (method === 'delete') {
-            this.db
+            await tx
               .query(`DELETE FROM ${identifier(name)} AS "qb_row_0" WHERE ${where}`)
               .run(...(params as any[]));
           } else {
@@ -442,7 +507,7 @@ export class BranchEngine {
               throw new QBError('VALIDATION', 'Primary keys cannot be updated');
             if (names.includes('revision'))
               throw new QBError('VALIDATION', 'Revision is managed by the server');
-            const actual = this.db
+            const actual = (await tx
               .query(
                 `UPDATE ${identifier(name)} AS "qb_row_0" SET ${names.map((n) => `${identifier(n)}=?`).join(',')}${columns.includes('revision') ? ',revision=revision+1' : ''} WHERE ${where} RETURNING *`,
               )
@@ -456,111 +521,122 @@ export class BranchEngine {
                   ),
                   ...params,
                 ] as any[]),
-              ) as Record<string, unknown>;
-            this.checkRow(table, actual, identity, 'update', privileged);
+              )) as Record<string, unknown>;
+            await this.checkRow(table, actual, identity, 'update', privileged);
             output.push(actual);
           }
         }
-        const readable = output.filter((row) => privileged || this.visible(table, row, identity));
+        const readable = [];
+        for (const row of output)
+          if (privileged || (await this.visible(table, row, identity))) readable.push(row);
         const response = {
           data: normalize(
             readable.map((row) =>
               Object.fromEntries(
-                (privileged ? columns : table.allowedColumns).map((n) => [n, row[n]]),
+                (privileged ? columns : table.allowedColumns).map((n) => [
+                  n,
+                  this.rowWire(table, row)[n],
+                ]),
               ),
             ),
           ),
-          meta: { schemaVersion: schemaVersion(this.db), consistencyToken: String(this.latest()) },
+          meta: {
+            schemaVersion: await schemaVersion(tx),
+            consistencyToken: String(await this.latest()),
+          },
         };
         if (scope)
-          this.db
+          await tx
             .query('INSERT INTO _qb_idempotency VALUES(?,?,?,?)')
             .run(scope, digest, JSON.stringify(response), new Date().toISOString());
         return response;
       })
       .immediate();
   }
-  visible(table: TableSchema, row: Record<string, unknown>, identity: Identity) {
+  async visible(table: TableSchema, row: Record<string, unknown>, identity: Identity) {
     const p = this.policy(table, 'select', identity);
     const names = table.columns.map((c) => c.name);
     return !!(
-      this.db
+      (await this.db
         .query(
-          `SELECT (${p.sql}) AS permitted FROM (SELECT ${names.map((n) => `? AS ${identifier(n)}`).join(',')}) AS "qb_row_0"`,
+          `SELECT (${p.sql}) AS permitted FROM (SELECT ${names.map((n) => `?::${table.columns.find((c) => c.name === n)!.type} AS ${identifier(n)}`).join(',')}) AS "qb_row_0"`,
         )
-        .get(...([...p.params, ...names.map((n) => row[n] ?? null)] as any[])) as any
+        .get(...([...p.params, ...names.map((n) => row[n] ?? null)] as any[]))) as any
     )?.permitted;
   }
-  migration(id: string, sql: string, author: string) {
+  async migration(id: string, sql: string, author: string) {
     if (!/^[A-Za-z0-9_-]{1,100}$/.test(id) || typeof sql !== 'string' || sql.length > 262144)
       throw new QBError('VALIDATION', 'Invalid migration');
     this.safeSQL(sql);
     const checksum = hash(sql);
-    const previous = this.db.query('SELECT checksum FROM _qb_migrations WHERE id=?').get(id) as any;
+    const previous = (await this.db
+      .query('SELECT checksum FROM _qb_migrations WHERE id=?')
+      .get(id)) as any;
     if (previous) {
       if (previous.checksum !== checksum)
         throw new QBError('MIGRATION_CHANGED', 'Applied checksum does not match', 409);
       return { id, alreadyApplied: true };
     }
-    return this.db
-      .transaction(() => {
-        this.db.exec(sql);
-        this.db.exec(
-          "UPDATE _qb_meta SET value=CAST(value AS INTEGER)+1 WHERE key='schema_version'",
+    return await this.db
+      .transaction(async (tx) => {
+        await tx.exec(sql);
+        await tx.exec(
+          "UPDATE _qb_meta SET value=(value::bigint+1)::text WHERE key='schema_version'",
         );
-        for (const t of schema(this.db).filter((t) => t.exposed))
-          expose(this.db, t.name, true, t.allowedColumns);
-        if (this.db.query('PRAGMA foreign_key_check').all().length)
-          throw new QBError('MIGRATION_INVALID', 'Foreign key validation failed');
-        this.db
+        for (const t of (await schema(tx)).filter((t) => t.exposed))
+          await expose(tx, t.name, true, t.allowedColumns);
+        await tx.exec('SET CONSTRAINTS ALL IMMEDIATE');
+        await tx
           .query('INSERT INTO _qb_migrations VALUES(?,?,?,?,?)')
           .run(id, checksum, author, sql, new Date().toISOString());
-        this.stampSchema();
-        return { id, schemaVersion: schemaVersion(this.db) };
+        await this.stampSchema();
+        return { id, schemaVersion: await schemaVersion(tx) };
       })
       .immediate();
   }
   safeSQL(sql: string) {
-    if (/\b(attach|detach|pragma|vacuum|begin|commit|rollback|load_extension)\b|_qb_/i.test(sql))
-      throw new QBError(
-        'UNSAFE_SQL',
-        'SQL cannot access reserved tables, transaction control or runtime configuration',
-      );
+    safeSQL(sql);
   }
-  snapshot(path: string) {
+  async snapshot(path: string) {
     mkdirSync(dirname(path), { recursive: true });
-    this.db.query('VACUUM INTO ?').run(path);
-    return { path, schemaVersion: schemaVersion(this.db) };
+    await this.db.snapshot(path);
+    return { path, schemaVersion: await schemaVersion(this.db) };
   }
-  latest() {
+  async latest() {
     return Number(
-      (this.db.query("SELECT seq FROM sqlite_sequence WHERE name='_qb_outbox'").get() as any)
-        ?.seq ?? 0,
+      (
+        (await this.db
+          .query(
+            'SELECT CASE WHEN is_called THEN last_value ELSE 0 END AS seq FROM _qb_outbox_seq_seq',
+          )
+          .get()) as any
+      )?.seq ?? 0,
     );
   }
-  events(after: number, identity: Identity, tableName?: string) {
-    this.assertSchema();
-    const latest = this.latest();
+  async events(after: number, identity: Identity, tableName?: string, through?: number) {
+    await this.assertSchema();
+    const latest = await this.latest();
+    through ??= latest;
     const floor = Number(
-      (this.db.query("SELECT value FROM _qb_meta WHERE key='outbox_floor'").get() as any)?.value ??
-        0,
+      ((await this.db.query("SELECT value FROM _qb_meta WHERE key='outbox_floor'").get()) as any)
+        ?.value ?? 0,
     );
     if (after < floor || after > latest)
       throw new QBError('RESYNC_REQUIRED', 'Replay window expired; fetch a fresh snapshot', 409);
-    const rows = this.db
+    const rows = (await this.db
       .query(
         `SELECT seq,table_name,operation,schema_version,
         CASE WHEN octet_length(old_json)>65536 THEN NULL ELSE old_json END AS old_json,
         CASE WHEN octet_length(new_json)>65536 THEN NULL ELSE new_json END AS new_json,
         CASE WHEN octet_length(pk_json)>65536 THEN NULL ELSE pk_json END AS pk_json,
         (COALESCE(octet_length(old_json),0)>65536 OR COALESCE(octet_length(new_json),0)>65536 OR octet_length(pk_json)>65536) AS oversized
-        FROM _qb_outbox WHERE seq>? ORDER BY seq LIMIT 200`,
+        FROM _qb_outbox WHERE seq>? AND seq<=? ORDER BY seq LIMIT 200`,
       )
-      .all(after) as any[];
+      .all(after, through)) as any[];
     const events = [];
     for (const row of rows) {
       if (tableName && row.table_name !== tableName) continue;
-      const table = schema(this.db).find((t) => t.name === row.table_name && t.exposed);
+      const table = (await schema(this.db)).find((t) => t.name === row.table_name && t.exposed);
       if (!table) continue;
       if (row.oversized)
         throw new QBError(
@@ -573,7 +649,7 @@ export class BranchEngine {
         const image = JSON.parse(value);
         for (const column of table.columns)
           if (
-            column.type.toUpperCase() === 'BLOB' &&
+            column.type.toUpperCase() === 'BYTEA' &&
             typeof image[column.name] === 'string' &&
             image[column.name].startsWith('qb_bytes:')
           )
@@ -582,8 +658,8 @@ export class BranchEngine {
       };
       const old = decode(row.old_json);
       const next = decode(row.new_json);
-      const oldAllowed = old && this.visible(table, old, identity);
-      const nextAllowed = next && this.visible(table, next, identity);
+      const oldAllowed = old && (await this.visible(table, old, identity));
+      const nextAllowed = next && (await this.visible(table, next, identity));
       if (nextAllowed)
         events.push({
           eventId: String(row.seq),
@@ -605,8 +681,10 @@ export class BranchEngine {
     }
     return { events, cursor: rows.length ? Number(rows.at(-1).seq) : latest };
   }
-  rpc(name: string, args: Record<string, unknown>, identity: Identity, idempotency?: string) {
-    const row = this.db.query('SELECT definition FROM _qb_rpc WHERE name=?').get(name) as any;
+  async rpc(name: string, args: Record<string, unknown>, identity: Identity, idempotency?: string) {
+    const row = (await this.db
+      .query('SELECT definition FROM _qb_rpc WHERE name=?')
+      .get(name)) as any;
     if (!row) throw new QBError('NOT_FOUND', 'Operation not available', 404);
     const operation = JSON.parse(row.definition);
     if (
@@ -630,8 +708,8 @@ export class BranchEngine {
       ]),
     );
     return operation.kind === 'query'
-      ? this.read(operation.table, operation.query ?? {}, identity)
-      : this.mutate(
+      ? await this.read(operation.table, operation.query ?? {}, identity)
+      : await this.mutate(
           operation.table,
           operation.kind,
           values,
@@ -640,11 +718,11 @@ export class BranchEngine {
           idempotency,
         );
   }
-  types() {
+  async types() {
     return generateTypes(
-      schema(this.db),
-      schemaVersion(this.db),
-      (this.db.query('SELECT definition FROM _qb_rpc').all() as any[]).map((r) =>
+      await schema(this.db),
+      await schemaVersion(this.db),
+      ((await this.db.query('SELECT definition FROM _qb_rpc').all()) as any[]).map((r) =>
         JSON.parse(r.definition),
       ),
     );
