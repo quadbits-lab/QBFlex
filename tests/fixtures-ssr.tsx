@@ -1,6 +1,6 @@
 import { renderToString } from 'react-dom/server';
-import { createClient } from '@qb-flex/client';
-import { QBProvider, useQBAuth, useQBClient } from '@qb-flex/react';
+import { createClient } from '@qbflex/client';
+import { QBProvider, useQBAuth, useQBClient } from '@qbflex/react';
 let requests = 0;
 const client = (projectId: string) =>
   createClient({

@@ -1,9 +1,9 @@
-# @qb-flex/client
+# @qbflex/client
 
 Browser ESM client for QB Flex: database, authentication, realtime and storage. Vanilla JavaScript and TypeScript are supported. Use a publishable project key; credentials and data access are checked by the server.
 
 ```js
-import { createClient } from '@qb-flex/client';
+import { createClient } from '@qbflex/client';
 const qb = createClient({
   url: 'http://localhost:7612',
   projectId: 'your-project-id',

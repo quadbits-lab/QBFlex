@@ -7,6 +7,6 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@qb-flex/client": "workspace:*"
+    "@qbflex/client": "workspace:*"
   }
 }

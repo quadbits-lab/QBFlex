@@ -15,7 +15,7 @@ Set the API URL, project ID and publishable key in the example configuration for
 ## Import and initialize
 
 ```js
-import { createClient } from '@qb-flex/client';
+import { createClient } from '@qbflex/client';
 const qb = createClient({
   url: 'http://localhost:7612',
   projectId: 'YOUR_PROJECT_ID',
@@ -29,7 +29,7 @@ Install the locally packed client artifact when integrating into a separate Vite
 First run `bun run sdk:pack` in QB Flex. In your Vite application, install the resulting tarball using its actual absolute path:
 
 ```sh
-npm install /path/to/QBFlex/dist/packages/qb-flex-client-0.1.0.tgz
+npm install /path/to/QBFlex/dist/packages/qbflex-client-0.1.1.tgz
 ```
 
 Import the client in your application entry module. The repository example already supplies a complete Vite configuration and can be copied as a starting application; its Vite version is pinned to 8.3.2.

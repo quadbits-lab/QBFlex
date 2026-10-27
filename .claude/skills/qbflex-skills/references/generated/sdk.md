@@ -2,7 +2,7 @@
 
 Generated from the actual 0.1.0 SDK declaration artifacts. Integer types preserve precision; omitted exposure columns are absent from generated database types.
 
-## @qb-flex/client
+## @qbflex/client
 
 ```ts
 import { type DatabaseShape, type RowOf, type InsertOf, type UpdateOf, type Query, type Result, type Session, type Filter, type AggregateExpr, type HavingClause, type RelationsOf } from './contracts/index';
@@ -219,12 +219,12 @@ export declare class QBChannel {
 
 ```
 
-## @qb-flex/react
+## @qbflex/react
 
 ```ts
 import { type ReactNode } from 'react';
 import { QueryClient, type QueryKey } from '@tanstack/react-query';
-import { QBClient, type Session, type ChannelOptions } from '@qb-flex/client';
+import { QBClient, type Session, type ChannelOptions } from '@qbflex/client';
 export interface QBProviderProps {
     client: QBClient<any, any>;
     queryClient?: QueryClient;
@@ -319,14 +319,14 @@ export declare function useQBRealtime(options: ChannelOptions & {
 export declare function useQBStorage(): {
     isPending: boolean;
     error: Error | null;
-    upload: (bucket: string, key: string, file: Blob, options?: (import("@qb-flex/client").RequestOptions & {
+    upload: (bucket: string, key: string, file: Blob, options?: (import("@qbflex/client").RequestOptions & {
         checksum?: string;
     }) | undefined) => Promise<import("./contracts/index").Result<{
         id: string;
         state: string;
     }>>;
-    download: (id: string, options?: import("@qb-flex/client").RequestOptions | undefined) => Promise<Blob>;
-    remove: (id: string, options?: import("@qb-flex/client").RequestOptions | undefined) => Promise<import("./contracts/index").Result<{
+    download: (id: string, options?: import("@qbflex/client").RequestOptions | undefined) => Promise<Blob>;
+    remove: (id: string, options?: import("@qbflex/client").RequestOptions | undefined) => Promise<import("./contracts/index").Result<{
         deleted: boolean;
     }>>;
     list: (bucket: string) => Promise<import("./contracts/index").Result<any[]>>;

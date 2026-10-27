@@ -14,8 +14,8 @@ const program = ts.createProgram(
     noEmit: true,
     baseUrl: root,
     paths: {
-      '@qb-flex/client': ['packages/sdk-js/dist/index.d.ts'],
-      '@qb-flex/react': ['packages/sdk-react/dist/index.d.ts'],
+      '@qbflex/client': ['packages/sdk-js/dist/index.d.ts'],
+      '@qbflex/react': ['packages/sdk-react/dist/index.d.ts'],
       'react/jsx-runtime': ['node_modules/@types/react/jsx-runtime.d.ts'],
     },
   },

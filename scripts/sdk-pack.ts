@@ -24,7 +24,7 @@ for (const sdkPackage of publicSDKPackages) {
   if (folder === 'sdk-react')
     manifest.peerDependencies = {
       ...manifest.peerDependencies,
-      '@qb-flex/client': sdkPeerRange(manifest.version),
+      '@qbflex/client': sdkPeerRange(manifest.version),
     };
   writeFileSync(`${dir}/package.json`, JSON.stringify(manifest, null, 2));
   const result = Bun.spawnSync(

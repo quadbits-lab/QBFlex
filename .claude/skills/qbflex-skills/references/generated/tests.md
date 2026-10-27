@@ -55,6 +55,17 @@ SHA-256: `ceded08ba176b50143934055c2bfaf8683c4066c28d97fcdce6b2b5092730e51`
 - assistant includes fixture rows only when the developer opts in
 - assistant rejects private and link-local base URLs
 
+## tests/bootstrap-token.test.ts
+
+SHA-256: `2b49f38e0060caddb1d0064229bec0f46626ab87a6438c5e9034328123b6ffeb`
+
+- environment token wins and is trimmed
+- production rejects the example placeholder instead of accepting it
+- production without a token fails only while first-owner setup is pending
+- mounted secret file is used when the platform injects secrets as files
+- development generates a stable file token that repeated starts reuse
+- token comparison ignores surrounding whitespace and rejects mismatches
+
 ## tests/client-disconnect.test.ts
 
 SHA-256: `5c1e1fbe1eb47a1c3a54cd36d680d6209f8f3df38852dc6ae6753d950154f6b5`
@@ -150,7 +161,7 @@ Shared test fixture; scenario names are in its consuming test files.
 
 ## tests/fixtures-ssr.tsx
 
-SHA-256: `0be630773b859977f6ace20f0427004a6d1ab97f7192ce1316132658ea7381a4`
+SHA-256: `aeb93e2fabd8942e78fa6cd30e9c8473254cf3223027c42e52851540fd65d7ca`
 
 Shared test fixture; scenario names are in its consuming test files.
 
@@ -162,13 +173,13 @@ Shared test fixture; scenario names are in its consuming test files.
 
 ## tests/helpers.ts
 
-SHA-256: `bb79daa9ca3931b8db3b271e31d8d275a24a0b48c9d154fefa8c7f5253d3ccff`
+SHA-256: `c98d40f6f408d545f4898b29816aab1291da892605b3478e394e84cc316861b9`
 
 Shared test fixture; scenario names are in its consuming test files.
 
 ## tests/integration/aggregates.test.ts
 
-SHA-256: `cdfa98aa81749ba5d4b0fdfe87b438d9aafcdb5638df17fe1d959d2fa1bf5b62`
+SHA-256: `12346f4e6f0f3c927398da2ba66ca5067bb636783932fd732f821c503dc76e6a`
 
 - integration: aggregate query via /query endpoint
 - integration: aggregate rejects unsupported combos via SDK
@@ -187,7 +198,7 @@ SHA-256: `b03acc884bf6806d06937cf47bc8fcc02a53cc355ead9f3190485667004bc4c9`
 
 ## tests/integration/core.test.ts
 
-SHA-256: `3f4394b27312556238828d22d9a792bb0832900cda44392f296e94239f68563a`
+SHA-256: `026cc8d2b247dd668843884c60e2a5155899359ba2f8cb213ce7c915c7b85f3c`
 
 - default deny, owner checks, atomic batches, cursor scopes, migration checksums and outbox
 - real API: first owner, provisioning, realm isolation, SDK CRUD, backup and isolated restore
@@ -214,7 +225,7 @@ SHA-256: `0c526e4bb7b5957bfe46472e3f008efd357fe6cbdaa0872d51a720c9287d6a01`
 
 ## tests/integration/network.test.ts
 
-SHA-256: `ef1b897143a96f28f589fe7e0bbf8d06482f8c263351e6e6a675e75329325629`
+SHA-256: `cbf4b2c06cc0ae5caeab88e4f9768d3be232830cc5a887b397ff06536f777a18`
 
 - real network isolation across two users/projects/branches, hidden schema, CORS, scopes and session revocation
 - real realtime stream respects ownership, resumes after a disconnect and reauthorizes revoked sessions
@@ -351,7 +362,7 @@ SHA-256: `7da76cd234cb8f80bb8e1bd61640b5f874ec8f60f2f6dd23f11ed2bbf9cb6cbc`
 
 ## tests/sdk-react.test.tsx
 
-SHA-256: `cac7f9401ab3c7b31133b0d82efd7b8a01fb1a9e35c4973740013da1a38a8e78`
+SHA-256: `3014e65c4b0fcd57839ae3c8db147260b41556c0653da849edee1ea99992f665`
 
 - provider boundary is actionable and SSR uses request-local anonymous state without browser globals
 - shared auth updates, single-flight refresh, explicit identity cache keys and cache cancellation
@@ -361,7 +372,7 @@ SHA-256: `cac7f9401ab3c7b31133b0d82efd7b8a01fb1a9e35c4973740013da1a38a8e78`
 
 ## tests/sdk-release.test.ts
 
-SHA-256: `57a449156ee9c6c91bab5f6cd5825aef129e1cbf275aeaaa181f75267a005b4a`
+SHA-256: `fd60f9d8e071be6a7377f804c3eca1d56ced095af1c9ea888b9ff992632ea105`
 
 - SDK release metadata stays synchronized and explicitly public
 - SDK release helpers handle stable and prerelease versions without fixed artifact names

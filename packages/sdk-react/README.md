@@ -1,10 +1,10 @@
-# @qb-flex/react
+# @qbflex/react
 
 React 19 context provider and custom hooks for QB Flex. Shares the Vanilla JavaScript client and uses a provider-scoped TanStack Query cache.
 
 ```jsx
-import { createClient } from '@qb-flex/client';
-import { QBProvider, useQBQuery } from '@qb-flex/react';
+import { createClient } from '@qbflex/client';
+import { QBProvider, useQBQuery } from '@qbflex/react';
 const client = createClient({
   url: 'http://localhost:7612',
   projectId: 'your-project-id',

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createService } from '../../apps/api/src/service';
-import { createClient } from '@qb-flex/client';
+import { createClient } from '@qbflex/client';
 import { schema, initializeBranch, expose, savePolicy } from '@qb-flex/schema';
 import { openDatabase } from '@qb-flex/database';
 import { BranchEngine } from '../../packages/database/src/engine';

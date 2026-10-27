@@ -55,7 +55,7 @@ bun run --cwd examples/vanilla dev
 
 React runs on port 7617 and Vanilla JavaScript on 7618. Enter your API URL, project ID, publishable key and bucket ID in their forms. Both implement signup/login, protected CRUD, authorized row events and file upload/download/deletion. Use exact application origins in project configuration.
 
-`@qb-flex/client` has browser ESM and TypeScript declarations without React dependencies. `@qb-flex/react` provides `QBProvider`, `useQBClient`, `useQBAuth`, `useQBQuery`, `useQBMutation`, `useQBRealtime` and `useQBStorage`, with identity-aware cache isolation and cleanup. Supply a stable client and use request-local state for SSR.
+`@qbflex/client` has browser ESM and TypeScript declarations without React dependencies. `@qbflex/react` provides `QBProvider`, `useQBClient`, `useQBAuth`, `useQBQuery`, `useQBMutation`, `useQBRealtime` and `useQBStorage`, with identity-aware cache isolation and cleanup. Supply a stable client and use request-local state for SSR.
 
 Build and package the SDKs locally:
 
@@ -63,7 +63,7 @@ Build and package the SDKs locally:
 bun run sdk:pack
 ```
 
-The artifacts are `dist/packages/qb-flex-client-0.1.0.tgz` and `dist/packages/qb-flex-react-0.1.0.tgz`. Install both tarballs with npm when testing React in another application (`npm install /path/to/qb-flex-client-0.1.0.tgz /path/to/qb-flex-react-0.1.0.tgz`). Bun 1.4.2 attempts to resolve the unpublished client peer from npm even when both local tarballs are supplied; npm installation passes the isolated consumer check. Nothing is published to npm. The framework-independent browser module is also available at `/sdk/client.js` on Docs.
+The artifacts are `dist/packages/qbflex-client-0.1.1.tgz` and `dist/packages/qbflex-react-0.1.1.tgz`. Install both tarballs with npm when testing React in another application (`npm install /path/to/qbflex-client-0.1.1.tgz /path/to/qbflex-react-0.1.1.tgz`). Bun 1.4.2 attempts to resolve the unpublished client peer from npm even when both local tarballs are supplied; npm installation passes the isolated consumer check. Nothing is published to npm. The framework-independent browser module is also available at `/sdk/client.js` on Docs.
 
 For npm scope setup, lockstep semantic versioning, dry-run validation, trusted publishing and post-release checks, use the [client SDK release runbook](docs/sdk-releases.md). The repository's publish command is dry-run by default; external publication remains an explicit release action.
 

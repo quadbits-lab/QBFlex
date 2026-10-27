@@ -26,7 +26,7 @@ try {
   writeFileSync(join(directory, 'qb-flex.types.ts'), await engine.types());
   writeFileSync(
     join(directory, 'consumer.tsx'),
-    `import {createClient} from '@qb-flex/client';import {useQBQuery,useQBMutation,QBProvider,useQBClient} from '@qb-flex/react';import type {Database,RPC} from './qb-flex.types';
+    `import {createClient} from '@qbflex/client';import {useQBQuery,useQBMutation,QBProvider,useQBClient} from '@qbflex/react';import type {Database,RPC} from './qb-flex.types';
 const client=createClient<Database,RPC>({url:'http://localhost:7612',projectId:'p',publishableKey:'k'});
 client.from('tasks').select(['title']).eq('completed',0);client.from('tasks').insert({title:'Typed',owner_id:'user'});
 // @ts-expect-error invalid table
@@ -70,8 +70,8 @@ const invalid:RPC['create_task']['Args']={sql:'DROP TABLE tasks'};
     paths: {
       'react/jsx-runtime': ['node_modules/@types/react/jsx-runtime.d.ts'],
       '@qb-flex/contracts': ['packages/contracts/src/index.ts'],
-      '@qb-flex/client': ['packages/sdk-js/src/index.ts'],
-      '@qb-flex/react': ['packages/sdk-react/src/index.tsx'],
+      '@qbflex/client': ['packages/sdk-js/src/index.ts'],
+      '@qbflex/react': ['packages/sdk-react/src/index.tsx'],
     },
   });
   const errors = ts.getPreEmitDiagnostics(program);

@@ -13,8 +13,8 @@
     "baseUrl": ".",
     "paths": {
       "@qb-flex/*": ["packages/*/src/index.ts"],
-      "@qb-flex/client": ["packages/sdk-js/src/index.ts"],
-      "@qb-flex/react": ["packages/sdk-react/src/index.tsx"],
+      "@qbflex/client": ["packages/sdk-js/src/index.ts"],
+      "@qbflex/react": ["packages/sdk-react/src/index.tsx"],
       "@qb-flex/ui": ["packages/ui/src/index.tsx"]
     },
     "resolveJsonModule": true

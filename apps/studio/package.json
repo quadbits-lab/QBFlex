@@ -9,7 +9,7 @@
     "start": "bun server.ts"
   },
   "dependencies": {
-    "@qb-flex/client": "workspace:*",
+    "@qbflex/client": "workspace:*",
     "@qb-flex/contracts": "workspace:*",
     "@qb-flex/management-client": "workspace:*",
     "@qb-flex/ui": "workspace:*"

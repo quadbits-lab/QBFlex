@@ -17,7 +17,7 @@ import {
   useQueryClient,
   type QueryKey,
 } from '@tanstack/react-query';
-import { QBClient, type Session, type ChannelOptions } from '@qb-flex/client';
+import { QBClient, type Session, type ChannelOptions } from '@qbflex/client';
 export interface QBProviderProps {
   client: QBClient<any, any>;
   queryClient?: QueryClient;

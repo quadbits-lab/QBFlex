@@ -1,6 +1,6 @@
 # React SDK
 
-Use the actual [generated exports](generated/sdk.md) and [runnable React tasks](../assets/examples/react/package.json). The package builds on `@qb-flex/client` and TanStack Query; it is not a separate auth implementation.
+Use the actual [generated exports](generated/sdk.md) and [runnable React tasks](../assets/examples/react/package.json). The package builds on `@qbflex/client` and TanStack Query; it is not a separate auth implementation.
 
 ## Client and provider
 

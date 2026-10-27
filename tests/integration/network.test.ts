@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import { fixture } from '../helpers';
-import { createClient } from '@qb-flex/client';
+import { createClient } from '@qbflex/client';
 import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';
 async function until(predicate: () => boolean, ms = 3000) {
   const end = Date.now() + ms;

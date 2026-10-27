@@ -29,9 +29,12 @@ export async function validateSDKReleaseMetadata() {
   if (!isSemver(client.version)) errors.push(`Invalid client version: ${client.version}`);
   if (client.version !== react.version)
     errors.push(`SDK versions differ: client=${client.version}, react=${react.version}`);
-  if (react.dependencies?.['@qb-flex/client'] !== `workspace:*`)
-    errors.push('The workspace React package must depend on @qb-flex/client through workspace:*');
-  for (const manifest of [client, react]) {
+  if (react.dependencies?.['@qbflex/client'] !== `workspace:*`)
+    errors.push('The workspace React package must depend on @qbflex/client through workspace:*');
+  for (const [index, manifest] of [client, react].entries()) {
+    const expectedName = publicSDKPackages[index]!.name;
+    if (manifest.name !== expectedName)
+      errors.push(`SDK package name differs: expected=${expectedName}, actual=${manifest.name}`);
     if (manifest.private === true) errors.push(`${manifest.name} is marked private`);
     if (manifest.publishConfig?.access !== 'public')
       errors.push(`${manifest.name} must set publishConfig.access to public`);
@@ -64,6 +67,43 @@ function assertCleanCheckout() {
     throw new Error('Publishing requires a clean checkout. Commit or stash all changes first.');
 }
 
+function assertNpmScopeAccess() {
+  const identity = spawnSync('npm', ['whoami'], { encoding: 'utf8' });
+  if (identity.status !== 0)
+    throw new Error('npm authentication is required. Run npm login, then retry the release.');
+
+  const account = identity.stdout.trim();
+  const scope = publicSDKPackages[0]?.name.match(/^@([^/]+)\//)?.[1];
+  if (!scope) throw new Error('Unable to determine the npm scope from the SDK package names.');
+  if (account === scope) return;
+
+  const organization = spawnSync('npm', ['org', 'ls', scope, '--json'], {
+    encoding: 'utf8',
+  });
+  if (organization.status !== 0) {
+    throw new Error(
+      `npm scope @${scope} is unavailable to account ${account}. Create the npm organization "${scope}" and grant this account publish access before retrying.`,
+    );
+  }
+
+  let members: unknown;
+  try {
+    members = JSON.parse(organization.stdout);
+  } catch {
+    throw new Error(`npm returned invalid organization metadata for @${scope}.`);
+  }
+  if (
+    !members ||
+    typeof members !== 'object' ||
+    Array.isArray(members) ||
+    !Object.hasOwn(members, account)
+  ) {
+    throw new Error(
+      `npm account ${account} is not a member of @${scope}. Grant it publish access before retrying.`,
+    );
+  }
+}
+
 async function publish(args: string[]) {
   const execute = args.includes('--execute');
   const provenance = args.includes('--provenance');
@@ -71,7 +111,10 @@ async function publish(args: string[]) {
   const requestedTag = tagIndex === -1 ? undefined : args[tagIndex + 1];
   if (tagIndex !== -1 && (!requestedTag || requestedTag.startsWith('--')))
     throw new Error('--tag requires a value');
-  if (execute) assertCleanCheckout();
+  if (execute) {
+    assertCleanCheckout();
+    assertNpmScopeAccess();
+  }
   const version = await validateSDKReleaseMetadata();
   const tag = requestedTag ?? defaultNpmTag(version);
   run('bun', ['run', 'sdk:pack']);
@@ -92,7 +135,7 @@ async function publish(args: string[]) {
   }
   console.log(
     execute
-      ? `Published @qb-flex/client and @qb-flex/react ${version} with the ${tag} tag.`
+      ? `Published @qbflex/client and @qbflex/react ${version} with the ${tag} tag.`
       : `Dry run passed for both SDK packages at ${version} with the ${tag} tag. No registry state changed.`,
   );
 }

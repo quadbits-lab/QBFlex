@@ -13,7 +13,7 @@ bun run --cwd examples/react dev
 For an external application, run `bun run sdk:pack` in QB Flex, then install both artifacts and their React peers from your Vite React application:
 
 ```sh
-npm install /path/to/QBFlex/dist/packages/qb-flex-client-0.1.0.tgz /path/to/QBFlex/dist/packages/qb-flex-react-0.1.0.tgz react@19.3.0 react-dom@19.3.0
+npm install /path/to/QBFlex/dist/packages/qbflex-client-0.1.1.tgz /path/to/QBFlex/dist/packages/qbflex-react-0.1.1.tgz react@19.3.0 react-dom@19.3.0
 ```
 
 Replace the paths with the actual absolute paths. npm installs the adapter's pinned TanStack Query dependency. Bun 1.4.2 attempts to resolve the unpublished client peer from the registry when installing these local tarballs, so use npm for this external artifact workflow. Configure the application's exact origin in Studio.
@@ -21,8 +21,8 @@ Replace the paths with the actual absolute paths. npm installs the adapter's pin
 ## Create the client once
 
 ```tsx
-import { createClient } from '@qb-flex/client';
-import { QBProvider } from '@qb-flex/react';
+import { createClient } from '@qbflex/client';
+import { QBProvider } from '@qbflex/react';
 import type { Database } from './qb-flex.types';
 
 const client = createClient<Database>({
@@ -42,7 +42,7 @@ The provider supplies a shared client and its own TanStack Query cache. You may 
 ## Read data with a custom hook
 
 ```tsx
-import { useQBQuery } from '@qb-flex/react';
+import { useQBQuery } from '@qbflex/react';
 
 function Tasks() {
   const query = useQBQuery({

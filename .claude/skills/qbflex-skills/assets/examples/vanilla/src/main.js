@@ -1,4 +1,4 @@
-import { createClient } from '@qb-flex/client';
+import { createClient } from '@qbflex/client';
 import './styles.css';
 const get = (id) => document.getElementById(id);
 let qb, channel, stopAuth, objectId, readController, activeIdentity;

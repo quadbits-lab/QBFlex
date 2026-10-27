@@ -74,7 +74,7 @@ export function APIWorkspace({
             title="SDK snippet"
           >
             <pre className="overflow-auto rounded-lg border border-border bg-background/60 p-4 font-mono text-xs leading-relaxed">
-              {`import { createClient } from '@qb-flex/client';\n\nconst qb = createClient({\n  url: '${apiURL}',\n  projectId: '${project.id}',\n  branch: '${branchId}',\n  publishableKey: 'YOUR_PUBLISHABLE_KEY',\n});`}
+              {`import { createClient } from '@qbflex/client';\n\nconst qb = createClient({\n  url: '${apiURL}',\n  projectId: '${project.id}',\n  branch: '${branchId}',\n  publishableKey: 'YOUR_PUBLISHABLE_KEY',\n});`}
             </pre>
           </SettingsSection>
         </SettingsSectionGroup>

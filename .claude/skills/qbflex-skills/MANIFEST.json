@@ -7,6 +7,10 @@
   "provenance": "Implemented repository sources, emitted SDK declarations and executable tests; design spec is planned-scope context.",
   "sources": [
     {
+      "path": "apps/api/src/bootstrap.ts",
+      "sha256": "5a0592af261dd6fb49865748e2aad90cb04fc904295f8cfeb03ce17424d47cd9"
+    },
+    {
       "path": "apps/api/src/index.ts",
       "sha256": "b37327e2f17a8b0850a70c3835f36406c4f0ac53895cb57a71e0260a0838439a"
     },
@@ -16,7 +20,7 @@
     },
     {
       "path": "apps/api/src/service.ts",
-      "sha256": "1e0f59bb8a265e19c6612b9faf83584d0cfa63b1af36f731dbae7db056cc5516"
+      "sha256": "23488ee4dd4f4a279029df8f440dbae75734da8e8749e2919095c962a0ac43e7"
     },
     {
       "path": "apps/cli/src/index.ts",
@@ -48,7 +52,7 @@
     },
     {
       "path": "bun.lock",
-      "sha256": "2f78316010422c7c5c99dfc595929ed47d20332614d12478a1a16b6c4eed46b1"
+      "sha256": "314ed76ed7049915550de8071065e858cf8c4ef58ea7cc74fa361d762e7a50a3"
     },
     {
       "path": "migrations/control/001-foundation.sql",
@@ -316,7 +320,7 @@
     },
     {
       "path": "packages/sdk-js/package.json",
-      "sha256": "e66725d4550447d8b2a30e86891000db57489c5bcbf0db883508b78fce4fb3f4"
+      "sha256": "31e260265bb489a75ac82f7922a4570dd4cbb2645420554403879248c074e75a"
     },
     {
       "path": "packages/sdk-js/src/index.ts",
@@ -324,11 +328,11 @@
     },
     {
       "path": "packages/sdk-react/package.json",
-      "sha256": "7fdd9dd37e2e99827016517c168d6f1a5094829262cf139f0cd2deb680523723"
+      "sha256": "cee073294b5a3e9487f79e52b428f5d44896a907fb6224fa1846342734968362"
     },
     {
       "path": "packages/sdk-react/src/index.tsx",
-      "sha256": "962a64bd3ab89a6a9cc2a6e4509eadc29d52c8a8591ba8b686d7db49f62f90c3"
+      "sha256": "6058a7335ae4ea3eb044dc0dba8c5549dae00c39e4e6a7e1e7c36d36dcb99b68"
     },
     {
       "path": "packages/storage/package.json",
@@ -832,7 +836,7 @@
     },
     {
       "path": "qb-flex-development-spec.md",
-      "sha256": "3531cebdedcb3b74a13fe1302aae5c3ee249d7666342ee2eaada75e8e85cd01f"
+      "sha256": "cb54114ff72a48e01059913dde83b2905ca7197cbb73697abd182959eef13c50"
     },
     {
       "path": "scripts/dev.ts",
@@ -844,7 +848,7 @@
     },
     {
       "path": "scripts/sdk-build.ts",
-      "sha256": "62d8cb5c94af164714d4a324143eb24408d07b3c91bb45141a3a06c5f5c0a3a4"
+      "sha256": "66da5c1a06523f8edbfb806835dc3a4c8c68a3162cb08de0229598582dedd2ef"
     },
     {
       "path": "scripts/skill-test.ts",
@@ -852,7 +856,7 @@
     },
     {
       "path": "scripts/skill-typecheck.ts",
-      "sha256": "1ceba4dc76b67276a7a8cef6c672b6feb2bbe79930414256977904f93203aaa9"
+      "sha256": "b7be6b4f2671dbdb06d587a9dac07029a229b5ba63b46701964978d3b48e26e1"
     },
     {
       "path": "scripts/skill.ts",
@@ -877,6 +881,10 @@
     {
       "path": "tests/assistant.test.ts",
       "sha256": "ceded08ba176b50143934055c2bfaf8683c4066c28d97fcdce6b2b5092730e51"
+    },
+    {
+      "path": "tests/bootstrap-token.test.ts",
+      "sha256": "2b49f38e0060caddb1d0064229bec0f46626ab87a6438c5e9034328123b6ffeb"
     },
     {
       "path": "tests/client-disconnect.test.ts",
@@ -928,7 +936,7 @@
     },
     {
       "path": "tests/fixtures-ssr.tsx",
-      "sha256": "0be630773b859977f6ace20f0427004a6d1ab97f7192ce1316132658ea7381a4"
+      "sha256": "aeb93e2fabd8942e78fa6cd30e9c8473254cf3223027c42e52851540fd65d7ca"
     },
     {
       "path": "tests/fixtures-webhook-delivery.ts",
@@ -936,11 +944,11 @@
     },
     {
       "path": "tests/helpers.ts",
-      "sha256": "bb79daa9ca3931b8db3b271e31d8d275a24a0b48c9d154fefa8c7f5253d3ccff"
+      "sha256": "c98d40f6f408d545f4898b29816aab1291da892605b3478e394e84cc316861b9"
     },
     {
       "path": "tests/integration/aggregates.test.ts",
-      "sha256": "cdfa98aa81749ba5d4b0fdfe87b438d9aafcdb5638df17fe1d959d2fa1bf5b62"
+      "sha256": "12346f4e6f0f3c927398da2ba66ca5067bb636783932fd732f821c503dc76e6a"
     },
     {
       "path": "tests/integration/control-backup.test.ts",
@@ -948,7 +956,7 @@
     },
     {
       "path": "tests/integration/core.test.ts",
-      "sha256": "3f4394b27312556238828d22d9a792bb0832900cda44392f296e94239f68563a"
+      "sha256": "026cc8d2b247dd668843884c60e2a5155899359ba2f8cb213ce7c915c7b85f3c"
     },
     {
       "path": "tests/integration/email.test.ts",
@@ -964,7 +972,7 @@
     },
     {
       "path": "tests/integration/network.test.ts",
-      "sha256": "ef1b897143a96f28f589fe7e0bbf8d06482f8c263351e6e6a675e75329325629"
+      "sha256": "cbf4b2c06cc0ae5caeab88e4f9768d3be232830cc5a887b397ff06536f777a18"
     },
     {
       "path": "tests/integration/operations.test.ts",
@@ -1036,11 +1044,11 @@
     },
     {
       "path": "tests/sdk-react.test.tsx",
-      "sha256": "cac7f9401ab3c7b31133b0d82efd7b8a01fb1a9e35c4973740013da1a38a8e78"
+      "sha256": "3014e65c4b0fcd57839ae3c8db147260b41556c0653da849edee1ea99992f665"
     },
     {
       "path": "tests/sdk-release.test.ts",
-      "sha256": "57a449156ee9c6c91bab5f6cd5825aef129e1cbf275aeaaa181f75267a005b4a"
+      "sha256": "fd60f9d8e071be6a7377f804c3eca1d56ced095af1c9ea888b9ff992632ea105"
     },
     {
       "path": "tests/search-collections.test.ts",
@@ -1099,12 +1107,12 @@
     "INSTALL.md": "49e50c84b6a9fab8173f8993cae94f3e59039e8a33fca512a3a14bfec825250e",
     "SKILL.md": "0569d3c4c7ca7f9733a167acb0351f50b1bb9c73b2e0c3148354276a7b10bc88",
     "agents/openai.yaml": "e18500370c6c22cc0de9bdcc6e6e2e3867132e22b5eff5af9f4c3cae667782dd",
-    "assets/examples/README.md": "4b2e7f1c71e029d2122ad6d7d37d9e18230ad25e41d45bf799cc03fe96cdb226",
+    "assets/examples/README.md": "8cded999d723f837d99e264abd058ba3e3e21e7f8ba5cc5cf6df1bedbc308666",
     "assets/examples/prerequisites.json": "7645b48e0659c9dc4ab20f239ed93d4c2afb8477c70d4c95e4ea6d6193b3b20a",
     "assets/examples/react/config.example.json": "2255e847186f778ce3265c406f19487e3302c8eda7975df6e5139d51c2efac05",
     "assets/examples/react/index.html": "0c8bad068f882183ce1dfdf45e3b701435f4f8bb79d830ab8ca574cf9fe224cc",
     "assets/examples/react/package.json": "1244cf3dbe0b82567aeef5d4db883547b77df4b87b45e8dbc3ae7630ba5d222d",
-    "assets/examples/react/src/main.tsx": "9fe9f338e8e2b2d08f028e606e3ed5a2c4fdcedfb1d2bb3b3c6056498fde574d",
+    "assets/examples/react/src/main.tsx": "5b36e2a28f63f09fc05c150d26c5819995351c0723b7be80ec293c2ee0e90bc1",
     "assets/examples/react/src/qb-flex.types.ts": "d136353aa222beca7501ee61090802531fd6721d8cb3408ad7053a6d0d1ff421",
     "assets/examples/react/src/styles.css": "c713588d334f85c3af966e801c7b60bd1a420ca152e025ed95db57fa4e257113",
     "assets/examples/react/tsconfig.json": "2bde94ee38b5115aee3de0ca8a5dc381ccf3df1a2b69176e1ad3b6d111dba0ae",
@@ -1115,10 +1123,10 @@
     "assets/examples/vanilla/direct/main.js": "809fbfe43e317e71db9e5af20154cc6cf30cc5f4244593b481a3df3ba7b16d58",
     "assets/examples/vanilla/index.html": "b53aac0d7bdb42b2a6b4021ee3964e7c3b5ffd65dfb0c4f45e149d4ae4828b69",
     "assets/examples/vanilla/package.json": "0efe3f2e1b8d53f1a57d23efd5db71370d5937f0a7e76eb7d09ce9f2fe2450aa",
-    "assets/examples/vanilla/src/main.js": "4da0c3a9d78462a5dcbd5a9142914c6f1a641983e53854f2a4db81abd77c7d33",
+    "assets/examples/vanilla/src/main.js": "cdd0c9cf052f25400fba7a33edce035cea43f971d3606d275b73d54691862940",
     "assets/examples/vanilla/src/qb-flex.types.ts": "d136353aa222beca7501ee61090802531fd6721d8cb3408ad7053a6d0d1ff421",
     "assets/examples/vanilla/src/styles.css": "7f4f69acb45c72956b5982b8824f7882eb79ef36468ee95b3939a8f8a4977bc8",
-    "assets/examples/vanilla/src/typecheck.ts": "79322d414e5584fd157b0f4d61b0ea72280771e15a6df07d132391d912fe8a36",
+    "assets/examples/vanilla/src/typecheck.ts": "44e9c33c54abf59107aba2bb91303fb40e2f4ff2ef036a7ce2f8ba091fc50006",
     "assets/examples/vanilla/tsconfig.json": "56e4f7acc2c1da79871b7cb3903f8887e89782d301b6352071d37c79abbb34fb",
     "assets/examples/vanilla/vendor/client.js": "7c0dd93a3edad136841502fc6a968ca99cd68cb81673b02e4f1252fb185dbfae",
     "assets/examples/vanilla/vite.config.ts": "634a4294b85c5585547a6ce6fc60a7b30eb76841042d032dbacdf170a4437780",
@@ -1126,11 +1134,11 @@
     "references/architecture.md": "ce989ff6fea11146eb07fa00040b7eb6b79f8a6d45aeaf5af0e31b80affe7199",
     "references/generated/api.md": "dd591a07ad47ec56792ef91be7dd0e1dfacdd2606ac05f5946dcd5758e288964",
     "references/generated/cli.md": "c16d4a8b6b2640d2e2ad305d61b66da7b0a25bb699da428809ac6bac889647b5",
-    "references/generated/sdk.md": "05f7c834bcfa8baddef85fa38679ed0215894bce5947387acc55f27413f79c77",
-    "references/generated/tests.md": "bbf11a2cf00fdc33050de50eec530783fdbf6b94e07d861308445d5e69ea2a9d",
+    "references/generated/sdk.md": "e6cdf116938376a2801606c41a7d3d4d6ff86f53713dc3e4fb8843f42acedc05",
+    "references/generated/tests.md": "62571f6928fb9643e4847b381ab92806fc555ec61a718698f4e063607cbeff68",
     "references/operations.md": "9c1dc6a69256eb6bd287f7d022c90c6d48813d4354f54be147e9852c1bbb3f2a",
     "references/platform.md": "7441170dfe8cd682a9e3a0788dbe5a916bcbba34e9c85413eb8b4588d7deab2e",
-    "references/react.md": "f47239565782aacebfe4b37509c5a0a36cadf048715166cb29efeafe4243dd33",
+    "references/react.md": "c250195d731a7ffa21d4fc0341f59e5aa1570975ba00fd7d8152bb2521180e67",
     "references/security.md": "4e602f731b0844e00bf132416ba3c4785682f6cd10b60374cf01fdba93b20e5f",
     "references/troubleshooting.md": "9c837ca5bb77cd8fca32dc84c2191e5263a5ff6ac9b66ab6538ea7d011655aaa",
     "references/vanilla.md": "6b770d1431d7838902031d0a7c37ff345df50dc9ae17eca36cbfd31959f6feb9",
@@ -1138,8 +1146,8 @@
     "scripts/check-package.d.mts": "d5014595be6ae3f9d72946d4743f9d799b73b7ce47260d31e67ba30394324959",
     "scripts/check-package.mjs": "80fac5302fc4d926a094e210c4ecd07b8099e5f19e6ebd5e1f487890f1099443",
     "scripts/diagnose.d.mts": "c2c7f1fe1c45c073387bebc4afa5f0e3216eadbc82bcc6bdfcccfa92c391525c",
-    "scripts/diagnose.mjs": "6c27f799ef8c07f84f4241c7612faf82ed5af1b1b40139ef391395f7c9fe36c6",
+    "scripts/diagnose.mjs": "906eb973be3f227ca8a84c5954ef3baf72126377a295ac5a556a0a0c1ed84f0d",
     "scripts/pack.mjs": "413bf7ac2fa571523eccf1cdd071efed7681676a513a83f69fcb57e893b069e4",
-    "scripts/refresh.ts": "2704c8e6aa58ef0cd05477da4a7cfc51198514c4d6d31088e4206d0cb29b64bf"
+    "scripts/refresh.ts": "d7a26c144dbf33c426a272e4737edda5c9f03e5b7d0fb18c7afa8b281fcf2773"
   }
 }

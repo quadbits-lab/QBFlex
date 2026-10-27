@@ -1,5 +1,5 @@
 {
-  "name": "@qb-flex/react",
+  "name": "@qbflex/react",
   "version": "0.1.1",
   "type": "module",
   "private": false,
@@ -16,7 +16,7 @@
   },
   "sideEffects": false,
   "dependencies": {
-    "@qb-flex/client": "workspace:*",
+    "@qbflex/client": "workspace:*",
     "@tanstack/react-query": "5.105.0"
   },
   "peerDependencies": {

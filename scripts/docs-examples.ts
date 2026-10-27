@@ -4,8 +4,8 @@ import { Glob } from 'bun';
 const files: string[] = [];
 mkdirSync('.cache/doc-examples', { recursive: true });
 // Fences are repository-owned source artifacts. Declarations model tutorial prerequisites, never SDK methods.
-const context = `import {createClient} from '@qb-flex/client';
-import {QBProvider,useQBAuth,useQBQuery,useQBMutation,useQBRealtime,useQBStorage} from '@qb-flex/react';
+const context = `import {createClient} from '@qbflex/client';
+import {QBProvider,useQBAuth,useQBQuery,useQBMutation,useQBRealtime,useQBStorage} from '@qbflex/react';
 interface Database {tasks:{Row:{id:string;owner_id:string;title:string;completed:number;revision:number};Insert:{id?:string;owner_id:string;title:string;completed?:number};Update:{title?:string;completed?:number}}}
 const client=createClient<Database>({url:'http://localhost:7612',projectId:'example',publishableKey:'example'});
 const qb=client;declare const auth:ReturnType<typeof useQBAuth>;const task={id:'example',revision:1};const taskId='example';const title='example';const email='example@example.com',password='example-password',name='Example';const row={title,owner_id:'example'};
@@ -35,7 +35,8 @@ for (const path of new Glob('apps/docs/content/**/*.mdx').scanSync('.')) {
         // Imports of generated types resolve to the prerequisite declarations above.
         if (
           !statement.moduleSpecifier.getText().includes('qb-flex.types') &&
-          !statement.moduleSpecifier.getText().includes('@qb-flex/')
+          !statement.moduleSpecifier.getText().includes('@qb-flex/') &&
+          !statement.moduleSpecifier.getText().includes('@qbflex/')
         )
           imports.push(statement.getText());
       } else definitions.push(statement.getText().replace(/^export\s+/, ''));
@@ -66,8 +67,8 @@ const program = ts.createProgram(files, {
   baseUrl: '.',
   paths: {
     '@qb-flex/contracts': ['packages/contracts/src/index.ts'],
-    '@qb-flex/client': ['packages/sdk-js/src/index.ts'],
-    '@qb-flex/react': ['packages/sdk-react/src/index.tsx'],
+    '@qbflex/client': ['packages/sdk-js/src/index.ts'],
+    '@qbflex/react': ['packages/sdk-react/src/index.tsx'],
   },
 });
 const diagnostics = ts.getPreEmitDiagnostics(program);

@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import { fixture } from '../helpers';
-import { createClient } from '@qb-flex/client';
+import { createClient } from '@qbflex/client';
 
 test('integration: aggregate query via /query endpoint', async () => {
   const f = await fixture();

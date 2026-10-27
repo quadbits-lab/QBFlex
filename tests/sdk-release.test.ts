@@ -11,9 +11,11 @@ import {
 import { validateSDKReleaseMetadata } from '../scripts/sdk-release';
 
 test('SDK release metadata stays synchronized and explicitly public', async () => {
-  expect(await validateSDKReleaseMetadata()).toBe('0.1.0');
   const manifests = await Promise.all(publicSDKPackages.map(readSDKManifest));
-  expect(manifests.map((manifest) => manifest.version)).toEqual(['0.1.0', '0.1.0']);
+  const version = await validateSDKReleaseMetadata();
+  // The release version moves with the packages; the invariant is that both agree.
+  expect(manifests.map((manifest) => manifest.version)).toEqual([version, version]);
+  expect(manifests.map((manifest) => manifest.name)).toEqual(['@qbflex/client', '@qbflex/react']);
   expect(manifests.every((manifest) => manifest.publishConfig.access === 'public')).toBe(true);
 });
 
@@ -25,7 +27,7 @@ test('SDK release helpers handle stable and prerelease versions without fixed ar
   expect(defaultNpmTag('1.0.0-rc.1')).toBe('next');
   expect(sdkPeerRange('0.2.0')).toBe('^0.2.0');
   expect(sdkTarballPath(publicSDKPackages[0], '0.2.0')).toEndWith(
-    '/dist/packages/qb-flex-client-0.2.0.tgz',
+    '/dist/packages/qbflex-client-0.2.0.tgz',
   );
 });
 

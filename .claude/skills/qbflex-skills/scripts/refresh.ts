@@ -60,7 +60,7 @@ put(
 );
 put(
   'references/generated/sdk.md',
-  `# SDK export declarations\n\nGenerated from the actual 0.1.0 SDK declaration artifacts. Integer types preserve precision; omitted exposure columns are absent from generated database types.\n\n${['sdk-js', 'sdk-react'].map((folder) => `## ${folder === 'sdk-js' ? '@qb-flex/client' : '@qb-flex/react'}\n\n\`\`\`ts\n${readFileSync(join(source, 'packages', folder, 'dist/index.d.ts'), 'utf8')}\n\`\`\`\n`).join('\n')}`,
+  `# SDK export declarations\n\nGenerated from the actual 0.1.0 SDK declaration artifacts. Integer types preserve precision; omitted exposure columns are absent from generated database types.\n\n${['sdk-js', 'sdk-react'].map((folder) => `## ${folder === 'sdk-js' ? '@qbflex/client' : '@qbflex/react'}\n\n\`\`\`ts\n${readFileSync(join(source, 'packages', folder, 'dist/index.d.ts'), 'utf8')}\n\`\`\`\n`).join('\n')}`,
 );
 const cli = readFileSync(join(source, 'apps/cli/src/index.ts'), 'utf8');
 const groups = new Map<string, string>([['program', '']]);

@@ -1,6 +1,6 @@
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createClient, type QBClient } from '@qb-flex/client';
+import { createClient, type QBClient } from '@qbflex/client';
 import {
   QBProvider,
   useQBClient,
@@ -9,7 +9,7 @@ import {
   useQBMutation,
   useQBRealtime,
   useQBStorage,
-} from '@qb-flex/react';
+} from '@qbflex/react';
 import './styles.css';
 import type { Database as TasksDatabase, RPC } from './qb-flex.types';
 function Root() {

@@ -31,14 +31,14 @@ accessible to the extracted examples. From each example directory use the actual
 
 ```sh
 # React directory; both tarballs are supplied in the same install.
-npm install --ignore-scripts --no-audit --no-fund /path/to/qb-flex-client-0.1.0.tgz /path/to/qb-flex-react-0.1.0.tgz
+npm install --ignore-scripts --no-audit --no-fund /path/to/qbflex-client-0.1.1.tgz /path/to/qbflex-react-0.1.1.tgz
 npm run typecheck
 npm run dev
 ```
 
 ```sh
 # Vanilla directory.
-npm install --ignore-scripts --no-audit --no-fund /path/to/qb-flex-client-0.1.0.tgz
+npm install --ignore-scripts --no-audit --no-fund /path/to/qbflex-client-0.1.1.tgz
 npm run typecheck
 npm run dev
 ```

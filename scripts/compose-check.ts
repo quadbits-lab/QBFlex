@@ -1,4 +1,4 @@
-import { createClient, type QBClient } from '@qb-flex/client';
+import { createClient, type QBClient } from '@qbflex/client';
 import { ownership } from '../tests/helpers';
 const name = 'qb-flex-check-' + crypto.randomUUID().slice(0, 8),
   volume = name + '-data';

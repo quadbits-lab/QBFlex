@@ -12,7 +12,7 @@ for (const name of packages) {
     naming: 'index.js',
     external:
       name === 'sdk-react'
-        ? ['react', 'react/jsx-runtime', '@tanstack/react-query', '@qb-flex/client']
+        ? ['react', 'react/jsx-runtime', '@tanstack/react-query', '@qbflex/client']
         : [],
     sourcemap: 'external',
   });
@@ -33,7 +33,7 @@ const program = ts.createProgram(
     baseUrl: '.',
     paths: {
       '@qb-flex/contracts': ['packages/contracts/src/index.ts'],
-      '@qb-flex/client': ['packages/sdk-js/src/index.ts'],
+      '@qbflex/client': ['packages/sdk-js/src/index.ts'],
     },
   },
 );

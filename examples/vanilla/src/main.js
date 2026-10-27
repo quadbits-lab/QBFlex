@@ -1,4 +1,4 @@
-import { createClient } from '@qb-flex/client';
+import { createClient } from '@qbflex/client';
 import '../../../packages/ui/src/theme.css';
 import '../../shared.css';
 const get = (id) => document.getElementById(id);

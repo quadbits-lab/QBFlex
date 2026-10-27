@@ -149,7 +149,7 @@ qb-flex/
     storage/                # S3/tus/transformation adapters
     ai/                     # Providers, vector adapters, RAG
     functions/              # Build/deploy/runtime contracts
-    sdk-js/                 # @qb-flex/client
+    sdk-js/                 # @qbflex/client
     sdk-react/              # Optional Query/DB bindings
     management-client/      # Typed management SDK
     ui/                     # QB components and tokens
@@ -413,12 +413,12 @@ Region pinning binds function, project database and sensitive storage to permitt
 
 ### 18.1 JavaScript client
 
-Publish `@qb-flex/client`, with an optional `@qb-flex/react` package. Support browser, Bun, Node-compatible consumers and React Native through tested adapters. Keep keys server-only where appropriate. The client exposes database, auth, realtime, storage, functions and AI modules.
+Publish `@qbflex/client`, with an optional `@qbflex/react` package. Support browser, Bun, Node-compatible consumers and React Native through tested adapters. Keep keys server-only where appropriate. The client exposes database, auth, realtime, storage, functions and AI modules.
 
 Illustrative target API, not existing implementation:
 
 ```ts
-import { createClient } from '@qb-flex/client'
+import { createClient } from '@qbflex/client'
 import type { Database } from './qb-flex.types'
 
 const qb = createClient<Database>({
@@ -795,7 +795,7 @@ Architecture and feature choices above are proposed QB Flex requirements. They a
 
 ### NAT-01 Foundation, sessions and native capabilities
 
-Add `@qb-flex/react-native` with asynchronous `createNativeClient`, existing provider/hooks and native hooks, plus optional background/notifications/media entrypoints. Initial certification target: Expo57.0.26, RN0.86.3, React19.2.3, Hermes/New Architecture; bare RN requires Expo modules. These pins are certification targets, not evidence of compatibility.
+Add `@qbflex/react-native` with asynchronous `createNativeClient`, existing provider/hooks and native hooks, plus optional background/notifications/media entrypoints. Initial certification target: Expo57.0.26, RN0.86.3, React19.2.3, Hermes/New Architecture; bare RN requires Expo modules. These pins are certification targets, not evidence of compatibility.
 
 React stays external; ReactDOM optional; Metro-compatible exports; no eager browser WebAuthn imports. Automatically supply missing URL/secureUUID/abort-composition/UTF8/base64url, preserving valid host implementations. Never emulate DOM or fall back to insecure random. Use Better Auth Expo1.7.7 and coordinated SecureStore cookies/session/token rotation, MFA completion and callback hydration. Support password/verification/reset/TOTP/Google/GitHub plus native passkeys0.4.2. Register app schemes/signing identities/AASA/assetlinks/assertion origins separately from HTTP CORS; preserve RPIDs.
 

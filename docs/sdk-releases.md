@@ -2,20 +2,21 @@
 
 QB Flex ships two public web SDK packages in lockstep:
 
-- `@qb-flex/client` is the framework-independent ESM client.
-- `@qb-flex/react` is the React 19 adapter and declares the matching client as a peer.
+- `@qbflex/client` is the framework-independent ESM client.
+- `@qbflex/react` is the React 19 adapter and declares the matching client as a peer.
 
 The management client remains private, and the React Native package described by specification 1.1 is not implemented. Publishing these two web packages is therefore a web-SDK release, not completion of the expanded release.
 
 ## One-time npm setup
 
-1. Confirm that the npm account or organization owns the `@qb-flex` scope and that the two package names are available. An HTTP 404 from `npm view` shows that a package is not publicly visible; it does not prove that the signed-in account controls the scope.
+1. Create an npm organization named `qbflex` if it does not already exist. The organization name creates the `@qbflex` scope. Add the publishing account with package write access, then confirm membership with `npm org ls qbflex`. An HTTP 404 from `npm view` shows that a package is not publicly visible; it does not prove that the signed-in account controls the scope.
 2. Decide and record the package license before the first publish. The private repository currently has no license file, so release owners must not infer an open-source license.
 3. Enable npm two-factor authentication. For automated releases, prefer npm trusted publishing with short-lived OIDC credentials; provenance is unavailable for private source repositories even when the package is public.
 4. Authenticate locally with `npm login`, then verify the intended identity and registry:
 
    ```sh
    npm whoami
+   npm org ls qbflex
    npm config get registry
    ```
 
@@ -72,9 +73,9 @@ The command publishes the client first and React second because React peers on t
 Verify registry metadata and install the exact versions into a clean application:
 
 ```sh
-npm view @qb-flex/client@0.1.1 version dist-tags --json
-npm view @qb-flex/react@0.1.1 version peerDependencies dist-tags --json
-npm install @qb-flex/client@0.1.1 @qb-flex/react@0.1.1
+npm view @qbflex/client@0.1.1 version dist-tags --json
+npm view @qbflex/react@0.1.1 version peerDependencies dist-tags --json
+npm install @qbflex/client@0.1.1 @qbflex/react@0.1.1
 ```
 
 After both registry checks succeed, create and push the matching repository tag. Tag only a version that was actually published, preserve the generated tarball checksums in release records, and keep the previous supported line available. Security fixes should state affected versions and upgrade guidance. Do not move `latest` to a prerelease; use `next`, `beta`, or another explicit channel.

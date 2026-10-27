@@ -1,4 +1,4 @@
-import { createClient } from '@qb-flex/client';
+import { createClient } from '@qbflex/client';
 import type { Database, RPC } from './qb-flex.types';
 const client = createClient<Database, RPC>({
   url: 'http://localhost:7612',

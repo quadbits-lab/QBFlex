@@ -2,17 +2,18 @@ export const frontmatter = {"title": "Publishing and maintaining SDK packages", 
 
 # Publishing and maintaining SDK packages
 
-The publishable web packages are `@qb-flex/client` and `@qb-flex/react`. They release at the same version; React declares the matching client line as a peer. `@qb-flex/management-client` stays private. The planned React Native package is a separate incomplete expanded-release requirement.
+The publishable web packages are `@qbflex/client` and `@qbflex/react`. They release at the same version; React declares the matching client line as a peer. `@qb-flex/management-client` stays private. The planned `@qbflex/react-native` package is a separate incomplete expanded-release requirement.
 
 ## Before the first release
 
-The release owner must control the `@qb-flex` npm scope, enable npm two-factor authentication, and choose the package license. This private checkout currently has no license file, so do not infer or add an open-source license during publication.
+Create an npm organization named `qbflex` if it does not already exist; the organization name creates the `@qbflex` scope. Add the publishing account with package write access. The release owner must also enable npm two-factor authentication and choose the package license. This private checkout currently has no license file, so do not infer or add an open-source license during publication.
 
 Authenticate and confirm the target registry:
 
 ```sh
 npm login
 npm whoami
+npm org ls qbflex
 npm config get registry
 ```
 

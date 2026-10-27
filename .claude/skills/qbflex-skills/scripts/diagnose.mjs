@@ -16,8 +16,8 @@ export async function diagnose(directory, { env = process.env, probeURL } = {}) 
   const linked = json(join(root, 'qb.json'));
   const versions = {};
   for (const [name, folder] of [
-    ['@qb-flex/client', 'sdk-js'],
-    ['@qb-flex/react', 'sdk-react'],
+    ['@qbflex/client', 'sdk-js'],
+    ['@qbflex/react', 'sdk-react'],
   ]) {
     const installed = json(join(root, 'node_modules', ...name.split('/'), 'package.json'));
     const source = json(join(root, 'packages', folder, 'package.json'));
@@ -50,8 +50,10 @@ export async function diagnose(directory, { env = process.env, probeURL } = {}) 
     skillVersion: '0.1.0',
     sourceVersion: manifest?.name === 'qb-flex' ? manifest.version : null,
     sdkVersions: versions,
-    compatibility: Object.values(versions).every((v) => v === '0.1.0' || v === 'not-installed')
-      ? 'verify-configured-0.1.0-target'
+    compatibility: Object.values(versions).every(
+      (v) => v === 'not-installed' || /^0\.1\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(v),
+    )
+      ? 'verify-configured-0.1.x-sdk-target'
       : 'version-mismatch-requires-verification',
     target: {
       url: linked?.url || env.QB_PUBLIC_URL ? 'configured' : 'missing',

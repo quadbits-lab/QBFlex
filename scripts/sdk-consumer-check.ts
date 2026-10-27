@@ -19,8 +19,8 @@ try {
       private: true,
       type: 'module',
       dependencies: {
-        '@qb-flex/client': 'file:' + sdkTarballPath(clientPackage, clientManifest.version),
-        '@qb-flex/react': 'file:' + sdkTarballPath(reactPackage, reactManifest.version),
+        '@qbflex/client': 'file:' + sdkTarballPath(clientPackage, clientManifest.version),
+        '@qbflex/react': 'file:' + sdkTarballPath(reactPackage, reactManifest.version),
         react: manifest.dependencies.react,
         'react-dom': manifest.dependencies['react-dom'],
         '@types/react': manifest.dependencies['@types/react'],
@@ -45,7 +45,7 @@ try {
   const project = await f.project('artifact-consumer');
   writeFileSync(
     join(directory, 'consumer.ts'),
-    `import {createClient} from '@qb-flex/client';import {useQBQuery} from '@qb-flex/react';interface DB{tasks:{Row:{id:string;title:string};Insert:{title:string};Update:{title?:string}}}const qb=createClient<DB>({url:'http://localhost:7612',projectId:'p',publishableKey:'k'});qb.from('tasks').insert({title:'Typed'});function component(){return useQBQuery({queryKey:['tasks'],queryFn:()=>qb.from('tasks').select(['title']).execute()});}
+    `import {createClient} from '@qbflex/client';import {useQBQuery} from '@qbflex/react';interface DB{tasks:{Row:{id:string;title:string};Insert:{title:string};Update:{title?:string}}}const qb=createClient<DB>({url:'http://localhost:7612',projectId:'p',publishableKey:'k'});qb.from('tasks').insert({title:'Typed'});function component(){return useQBQuery({queryKey:['tasks'],queryFn:()=>qb.from('tasks').select(['title']).execute()});}
 // @ts-expect-error Invalid exposed table
 qb.from('reserved');
 // @ts-expect-error Required insert field
@@ -71,7 +71,7 @@ qb.from('tasks').insert({});
     );
   writeFileSync(
     join(directory, 'consumer.js'),
-    `import {createClient} from '@qb-flex/client';import {QBProvider,useQBAuth} from '@qb-flex/react';import {createElement} from 'react';import {renderToString} from 'react-dom/server';
+    `import {createClient} from '@qbflex/client';import {QBProvider,useQBAuth} from '@qbflex/react';import {createElement} from 'react';import {renderToString} from 'react-dom/server';
 const qb=createClient({...${JSON.stringify({ url: f.url, projectId: project.id, branch: project.branchId, publishableKey: project.key })},fetch:(input,init)=>{const headers=new Headers(init?.headers);headers.set('origin','http://localhost:7610');return fetch(input,{...init,headers});}});
 function Status(){return createElement('span',null,useQBAuth().user?.id??'anonymous');}
 if(!renderToString(createElement(QBProvider,{client:qb},createElement(Status))).includes('anonymous'))throw new Error('Packaged SSR failed');

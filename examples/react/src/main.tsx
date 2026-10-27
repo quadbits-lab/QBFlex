@@ -1,6 +1,6 @@
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createClient, type QBClient } from '@qb-flex/client';
+import { createClient, type QBClient } from '@qbflex/client';
 import {
   QBProvider,
   useQBAuth,
@@ -8,7 +8,7 @@ import {
   useQBMutation,
   useQBRealtime,
   useQBStorage,
-} from '@qb-flex/react';
+} from '@qbflex/react';
 import '../../../packages/ui/src/theme.css';
 import '../../shared.css';
 interface TasksDatabase {

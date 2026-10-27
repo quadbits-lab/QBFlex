@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startService } from '../apps/api/src/index';
-import { createClient } from '@qb-flex/client';
+import { createClient } from '@qbflex/client';
 export const ownership = {
   op: 'eq',
   left: { column: 'owner_id' },

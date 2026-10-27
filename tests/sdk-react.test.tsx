@@ -2,8 +2,8 @@ import { test, expect } from 'bun:test';
 import React, { StrictMode } from 'react';
 import { create, act, type ReactTestRenderer } from 'react-test-renderer';
 import { QueryClient } from '@tanstack/react-query';
-import { createClient, QBError } from '@qb-flex/client';
-import { QBProvider, useQBAuth, useQBClient, useQBQuery, useQBRealtime } from '@qb-flex/react';
+import { createClient, QBError } from '@qbflex/client';
+import { QBProvider, useQBAuth, useQBClient, useQBQuery, useQBRealtime } from '@qbflex/react';
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 function fakeClient(project = 'p') {
   let user: any = null;

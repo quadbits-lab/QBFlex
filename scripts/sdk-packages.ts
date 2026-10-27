@@ -1,8 +1,8 @@
 import { resolve } from 'node:path';
 
 export const publicSDKPackages = [
-  { folder: 'sdk-js', artifact: 'client', name: '@qb-flex/client' },
-  { folder: 'sdk-react', artifact: 'react', name: '@qb-flex/react' },
+  { folder: 'sdk-js', artifact: 'client', name: '@qbflex/client' },
+  { folder: 'sdk-react', artifact: 'react', name: '@qbflex/react' },
 ] as const;
 
 export type PublicSDKPackage = (typeof publicSDKPackages)[number];
@@ -12,7 +12,7 @@ export async function readSDKManifest(pkg: PublicSDKPackage) {
 }
 
 export function sdkTarballPath(pkg: PublicSDKPackage, version: string) {
-  return resolve(`dist/packages/qb-flex-${pkg.artifact}-${version}.tgz`);
+  return resolve(`dist/packages/qbflex-${pkg.artifact}-${version}.tgz`);
 }
 
 export function sdkPeerRange(version: string) {
