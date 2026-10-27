@@ -1,0 +1,110 @@
+# Always combine with compose.yml. Production-like behavior on localhost without TLS or a gateway.
+# Copy .env.staging.example to .env, replace every placeholder, then run with --profile staging.
+# A separate project name keeps staging volumes and containers isolated from the local stack.
+name: qb-flex-staging
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+services:
+  storage-init:
+    profiles: [staging]
+    environment:
+      QB_S3_ENDPOINT: ${QB_S3_ENDPOINT:?point at an S3-compatible backend (e.g. RustFS)}
+      QB_S3_REGION: ${QB_S3_REGION:-us-east-1}
+      QB_S3_BUCKET: ${QB_S3_BUCKET:-qb-flex}
+      QB_S3_ACCESS_KEY: ${QB_S3_ACCESS_KEY}
+      QB_S3_SECRET_KEY: ${QB_S3_SECRET_KEY}
+    security_opt: ['no-new-privileges:true']
+    cap_drop: [ALL]
+    deploy:
+      resources:
+        limits:
+          cpus: '${QB_STORAGE_INIT_CPUS:-0.25}'
+          memory: ${QB_STORAGE_INIT_MEMORY:-256m}
+    logging: *logging
+  api:
+    profiles: [staging]
+    environment:
+      NODE_ENV: production
+      QB_PUBLIC_URL: http://localhost:7612
+      QB_STUDIO_URL: http://localhost:7610
+      QB_ALLOWED_ORIGINS: http://localhost:7610,http://127.0.0.1:7610,http://localhost:7611,http://127.0.0.1:7611
+      # Explicit loopback-only exception to the production HTTPS requirement; not for public hosts.
+      QB_ALLOW_INSECURE_HTTP: 'true'
+      QB_MASTER_KEY: ${QB_MASTER_KEY:?set a protected master encryption key}
+      QB_BOOTSTRAP_TOKEN: ${QB_BOOTSTRAP_TOKEN:?set a first-owner bootstrap token}
+      QB_WORKER_TOKEN: ${QB_WORKER_TOKEN:?set a private worker token}
+      QB_REQUIRE_ADMIN_MFA: 'true'
+      QB_S3_ENDPOINT: ${QB_S3_ENDPOINT:?point at an S3-compatible backend (e.g. RustFS)}
+      QB_S3_REGION: ${QB_S3_REGION:-us-east-1}
+      QB_S3_BUCKET: ${QB_S3_BUCKET:-qb-flex}
+      QB_S3_ACCESS_KEY: ${QB_S3_ACCESS_KEY:?set S3 credentials}
+      QB_S3_SECRET_KEY: ${QB_S3_SECRET_KEY:?set S3 credentials}
+      QB_RESEND_API_KEY: ${QB_RESEND_API_KEY:-}
+      QB_SMTP_HOST: ${QB_SMTP_HOST:-}
+      QB_SMTP_PORT: ${QB_SMTP_PORT:-587}
+      QB_SMTP_USER: ${QB_SMTP_USER:-}
+      QB_SMTP_PASSWORD: ${QB_SMTP_PASSWORD:-}
+      QB_MAIL_FROM: ${QB_MAIL_FROM:-QB Flex <hello@localhost>}
+    security_opt: ['no-new-privileges:true']
+    cap_drop: [ALL]
+    deploy:
+      resources:
+        limits:
+          cpus: '${QB_API_CPUS:-1.0}'
+          memory: ${QB_API_MEMORY:-8g}
+    logging: *logging
+  worker:
+    profiles: [staging]
+    environment:
+      QB_WORKER_TOKEN: ${QB_WORKER_TOKEN}
+      QB_INTERNAL_API_URL: 'http://api:7612'
+      QB_S3_ENDPOINT: ${QB_S3_ENDPOINT:?point at an S3-compatible backend (e.g. RustFS)}
+      QB_S3_REGION: ${QB_S3_REGION:-us-east-1}
+      QB_S3_BUCKET: ${QB_S3_BUCKET:-qb-flex}
+    security_opt: ['no-new-privileges:true']
+    cap_drop: [ALL]
+    deploy:
+      resources:
+        limits:
+          cpus: '${QB_WORKER_CPUS:-0.5}'
+          memory: ${QB_WORKER_MEMORY:-512m}
+    logging: *logging
+  studio:
+    profiles: [staging]
+    environment:
+      NODE_ENV: production
+    security_opt: ['no-new-privileges:true']
+    cap_drop: [ALL]
+    build:
+      args:
+        VITE_API_URL: http://localhost:7612
+        VITE_DOCS_URL: http://localhost:7611
+        VITE_STUDIO_URL: http://localhost:7610
+        QB_DOCS_URL: http://localhost:7611
+    deploy:
+      resources:
+        limits:
+          cpus: '${QB_STUDIO_CPUS:-0.5}'
+          memory: ${QB_STUDIO_MEMORY:-512m}
+    logging: *logging
+  docs:
+    profiles: [staging]
+    environment:
+      NODE_ENV: production
+    security_opt: ['no-new-privileges:true']
+    cap_drop: [ALL]
+    build:
+      args:
+        VITE_API_URL: http://localhost:7612
+        VITE_DOCS_URL: http://localhost:7611
+        VITE_STUDIO_URL: http://localhost:7610
+        QB_DOCS_URL: http://localhost:7611
+    deploy:
+      resources:
+        limits:
+          cpus: '${QB_DOCS_CPUS:-0.5}'
+          memory: ${QB_DOCS_MEMORY:-512m}
+    logging: *logging

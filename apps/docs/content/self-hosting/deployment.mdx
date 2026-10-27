@@ -6,6 +6,8 @@ export const frontmatter = {"title": "Deploy a single node", "description": "Run
 
 The self-host Compose overlay runs Caddy, API/database owners, maintenance worker, Studio, Docs and one-shot `storage-init`. Object bytes live in your separately operated S3-compatible provider, such as RustFS. There is no bundled MinIO service or object-storage volume. Mailpit belongs to local development, not production mail.
 
+Deployment images install production dependencies only, run as non-root user `qb` (UID/GID 10001) with `/var/lib/qb-flex` as its writable home, and default to `NODE_ENV=production`. Every long-running service has a healthcheck; the gateway starts after API, Studio and Docs report healthy.
+
 Keep writable PGlite directories on persistent local disk with one API volume owner. Do not start multiple writers against the same volume or put live databases on network filesystems.
 
 ## Prepare domains and secrets
@@ -31,7 +33,7 @@ Generate independent secrets locally, for example with `openssl rand -hex 32`. N
 
 Use an endpoint reachable from containers, not their own `127.0.0.1`. For a host-local provider, use `http://host.docker.internal:9000`; the current Compose includes the Linux host-gateway mapping. Remote production providers should use HTTPS.
 
-The one-shot initializer tries HeadBucket/CreateBucket. Operators can provision the bucket independently when bucket-creation rights are unavailable. Inspect initializer output and verify upload/download on your actual backend. Its failure does not prevent API boot and must not be mistaken for a successful storage setup.
+The one-shot initializer tries HeadBucket/CreateBucket. Operators can provision the bucket independently when bucket-creation rights are unavailable. The API, worker and Studio wait for `storage-init` to complete, so a failed initializer stops those services instead of letting them boot with broken storage; inspect its output and verify upload/download on your actual backend. A successful bucket check alone does not prove application upload paths.
 
 ## Build and start
 
@@ -50,6 +52,29 @@ docker compose -f compose.yml -f compose.selfhost.yml --profile selfhost logs --
 ```
 
 Production startup requires injected configuration, not an already-created owner. Open Studio to create the first owner using the bootstrap token, enroll/verify TOTP and securely save recovery codes. Remove the plaintext bootstrap token after setup; the API does not require it again once an owner exists. Platform credentials must never become browser application credentials.
+
+## Local staging before public domains
+
+Use the `staging` profile to validate production-like secrets, S3 and mail configuration on `localhost` before pointing real DNS at the TLS gateway. Staging runs with `NODE_ENV=production`, resource limits and security hardening, but exposes the services directly on `127.0.0.1` with no Caddy gateway or TLS.
+
+Copy `.env.staging.example` to `.env`, generate local secrets and fill the same required values as production (master key, bootstrap token, worker token, S3 credentials and Resend or SMTP). Then validate, build and start:
+
+```sh
+docker compose -f compose.yml -f compose.staging.yml --profile staging config --quiet
+docker compose -f compose.yml -f compose.staging.yml --profile staging build
+docker compose -f compose.yml -f compose.staging.yml --profile staging up -d
+```
+
+The overlay pins public URLs to `http://localhost:7612` (API), `http://localhost:7610` (Studio) and `http://localhost:7611` (Docs), and sets Compose project name `qb-flex-staging`, so its database volume is isolated from the local `qb-flex` stack. It also sets `QB_ALLOW_INSECURE_HTTP=true`, which the API accepts only for loopback URLs; never set that variable on a public host.
+
+Verify readiness after `storage-init` completes:
+
+```sh
+curl -fsS http://localhost:7612/ready
+docker compose -f compose.yml -f compose.staging.yml --profile staging logs --tail 100 storage-init
+```
+
+Use the bootstrap token to create the first owner at `http://localhost:7610`, then remove the token from the host. Staging is not a public deployment target; switch to `compose.selfhost.yml` with real domains and TLS once validation passes.
 
 ## Day-two capacity and recovery
 

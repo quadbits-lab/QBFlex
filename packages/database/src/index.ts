@@ -44,8 +44,20 @@ export function configuration() {
   }
   if (master.length < 32) throw new Error('QB_MASTER_KEY must contain at least 32 characters');
   const publicURL = process.env.QB_PUBLIC_URL ?? 'http://localhost:7612';
-  if (process.env.NODE_ENV === 'production' && !publicURL.startsWith('https://'))
-    throw new Error('Production requires HTTPS QB_PUBLIC_URL');
+  if (process.env.NODE_ENV === 'production' && !publicURL.startsWith('https://')) {
+    // Explicit opt-in for non-TLS local staging; public hosts must never use this path.
+    let loopback = false;
+    try {
+      const host = new URL(publicURL).hostname;
+      loopback = host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1';
+    } catch {
+      // Invalid URL falls through to the HTTPS requirement below.
+    }
+    if (process.env.QB_ALLOW_INSECURE_HTTP !== 'true' || !loopback)
+      throw new Error(
+        'Production requires HTTPS QB_PUBLIC_URL; local staging may set QB_ALLOW_INSECURE_HTTP=true with a loopback URL',
+      );
+  }
   const maxBranchOwners = Number(process.env.QB_MAX_BRANCH_OWNERS ?? 4);
   if (!Number.isInteger(maxBranchOwners) || maxBranchOwners < 1 || maxBranchOwners > 32)
     throw new Error('QB_MAX_BRANCH_OWNERS must be an integer from 1 to 32');

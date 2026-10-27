@@ -48,7 +48,15 @@ try {
       '-e',
       'QB_MASTER_KEY',
       '-e',
+      'QB_WORKER_TOKEN',
+      '-e',
       'QB_SCHEDULED_BACKUPS=false',
+      // The check reaches the production image over a loopback HTTP port.
+      '-e',
+      'QB_ALLOW_INSECURE_HTTP=true',
+      // The scripted owner has no authenticator; deployment overlays keep MFA enabled.
+      '-e',
+      'QB_REQUIRE_ADMIN_MFA=false',
       '--add-host=host.docker.internal:host-gateway',
       '-e',
       `QB_S3_ENDPOINT=${s3Endpoint}`,
@@ -72,6 +80,7 @@ try {
       ...process.env,
       QB_BOOTSTRAP_TOKEN: bootstrap,
       QB_MASTER_KEY: crypto.randomUUID() + crypto.randomUUID(),
+      QB_WORKER_TOKEN: crypto.randomUUID() + crypto.randomUUID(),
     },
   );
   const port = (await docker(['port', name, '7612/tcp'])).split(':').at(-1),

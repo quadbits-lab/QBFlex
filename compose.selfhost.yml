@@ -42,6 +42,13 @@ services:
       QB_S3_BUCKET: ${QB_S3_BUCKET:-qb-flex}
       QB_S3_ACCESS_KEY: ${QB_S3_ACCESS_KEY}
       QB_S3_SECRET_KEY: ${QB_S3_SECRET_KEY}
+    security_opt: ['no-new-privileges:true']
+    cap_drop: [ALL]
+    deploy:
+      resources:
+        limits:
+          cpus: '${QB_STORAGE_INIT_CPUS:-0.25}'
+          memory: ${QB_STORAGE_INIT_MEMORY:-256m}
     logging: *logging
   worker:
     environment:
@@ -101,7 +108,13 @@ services:
     security_opt: ['no-new-privileges:true']
     ports: ['80:80', '443:443']
     volumes: ['./infra/Caddyfile:/etc/caddy/Caddyfile:ro', 'gateway:/data']
-    depends_on: [api, studio, docs]
+    depends_on:
+      api:
+        condition: service_healthy
+      studio:
+        condition: service_healthy
+      docs:
+        condition: service_healthy
     deploy:
       resources:
         limits:

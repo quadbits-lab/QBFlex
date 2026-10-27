@@ -62,6 +62,13 @@ SHA-256: `5c1e1fbe1eb47a1c3a54cd36d680d6209f8f3df38852dc6ae6753d950154f6b5`
 - recognizes a client socket reset wrapped as an HTTP error
 - console.error skips client disconnects and keeps other errors
 
+## tests/configuration.test.ts
+
+SHA-256: `fd975175ecad56925b8fad67e5a251fd297cf728fb95f81b874d0dc8a08c5234`
+
+- production requires HTTPS unless loopback staging explicitly opts in
+- development keeps HTTP localhost defaults
+
 ## tests/control-archives.test.ts
 
 SHA-256: `6c3ba8e885de5be8a02e3cb6956fbf67488689046f38faa2b87d86f32be864b0`

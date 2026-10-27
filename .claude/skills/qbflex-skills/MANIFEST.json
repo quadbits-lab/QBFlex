@@ -204,7 +204,7 @@
     },
     {
       "path": "packages/database/src/index.ts",
-      "sha256": "949d42a87c40cf54cf4bf2c9fdf911db324ee21aa63ef2c49409a4754a444a75"
+      "sha256": "b1d08fd36bfd89608542ef4d8197637fab30959bdec121d4fa3336b0385e603c"
     },
     {
       "path": "packages/database/src/jobs.ts",
@@ -883,6 +883,10 @@
       "sha256": "5c1e1fbe1eb47a1c3a54cd36d680d6209f8f3df38852dc6ae6753d950154f6b5"
     },
     {
+      "path": "tests/configuration.test.ts",
+      "sha256": "fd975175ecad56925b8fad67e5a251fd297cf728fb95f81b874d0dc8a08c5234"
+    },
+    {
       "path": "tests/control-archives.test.ts",
       "sha256": "6c3ba8e885de5be8a02e3cb6956fbf67488689046f38faa2b87d86f32be864b0"
     },
@@ -1119,8 +1123,8 @@
     "references/generated/api.md": "dd591a07ad47ec56792ef91be7dd0e1dfacdd2606ac05f5946dcd5758e288964",
     "references/generated/cli.md": "c16d4a8b6b2640d2e2ad305d61b66da7b0a25bb699da428809ac6bac889647b5",
     "references/generated/sdk.md": "081809e7c0b5ada4f3a01b6ef6c3b256e8e9eeb59ed7a5e11b933b8b87e96874",
-    "references/generated/tests.md": "f050ad25204fdfce25ecd261c5ac06dd1d931f1f0c13549ef4534a14063ad1a1",
-    "references/operations.md": "d3fca2b5dc0c04d75350b9d3a89c4ea4a11ca404047c873fc6a66ee9628b6644",
+    "references/generated/tests.md": "0cd273edbc8554862e479e586b88b4e2643fddf45feca37b29a849bc42ddf852",
+    "references/operations.md": "f013cf5a56505e52fb8c8d9f2b009f83666888758752cdef4a2e02393704a522",
     "references/platform.md": "7441170dfe8cd682a9e3a0788dbe5a916bcbba34e9c85413eb8b4588d7deab2e",
     "references/react.md": "f47239565782aacebfe4b37509c5a0a36cadf048715166cb29efeafe4243dd33",
     "references/security.md": "4e602f731b0844e00bf132416ba3c4785682f6cd10b60374cf01fdba93b20e5f",
