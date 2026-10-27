@@ -13,3 +13,4 @@ test-results/
 .cache/
 qb.json
 verification-artifacts/
+.data-pglite/
