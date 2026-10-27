@@ -1,0 +1,370 @@
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Bell, BellRing, Mail, Plus, Trash2 } from 'lucide-react';
+import {
+  Badge,
+  Button,
+  Checkbox,
+  Empty,
+  Field,
+  FieldDescription,
+  FieldLabel,
+  Input,
+  Loading,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  toast,
+} from '@qb-flex/ui';
+import type { AlertKind, AlertRule, AlertSeverity, NotificationSummary } from '@qb-flex/contracts';
+import { management } from '../api';
+import { SettingsFormSection, SettingsMain, SettingsShellLayout, settingsNavListClassName, settingsNavTriggerClassName } from './settings-layout';
+
+const alertKinds: { label: string; value: AlertKind; description: string }[] = [
+  { label: 'Error rate', value: 'error_rate', description: 'Ratio of 5xx/4xx responses to total requests' },
+  { label: 'Error count', value: 'error_count', description: 'Absolute error responses in the window' },
+  { label: 'p95 latency', value: 'p95_latency', description: '95th percentile request duration (ms)' },
+  { label: 'Dead letter depth', value: 'dead_letter_depth', description: 'Jobs stuck in dead-letter state' },
+  { label: 'Quota usage', value: 'quota_usage', description: 'Project storage/quota consumption percent' },
+  { label: 'Backup failure', value: 'backup_failure', description: 'Last backup or drill did not succeed' },
+  { label: 'Snapshot age', value: 'snapshot_age', description: 'Minutes since the last successful backup' },
+];
+
+const severities: { label: string; value: AlertSeverity }[] = [
+  { label: 'Info', value: 'info' },
+  { label: 'Warning', value: 'warning' },
+  { label: 'Critical', value: 'critical' },
+];
+
+function severityVariant(severity: AlertSeverity): 'default' | 'warning' | 'destructive' {
+  switch (severity) {
+    case 'critical':
+      return 'destructive';
+    case 'warning':
+      return 'warning';
+    default:
+      return 'default';
+  }
+}
+
+export function NotificationCenter({ organizationId }: { organizationId: string }) {
+  const cache = useQueryClient();
+  const rules = useQuery({
+    queryKey: ['alert-rules', organizationId],
+    queryFn: ({ signal }) => management.alerts(organizationId).listRules(signal),
+  });
+  const notifications = useQuery({
+    queryKey: ['notifications', organizationId],
+    queryFn: ({ signal }) => management.alerts(organizationId).notifications(signal),
+    refetchInterval: 15000,
+  });
+  const markRead = useMutation({
+    mutationFn: (id: string) => management.alerts(organizationId).markRead(id),
+    onSuccess: () => {
+      void cache.invalidateQueries({ queryKey: ['notifications', organizationId] });
+    },
+  });
+  const [newRule, setNewRule] = useState({
+    name: '',
+    kind: 'error_rate' as AlertKind,
+    threshold: 0.05,
+    severity: 'warning' as AlertSeverity,
+    emails: '',
+    enabled: true,
+  });
+  const create = useMutation({
+    mutationFn: () =>
+      management.alerts(organizationId).createRule({
+        name: newRule.name,
+        kind: newRule.kind,
+        config: { threshold: newRule.threshold },
+        severity: newRule.severity,
+        channels: newRule.emails
+          .split(',')
+          .map((s) => s.trim())
+          .filter((s) => s.includes('@'))
+          .map((to) => ({ type: 'email' as const, to })),
+        enabled: newRule.enabled,
+      }),
+    onSuccess: () => {
+      setNewRule({
+        name: '',
+        kind: 'error_rate',
+        threshold: 0.05,
+        severity: 'warning',
+        emails: '',
+        enabled: true,
+      });
+      void cache.invalidateQueries({ queryKey: ['alert-rules', organizationId] });
+      toast.success('Alert rule created');
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => management.alerts(organizationId).deleteRule(id),
+    onSuccess: () => void cache.invalidateQueries({ queryKey: ['alert-rules', organizationId] }),
+  });
+
+  const rows = notifications.data?.data ?? [];
+  const ruleRows = rules.data?.data ?? [];
+
+  return (
+    <Tabs defaultValue="notifications" orientation="vertical" className="min-w-0 gap-0">
+      <SettingsShellLayout
+        nav={
+          <TabsList aria-label="Notifications sections" className={settingsNavListClassName}>
+            <TabsTrigger className={settingsNavTriggerClassName} value="notifications">
+              Notifications
+            </TabsTrigger>
+            <TabsTrigger className={settingsNavTriggerClassName} value="alerts">
+              Alert rules
+            </TabsTrigger>
+          </TabsList>
+        }
+      >
+        <SettingsMain>
+          <TabsContent value="notifications" className="mt-0 outline-none">
+            <SettingsFormSection
+              title="Notification center"
+              description="Operational alerts generated by the maintenance evaluator. Unread notifications are highlighted."
+            >
+              <div className="overflow-hidden rounded-xl border border-border bg-card">
+                <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+                  <p className="text-sm text-muted-foreground">{rows.filter((n) => !n.readAt).length} unread</p>
+                  <Button variant="secondary" disabled={notifications.isFetching} onClick={() => void notifications.refetch()}>
+                    Refresh
+                  </Button>
+                </div>
+                {notifications.isPending ? (
+                  <div className="p-6">
+                    <Loading />
+                  </div>
+                ) : !rows.length ? (
+                  <div className="p-8">
+                    <Empty title="No notifications">
+                      Alerts appear when a rule threshold is crossed during the maintenance tick.
+                    </Empty>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Severity</TableHead>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {rows.map((n) => (
+                        <TableRow key={n.id} data-unread={!n.readAt}>
+                          <TableCell>
+                            <Badge variant={severityVariant(n.severity)}>{n.severity}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <span className={`block text-sm ${n.readAt ? 'text-muted-foreground' : 'font-medium'}`}>{n.title}</span>
+                            {n.body ? <span className="block text-xs text-muted-foreground">{n.body}</span> : null}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                            {new Date(n.createdAt).toLocaleString()}
+                          </TableCell>
+                          <TableCell>
+                            {!n.readAt ? (
+                              <Button
+                                variant="secondary"
+                                disabled={markRead.isPending}
+                                onClick={() => markRead.mutate(n.id)}
+                              >
+                                Mark read
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Read</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            </SettingsFormSection>
+          </TabsContent>
+
+          <TabsContent value="alerts" className="mt-0 outline-none">
+            <SettingsFormSection
+              title="Alert rules"
+              description="Rules are evaluated during the 60-second maintenance tick. Delivery is direct email today; future releases will queue durable delivery."
+            >
+              <div className="space-y-4">
+                <div className="rounded-xl border border-border bg-card p-4">
+                  <h3 className="mb-3 text-sm font-medium">Create rule</h3>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel>Name</FieldLabel>
+                      <Input
+                        value={newRule.name}
+                        onChange={(e) => setNewRule((r) => ({ ...r, name: e.target.value }))}
+                        placeholder="API error rate spike"
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>Kind</FieldLabel>
+                      <Select
+                        value={newRule.kind}
+                        onValueChange={(v) => setNewRule((r) => ({ ...r, kind: v as AlertKind }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {alertKinds.map((k) => (
+                            <SelectItem key={k.value} value={k.value}>
+                              {k.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FieldDescription>{alertKinds.find((k) => k.value === newRule.kind)?.description}</FieldDescription>
+                    </Field>
+                    <Field>
+                      <FieldLabel>Threshold</FieldLabel>
+                      <Input
+                        type="number"
+                        step="any"
+                        value={newRule.threshold}
+                        onChange={(e) => setNewRule((r) => ({ ...r, threshold: Number(e.target.value) }))}
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>Severity</FieldLabel>
+                      <Select
+                        value={newRule.severity}
+                        onValueChange={(v) => setNewRule((r) => ({ ...r, severity: v as AlertSeverity }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {severities.map((s) => (
+                            <SelectItem key={s.value} value={s.value}>
+                              {s.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field className="sm:col-span-2">
+                      <FieldLabel>Email recipients</FieldLabel>
+                      <Input
+                        value={newRule.emails}
+                        onChange={(e) => setNewRule((r) => ({ ...r, emails: e.target.value }))}
+                        placeholder="ops@example.com, oncall@example.com"
+                      />
+                      <FieldDescription>Comma-separated addresses.</FieldDescription>
+                    </Field>
+                    <div className="flex items-center gap-2 sm:col-span-2">
+                      <Checkbox
+                        id="alert-enabled"
+                        checked={newRule.enabled}
+                        onCheckedChange={(checked) => setNewRule((r) => ({ ...r, enabled: checked === true }))}
+                      />
+                      <label htmlFor="alert-enabled" className="text-sm">
+                        Enabled
+                      </label>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex justify-end">
+                    <Button disabled={create.isPending || !newRule.name.trim()} onClick={() => create.mutate()}>
+                      <Plus aria-hidden="true" className="size-4" /> Create rule
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="overflow-hidden rounded-xl border border-border bg-card">
+                  {rules.isPending ? (
+                    <div className="p-6">
+                      <Loading />
+                    </div>
+                  ) : !ruleRows.length ? (
+                    <div className="p-8">
+                      <Empty title="No alert rules">
+                        Create a rule to start receiving operational notifications.
+                      </Empty>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Rule</TableHead>
+                          <TableHead>Kind</TableHead>
+                          <TableHead>Threshold</TableHead>
+                          <TableHead>Severity</TableHead>
+                          <TableHead>Channels</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {ruleRows.map((rule) => (
+                          <RuleRow key={rule.id} rule={rule} onDelete={() => remove.mutate(rule.id)} isDeleting={remove.isPending} />
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              </div>
+            </SettingsFormSection>
+          </TabsContent>
+        </SettingsMain>
+      </SettingsShellLayout>
+    </Tabs>
+  );
+}
+
+function RuleRow({
+  rule,
+  onDelete,
+  isDeleting,
+}: {
+  rule: AlertRule;
+  onDelete: () => void;
+  isDeleting: boolean;
+}) {
+  return (
+    <TableRow>
+      <TableCell>
+        <span className="block font-medium">{rule.name}</span>
+        <span className="font-mono text-xs text-muted-foreground">{rule.id.slice(0, 12)}</span>
+      </TableCell>
+      <TableCell>
+        <Badge variant="secondary">{rule.kind}</Badge>
+      </TableCell>
+      <TableCell className="tabular-nums">{rule.config.threshold}</TableCell>
+      <TableCell>
+        <Badge variant={severityVariant(rule.severity)}>{rule.severity}</Badge>
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <Mail className="size-3" />
+          {rule.channels.length}
+        </div>
+      </TableCell>
+      <TableCell>
+                  <Button variant="ghost" className="size-8" disabled={isDeleting} onClick={onDelete} aria-label={`Delete ${rule.name}`}>
+                    <Trash2 className="size-4" />
+                  </Button>
+      </TableCell>
+    </TableRow>
+  );
+}

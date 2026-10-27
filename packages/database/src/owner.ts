@@ -146,6 +146,10 @@ async function run(action: string, a: any) {
       return await jobs.cancel(a.id);
     case 'jobs-replay':
       return await jobs.replay(a.id, a.idempotencyKey);
+    case 'dead-letter-depth':
+      return await engine.db.query(
+        "SELECT kind,COUNT(*) AS count FROM _qb_jobs WHERE state='dead' GROUP BY kind",
+      ).all();
     case 'webhooks-list':
       return await webhooks.list();
     case 'webhooks-create':

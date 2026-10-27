@@ -6,6 +6,9 @@ import { createHmac, createCipheriv, createDecipheriv, randomBytes } from 'node:
 import { PGliteDialect } from 'kysely';
 import type { Database } from '../../database/src/connection';
 import { createMailer } from './email/mailer';
+export { createMailer } from './email/mailer';
+export type { Mailer } from './email/mailer';
+export type { AlertEmailProps } from './email/templates';
 export const realmSecret = (master: string, realm: string) =>
   createHmac('sha256', master).update(realm).digest('hex');
 export function encryption(master: string) {

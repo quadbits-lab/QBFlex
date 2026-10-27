@@ -16,7 +16,7 @@
     },
     {
       "path": "apps/api/src/service.ts",
-      "sha256": "33d12ef954722a8cd4e3085453ee4cc8ce19d529733d65b308c198df01c28b71"
+      "sha256": "1e0f59bb8a265e19c6612b9faf83584d0cfa63b1af36f731dbae7db056cc5516"
     },
     {
       "path": "apps/cli/src/index.ts",
@@ -95,6 +95,10 @@
       "sha256": "0dcd432be44ca222c567226e817434b7433bcb29c66fbf022d6a26b3893a6a97"
     },
     {
+      "path": "migrations/pglite/007-alerts.sql",
+      "sha256": "509f50b6186a6125ad9b0a00aea1544e5b76941e274275040ef50635ec58be11"
+    },
+    {
       "path": "package.json",
       "sha256": "d020272e22ce303f8c5b780088ba73adef270d373009608de40d14ac4f35a236"
     },
@@ -104,19 +108,23 @@
     },
     {
       "path": "packages/auth/src/email/mailer.tsx",
-      "sha256": "87bc812ee24f61b9edbd4c60f6ba4307fa739f3ff7be003bd9f9e2e5c791d984"
+      "sha256": "8a74275d692c233e6c0e2ee343c2b8910b77323bc69b0230e670a5bcde76a2ba"
     },
     {
       "path": "packages/auth/src/email/templates.tsx",
-      "sha256": "1d4108c292f8e4251b32c12c7684ca3dd22285548ef30c78392086a4e8c8989c"
+      "sha256": "7a2a752a5256c94603b98f3188552acc35f17520d727deae12f9d77403e0de72"
     },
     {
       "path": "packages/auth/src/index.ts",
-      "sha256": "e1236c238ee0ebe483d1174c9d9710f55e7baf69043f7ad6620599667a9f1faa"
+      "sha256": "d8090a3f3c360022be4ab5a2ec64605ed7ae7ddf667db109b412034b90c7935b"
     },
     {
       "path": "packages/contracts/package.json",
       "sha256": "9ab642a10abc1f8f4d9753ad5adbdc2fde56c05f7c95b4ed5e72ef0eb980864b"
+    },
+    {
+      "path": "packages/contracts/src/alerts.ts",
+      "sha256": "a3463f91b438465ec63bd197e5cca104afc2318050207d1444d82dd5e2bf50ca"
     },
     {
       "path": "packages/contracts/src/assistant.ts",
@@ -124,7 +132,7 @@
     },
     {
       "path": "packages/contracts/src/index.ts",
-      "sha256": "0c3162b23f106b3260df065f43021d7c2b1b8f7d45d0c7c3f9d4ffbf3877077c"
+      "sha256": "a64c29c521308b8ce0cb600f9f22f6a6810870e0d80b1b89f75d9faf40ca893f"
     },
     {
       "path": "packages/contracts/src/jobs.ts",
@@ -208,11 +216,11 @@
     },
     {
       "path": "packages/database/src/legacy.ts",
-      "sha256": "e0cf55c9605eb2756b73237deb00453562d1bba4c83ed18bd839f84b8dd45b6e"
+      "sha256": "d3f5d99f0c46eec8c24af69700ebf03659ce1179ca9bed07cc53c8183c525bed"
     },
     {
       "path": "packages/database/src/owner.ts",
-      "sha256": "7d5abb01243da09042c1496f851607ac17f3da84382701c71cbcf55a2f6654a0"
+      "sha256": "c5a3eab6fbb145e1a30abef5cf22478704c2bdf0ffe73a1663b594b3123ed209"
     },
     {
       "path": "packages/database/src/policy-simulator.ts",
@@ -260,7 +268,7 @@
     },
     {
       "path": "packages/management-client/src/index.ts",
-      "sha256": "07c9473e1a419a69c7e6782ae2caf3401114eb3a1796bb39cdc9c1ab526a420a"
+      "sha256": "9eb84b75d1962fa383f6c340d92ea019c83e05090a5c9e62073c3cefcc8040f8"
     },
     {
       "path": "packages/observability/package.json",
@@ -268,7 +276,7 @@
     },
     {
       "path": "packages/observability/src/index.ts",
-      "sha256": "dcb173565c5a7fd87ef13bb4c96ee52fcc5de657ecff93d66ace13d23e8cd1db"
+      "sha256": "a5978624a89a09197ec976eb2dd41911c55a9d79e3c823809cc39e6c48130326"
     },
     {
       "path": "packages/observability/src/terminal.ts",
@@ -859,6 +867,10 @@
       "sha256": "2f895e7a55b9e28d22fb7e180f5fdf9c182b99a0e9e054db1cd79b491ae1de27"
     },
     {
+      "path": "tests/alerts.test.ts",
+      "sha256": "4e6f3cf5312cb9925b23e8e4e2080e38f6e3dbc0e3b41fd195fe9a967c1c9ff0"
+    },
+    {
       "path": "tests/app-rbac.test.ts",
       "sha256": "d08c24e69fc79705d1d9426438eb81b8c09b081b4f15471d875358cb59aa8082"
     },
@@ -1100,14 +1112,14 @@
     "assets/examples/vanilla/src/styles.css": "7f4f69acb45c72956b5982b8824f7882eb79ef36468ee95b3939a8f8a4977bc8",
     "assets/examples/vanilla/src/typecheck.ts": "79322d414e5584fd157b0f4d61b0ea72280771e15a6df07d132391d912fe8a36",
     "assets/examples/vanilla/tsconfig.json": "56e4f7acc2c1da79871b7cb3903f8887e89782d301b6352071d37c79abbb34fb",
-    "assets/examples/vanilla/vendor/client.js": "1f720ef4a3cd4be8a39894d43a2a2b9fc224a9caaf2a10b08cb28c455a6aa13e",
+    "assets/examples/vanilla/vendor/client.js": "c7a0d9525602fbcc6367d2a9d4de7d9a69921cf37694c198e44b2d4429da0b23",
     "assets/examples/vanilla/vite.config.ts": "634a4294b85c5585547a6ce6fc60a7b30eb76841042d032dbacdf170a4437780",
     "references/application.md": "f1966aaaba9fd2303e61b19e752be7e9b59534b7e974d66602ab226f5716ca65",
     "references/architecture.md": "ce989ff6fea11146eb07fa00040b7eb6b79f8a6d45aeaf5af0e31b80affe7199",
-    "references/generated/api.md": "3f917508e1d468bad20004085f093da3be259387e075fff5caf6949c357bd405",
+    "references/generated/api.md": "dd591a07ad47ec56792ef91be7dd0e1dfacdd2606ac05f5946dcd5758e288964",
     "references/generated/cli.md": "c16d4a8b6b2640d2e2ad305d61b66da7b0a25bb699da428809ac6bac889647b5",
     "references/generated/sdk.md": "081809e7c0b5ada4f3a01b6ef6c3b256e8e9eeb59ed7a5e11b933b8b87e96874",
-    "references/generated/tests.md": "ae527a87c1936c382c073f99022c83520133a356d4c29fd3715bc3d2c38884d6",
+    "references/generated/tests.md": "f050ad25204fdfce25ecd261c5ac06dd1d931f1f0c13549ef4534a14063ad1a1",
     "references/operations.md": "d3fca2b5dc0c04d75350b9d3a89c4ea4a11ca404047c873fc6a66ee9628b6644",
     "references/platform.md": "7441170dfe8cd682a9e3a0788dbe5a916bcbba34e9c85413eb8b4588d7deab2e",
     "references/react.md": "f47239565782aacebfe4b37509c5a0a36cadf048715166cb29efeafe4243dd33",

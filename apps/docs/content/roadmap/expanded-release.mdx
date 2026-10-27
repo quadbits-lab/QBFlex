@@ -34,7 +34,7 @@ No deployment, external publication, EAS credentials, production notifications, 
 | --- | --- | --- |
 | Recovery Center | Encrypted branch/control snapshots; isolated restore and retention. | Experimental: per-project schedule/retention, sealed off-node destinations, inventory/freshness findings and isolated drills with database/object/key reports. No automatic cutover or integrated object-copy backup; alert delivery and provider certification remain open. |
 | Security Advisor + Policy Simulator | Real-engine simulator; bounded grant/exposure/bucket/key-age/MFA findings, evidence/remediation, expiring acknowledgment and Advisor UI. | Full relationship/type/constraint matrix, hard scratch execution budget and broader security/compatibility acceptance. No automatic fixes. |
-| Operations Dashboard | Private request counters, contract-labeled latency histograms, owner/disk basics. | Authorized latency/queue/restarts/WAL/outbox/maintenance/backup/delivery summaries with bounded labels/retention and redacted data. |
+| Operations Dashboard | Private request counters, contract-labeled latency histograms, owner/disk basics. Organization-level alert rules and a Studio/email notification center are available. | Authorized latency/queue/restarts/WAL/outbox/maintenance/backup/delivery summaries with bounded labels/retention and redacted data. Signed-webhook alert channels remain deferred. |
 | Bounded streaming transfers | Private disk-staged uploads, checksum/cancellation and streamed branch/control v2 archives with legacy recovery. | Full expanded stress/restart/concurrency evidence and remaining transfer validation gates. Resumable multipart remains deferred. |
 | Deployment Doctor | Read-only redacted CLI inventory and explicitly requested readiness GET. | Runtime/ownership/provider/worker/destination/native diagnostics; explicitly invoked scoped write/mail/push probes. |
 | Query Inspector | Existing trusted SQL console; not an inspector. | Normalized slow queries, owner-generated plans including policies, schema-based index suggestions and reviewed comparisons; no values or automatic indexes. |
@@ -47,7 +47,7 @@ No deployment, external publication, EAS credentials, production notifications, 
 
 ## Operational alerts
 
-Planned Studio/email/signed-webhook alerts reuse the mail adapter and durable delivery facility. They need configured recipients/destinations, deduplication, acknowledgment, cooldown and recovery notifications. Defaults cover stale backups, disk pressure, sustained queue saturation, maintenance and delivery-worker failure. Current auth mail is not this alert service.
+Studio/email operational alerts are implemented. Organization-level alert rules live in the control plane and are evaluated during the maintenance tick. Rules cover error rate, error count, p95 latency, dead-letter depth, quota usage, backup failure and snapshot age. Firing writes a notification row and attempts direct email delivery; failures are logged in a delivery table and surfaced in the Studio notification center. Per-rule cooldown and debounce are stored in `alert_states`. Signed-webhook channels and recovery/acknowledgment/deduplication workflows remain planned.
 
 ## Native, notifications and browser accelerators
 

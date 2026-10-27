@@ -3,8 +3,11 @@ import type { JobSummary, JobAttempt } from '../../contracts/src/jobs';
 import type { WebhookInput, WebhookSummary } from '@qb-flex/contracts';
 import type { SecurityReport, SecurityFinding } from '@qb-flex/contracts';
 import type {
+  AlertRule,
+  AlertRuleInput,
   AssistantRequest,
   AssistantResponse,
+  NotificationSummary,
   PreviewInput,
   PreviewSummary,
   QueryPlanResult,
@@ -260,6 +263,28 @@ export class ManagementClient {
     return {
       propose: (body: AssistantRequest, signal?: AbortSignal) =>
         this.request<AssistantResponse>(base, 'POST', body, signal),
+    };
+  }
+  alerts(orgId: string) {
+    const base = `/organizations/${encodeURIComponent(orgId)}`;
+    return {
+      listRules: (signal?: AbortSignal) =>
+        this.request<AlertRule[]>(`${base}/alert-rules`, 'GET', undefined, signal),
+      createRule: (input: AlertRuleInput, signal?: AbortSignal) =>
+        this.request<AlertRule>(`${base}/alert-rules`, 'POST', input, signal),
+      getRule: (id: string, signal?: AbortSignal) =>
+        this.request<AlertRule>(`${base}/alert-rules/${encodeURIComponent(id)}`, 'GET', undefined, signal),
+      deleteRule: (id: string, signal?: AbortSignal) =>
+        this.request<void>(`${base}/alert-rules/${encodeURIComponent(id)}`, 'DELETE', undefined, signal),
+      notifications: (signal?: AbortSignal) =>
+        this.request<NotificationSummary[]>(`${base}/notifications`, 'GET', undefined, signal),
+      markRead: (id: string, signal?: AbortSignal) =>
+        this.request<{ id: string; readAt: string }>(
+          `${base}/notifications/${encodeURIComponent(id)}/read`,
+          'POST',
+          undefined,
+          signal,
+        ),
     };
   }
   jobs(projectId: string, branchId: string) {

@@ -76,6 +76,12 @@ Generated from shared QB Flex 0.1.0 contracts. This is the route registry; reque
 | GET | `/management/v1/projects/{id}/branches/{branch}/security` | Security Advisor findings |
 | POST | `/management/v1/projects/{id}/branches/{branch}/security/{finding}/acknowledge` | Acknowledge current finding with expiry |
 | DELETE | `/management/v1/projects/{id}/branches/{branch}/security/{finding}/acknowledge` | Clear finding acknowledgment |
+| GET | `/management/v1/organizations/{id}/alert-rules` | List alert rules |
+| POST | `/management/v1/organizations/{id}/alert-rules` | Create alert rule |
+| GET | `/management/v1/organizations/{id}/alert-rules/{rule}` | Read alert rule |
+| DELETE | `/management/v1/organizations/{id}/alert-rules/{rule}` | Delete alert rule |
+| GET | `/management/v1/organizations/{id}/notifications` | List notifications |
+| POST | `/management/v1/organizations/{id}/notifications/{notification}/read` | Mark notification read |
 | POST | `/management/v1/projects/{id}/branches/{branch}/webhooks` | Create scoped webhook |
 | POST | `/management/v1/projects/{id}/branches/{branch}/webhooks/{webhook}/state` | Pause, resume or revoke webhook |
 | POST | `/management/v1/projects/{id}/branches/{branch}/webhooks/{webhook}/rotate` | Rotate webhook signing secret |
@@ -168,6 +174,7 @@ Generated from shared QB Flex 0.1.0 contracts. This is the route registry; reque
 - **recoveryCenter:** experimental
 - **securityAdvisor:** experimental
 - **operationsDashboard:** planned
+- **alerts:** available
 - **queryInspector:** available
 - **schemaReviews:** available
 - **previews:** available

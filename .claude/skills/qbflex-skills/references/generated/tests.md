@@ -31,6 +31,13 @@ SHA-256: `2f895e7a55b9e28d22fb7e180f5fdf9c182b99a0e9e054db1cd79b491ae1de27`
 - compileQuery: duplicate aggregate alias rejected
 - compileQuery: cursorCodec scope includes query shape
 
+## tests/alerts.test.ts
+
+SHA-256: `4e6f3cf5312cb9925b23e8e4e2080e38f6e3dbc0e3b41fd195fe9a967c1c9ff0`
+
+- alert rules CRUD and notifications lifecycle
+- alert rule validation rejects invalid input
+
 ## tests/app-rbac.test.ts
 
 SHA-256: `d08c24e69fc79705d1d9426438eb81b8c09b081b4f15471d875358cb59aa8082`

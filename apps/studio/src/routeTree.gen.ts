@@ -23,6 +23,7 @@ import { Route as ConsoleInspectorRouteImport } from './routes/_console/inspecto
 import { Route as ConsoleJobsRouteImport } from './routes/_console/jobs'
 import { Route as ConsoleLabRouteImport } from './routes/_console/lab'
 import { Route as ConsoleLogsRouteImport } from './routes/_console/logs'
+import { Route as ConsoleNotificationsRouteImport } from './routes/_console/notifications'
 import { Route as ConsoleOverviewRouteImport } from './routes/_console/overview'
 import { Route as ConsolePreviewsRouteImport } from './routes/_console/previews'
 import { Route as ConsoleRealtimeRouteImport } from './routes/_console/realtime'
@@ -104,6 +105,11 @@ const ConsoleLogsRoute = ConsoleLogsRouteImport.update({
   path: '/logs',
   getParentRoute: () => ConsoleRoute,
 } as any)
+const ConsoleNotificationsRoute = ConsoleNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => ConsoleRoute,
+} as any)
 const ConsoleOverviewRoute = ConsoleOverviewRouteImport.update({
   id: '/overview',
   path: '/overview',
@@ -174,6 +180,7 @@ export interface FileRoutesByFullPath {
   '/jobs': typeof ConsoleJobsRoute
   '/lab': typeof ConsoleLabRoute
   '/logs': typeof ConsoleLogsRoute
+  '/notifications': typeof ConsoleNotificationsRoute
   '/overview': typeof ConsoleOverviewRoute
   '/previews': typeof ConsolePreviewsRoute
   '/realtime': typeof ConsoleRealtimeRoute
@@ -200,6 +207,7 @@ export interface FileRoutesByTo {
   '/jobs': typeof ConsoleJobsRoute
   '/lab': typeof ConsoleLabRoute
   '/logs': typeof ConsoleLogsRoute
+  '/notifications': typeof ConsoleNotificationsRoute
   '/overview': typeof ConsoleOverviewRoute
   '/previews': typeof ConsolePreviewsRoute
   '/realtime': typeof ConsoleRealtimeRoute
@@ -228,6 +236,7 @@ export interface FileRoutesById {
   '/_console/jobs': typeof ConsoleJobsRoute
   '/_console/lab': typeof ConsoleLabRoute
   '/_console/logs': typeof ConsoleLogsRoute
+  '/_console/notifications': typeof ConsoleNotificationsRoute
   '/_console/overview': typeof ConsoleOverviewRoute
   '/_console/previews': typeof ConsolePreviewsRoute
   '/_console/realtime': typeof ConsoleRealtimeRoute
@@ -256,6 +265,7 @@ export interface FileRouteTypes {
     | '/jobs'
     | '/lab'
     | '/logs'
+    | '/notifications'
     | '/overview'
     | '/previews'
     | '/realtime'
@@ -282,6 +292,7 @@ export interface FileRouteTypes {
     | '/jobs'
     | '/lab'
     | '/logs'
+    | '/notifications'
     | '/overview'
     | '/previews'
     | '/realtime'
@@ -309,6 +320,7 @@ export interface FileRouteTypes {
     | '/_console/jobs'
     | '/_console/lab'
     | '/_console/logs'
+    | '/_console/notifications'
     | '/_console/overview'
     | '/_console/previews'
     | '/_console/realtime'
@@ -430,6 +442,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConsoleLogsRouteImport
       parentRoute: typeof ConsoleRoute
     }
+    '/_console/notifications': {
+      id: '/_console/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof ConsoleNotificationsRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
     '/_console/overview': {
       id: '/_console/overview'
       path: '/overview'
@@ -521,6 +540,7 @@ interface ConsoleRouteChildren {
   ConsoleJobsRoute: typeof ConsoleJobsRoute
   ConsoleLabRoute: typeof ConsoleLabRoute
   ConsoleLogsRoute: typeof ConsoleLogsRoute
+  ConsoleNotificationsRoute: typeof ConsoleNotificationsRoute
   ConsoleOverviewRoute: typeof ConsoleOverviewRoute
   ConsolePreviewsRoute: typeof ConsolePreviewsRoute
   ConsoleRealtimeRoute: typeof ConsoleRealtimeRoute
@@ -544,6 +564,7 @@ const ConsoleRouteChildren: ConsoleRouteChildren = {
   ConsoleJobsRoute: ConsoleJobsRoute,
   ConsoleLabRoute: ConsoleLabRoute,
   ConsoleLogsRoute: ConsoleLogsRoute,
+  ConsoleNotificationsRoute: ConsoleNotificationsRoute,
   ConsoleOverviewRoute: ConsoleOverviewRoute,
   ConsolePreviewsRoute: ConsolePreviewsRoute,
   ConsoleRealtimeRoute: ConsoleRealtimeRoute,

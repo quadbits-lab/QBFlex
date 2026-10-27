@@ -1,0 +1,49 @@
+export const frontmatter = {"title": "Notifications", "description": "Operational alert center and alert-rule settings for organization-level notifications.", "section": "Studio", "slug": "studio/notifications", "order": 13};
+
+# Notifications
+
+## Alert center
+
+Open **Notifications** (`/notifications`) to see operational alerts raised for the current organization. Alerts are created by the maintenance evaluator during its 60-second tick, based on alert rules configured in the same workspace. Unread notifications are highlighted and can be marked read individually. The list refreshes every 15 seconds while the page is open.
+
+Notifications are organization-scoped. They do not contain row data, credentials or delivery payloads. The alert body describes what threshold was crossed and over what window.
+
+## Alert rules
+
+The **Alert rules** tab lists existing rules and lets administrators create or delete them. Each rule has:
+
+| Field | Meaning |
+| --- | --- |
+| `name` | Human-readable label shown in the notification list. |
+| `kind` | One of `error_rate`, `error_count`, `p95_latency`, `dead_letter_depth`, `quota_usage`, `backup_failure` or `snapshot_age`. |
+| `threshold` | Numeric threshold. For `error_rate` this is a ratio (for example `0.05` for 5%); for `error_count` and `p95_latency` it is an absolute count or milliseconds; for `quota_usage` and `snapshot_age` it is percent or minutes. |
+| `severity` | `info`, `warning` or `critical`, displayed as a badge. |
+| `channels` | Today one or more email recipients; future releases will add signed-webhook channels. |
+| `enabled` | Disabled rules are skipped by the evaluator. |
+
+Only organization administrators can create or delete rules. Viewers can inspect rules and notifications. Rule writes are audited.
+
+Delivery uses the existing Resend/SMTP mail adapter. A failed delivery is recorded in the delivery log and does not block the maintenance tick. The alert is still written to the notification center.
+
+## Management client and routes
+
+Trusted management code can use `ManagementClient.alerts(orgId)`.
+
+| Method | Route | Access |
+| --- | --- | --- |
+| GET | `/organizations/{orgId}/alert-rules` | Viewer or higher. |
+| POST | `/organizations/{orgId}/alert-rules` | Administrator write. |
+| GET | `/organizations/{orgId}/alert-rules/{ruleId}` | Viewer or higher. |
+| DELETE | `/organizations/{orgId}/alert-rules/{ruleId}` | Administrator write. |
+| GET | `/organizations/{orgId}/notifications` | Viewer or higher. |
+| POST | `/organizations/{orgId}/notifications/{id}/read` | Viewer or higher. |
+
+All routes are prefixed with `/management/v1`. Rule creation validates kind, severity, threshold and email recipients. Project-scoped rules are not yet exposed in Studio; the API accepts an optional `projectId` that must belong to the organization.
+
+## Self-hosting notes
+
+No new environment variable is required for the notification center itself. Alert delivery reuses the existing mailer (`QB_RESEND_API_KEY` or `QB_SMTP_*`). The maintenance worker token (`QB_WORKER_TOKEN`) already triggers the evaluator; the push worker token (`QB_PUSH_WORKER_TOKEN`) does not read metrics or send alert email.
+
+Metrics deltas are computed from the API's in-memory `Metrics` snapshot between maintenance ticks. The first tick after startup has no previous snapshot and will not fire rate/count rules; absolute thresholds still evaluate against the current state. Internal scrape at `/internal/metrics` is unchanged.
+
+See [Monitoring and troubleshooting](/docs/self-hosting/monitoring) for health checks, metrics and maintenance details.

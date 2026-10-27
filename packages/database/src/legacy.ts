@@ -435,6 +435,7 @@ export async function convertSQLiteDatabase(source: string, destination: string)
             '004-workspace-lifecycle',
             '005-recovery',
             '006-reviews-previews',
+            '007-alerts',
           ]) {
             const sql = readFileSync(
               new URL(`../../../migrations/pglite/${name}.sql`, import.meta.url),

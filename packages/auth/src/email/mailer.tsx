@@ -13,11 +13,13 @@ import {
 import nodemailer from 'nodemailer';
 import { render } from '@react-email/render';
 import { Resend } from 'resend';
-import { ResetPasswordEmail, VerifyEmailEmail } from './templates';
+import { AlertEmail, ResetPasswordEmail, VerifyEmailEmail, type AlertEmailProps } from './templates';
 export type EmailKind = 'verify-email' | 'reset-password' | 'magic-link';
 export interface Mailer {
   /** Delivers a branded React Email (Resend) with a plain-text URL fallback (SMTP/Mailpit). */
   send(to: string, kind: EmailKind, url: string): Promise<void>;
+  /** Delivers an operational alert email with a link back to Studio. */
+  sendAlert(to: string, payload: AlertEmailProps): Promise<void>;
 }
 const subjects: Record<EmailKind, string> = {
   'verify-email': 'Verify your email',
@@ -149,6 +151,13 @@ export function createMailer(): Mailer {
         });
         if (error) throw new Error('Email delivery failed', { cause: error });
       },
+      async sendAlert(to: string, payload: AlertEmailProps) {
+        const subject = `QB Flex alert: ${payload.title}`;
+        const html = await render(<AlertEmail {...payload} />);
+        const text = `${subject}\n\n${payload.severity.toUpperCase()} — ${payload.details}\n\n${payload.studioUrl}`;
+        const { error } = await resend.emails.send({ from, to, subject, html, text });
+        if (error) throw new Error('Alert delivery failed', { cause: error });
+      },
     };
   }
   const transport = nodemailer.createTransport({
@@ -164,6 +173,12 @@ export function createMailer(): Mailer {
       const subject = subjects[kind];
       const html = await render(emailElement(kind, url));
       await transport.sendMail({ from, to, subject, text: `${subject}\n\n${url}`, html });
+    },
+    async sendAlert(to: string, payload: AlertEmailProps) {
+      const subject = `QB Flex alert: ${payload.title}`;
+      const html = await render(<AlertEmail {...payload} />);
+      const text = `${subject}\n\n${payload.severity.toUpperCase()} — ${payload.details}\n\n${payload.studioUrl}`;
+      await transport.sendMail({ from, to, subject, text, html });
     },
   };
 }

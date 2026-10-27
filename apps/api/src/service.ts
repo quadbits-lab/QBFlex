@@ -21,12 +21,14 @@ import {
   branchPath,
   BranchOwner,
 } from '@qb-flex/database';
-import { createRealm, realmSecret, encryption } from '@qb-flex/auth';
+import { createRealm, realmSecret, encryption, createMailer } from '@qb-flex/auth';
 import {
   QBError,
   capabilities,
   routes,
   jobKinds,
+  isValidAlertKind,
+  isValidAlertSeverity,
   type Identity,
   type Role,
 } from '@qb-flex/contracts';
@@ -125,6 +127,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
       '004-workspace-lifecycle',
       '005-recovery',
       '006-reviews-previews',
+      '007-alerts',
     ]) {
       const migration = readFileSync(
         new URL(`../../../migrations/pglite/${id}.sql`, import.meta.url),
@@ -150,6 +153,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           .immediate();
     }
     const metrics = new Metrics();
+    const mailer = createMailer();
     const webhookAllowlist = parseInternalAllowlist(process.env.QB_WEBHOOK_INTERNAL_ALLOWLIST);
     const starts = new WeakMap<Request, number>();
     const transfers = new WeakSet<Request>();
@@ -164,6 +168,11 @@ export async function createService(override?: Partial<ReturnType<typeof configu
     const lastUsed = new Map<string, number>();
     const backend = new ObjectBackend();
     const timers = new Set<ReturnType<typeof setInterval>>();
+    let lastMetricsSnapshot = new Map<
+      string,
+      { count: number; errors: number; total: number; max: number; buckets: number[] }
+    >();
+    const deadLetterDepths = new Map<string, number>();
     const bootstrapFile = join(config.dataDir, 'bootstrap.token');
     let bootstrap = process.env.QB_BOOTSTRAP_TOKEN;
     if (!bootstrap && !(await db.query('SELECT id FROM _qb_auth_users LIMIT 1').get())) {
@@ -852,6 +861,205 @@ export async function createService(override?: Partial<ReturnType<typeof configu
     async function performMaintenance() {
       let cleaned = 0,
         backedUp = 0;
+      deadLetterDepths.clear();
+      async function evaluateAlerts() {
+        const rules = (await db
+          .query('SELECT * FROM alert_rules WHERE enabled=1')
+          .all()) as any[];
+        if (!rules.length) return;
+        const currentSnapshot = metrics.snapshot();
+        const nowTime = Date.now();
+        const bounds = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000];
+        function p95(value: { count: number; buckets: number[] }) {
+          if (!value.count) return 0;
+          const target = value.count * 0.95;
+          let cumulative = 0;
+          for (let i = 0; i < bounds.length; i++) {
+            cumulative += value.buckets[i]!;
+            if (cumulative >= target) {
+              const prev = i > 0 ? bounds[i - 1]! : 0;
+              const frac = (target - (cumulative - value.buckets[i]!)) / value.buckets[i]!;
+              return prev + (bounds[i]! - prev) * Math.max(0, Math.min(1, frac));
+            }
+          }
+          return bounds[bounds.length - 1]!;
+        }
+        function deltaErrors(key: string) {
+          const current = currentSnapshot.get(key);
+          if (!current) return 0;
+          const previous = lastMetricsSnapshot.get(key);
+          return current.errors - (previous?.errors ?? 0);
+        }
+        function deltaCount(key: string) {
+          const current = currentSnapshot.get(key);
+          if (!current) return 0;
+          const previous = lastMetricsSnapshot.get(key);
+          return current.count - (previous?.count ?? 0);
+        }
+        const studioUrl = config.studioURL ?? `${config.publicURL}/studio`;
+        for (const rule of rules) {
+          try {
+            const ruleConfig = JSON.parse(rule.config) as { threshold: number; route?: string; windowMinutes?: number; silenceMinutes?: number };
+            const state = (await db.query('SELECT * FROM alert_states WHERE rule_id=?').get(rule.id)) as any;
+            const silencedUntil = state?.silenced_until ? Date.parse(state.silenced_until) : 0;
+            if (silencedUntil > nowTime) continue;
+            const lastFired = state?.last_fired_at ? Date.parse(state.last_fired_at) : 0;
+            const windowMinutes = Number(ruleConfig.windowMinutes ?? 5);
+            const windowStart = new Date(nowTime - windowMinutes * 60000).toISOString();
+            let triggered = false;
+            let title = rule.name;
+            let details = '';
+            const routeKey = ruleConfig.route;
+            switch (rule.kind as string) {
+              case 'error_rate': {
+                let errors = 0;
+                let count = 0;
+                if (routeKey) {
+                  errors = deltaErrors(routeKey);
+                  count = deltaCount(routeKey);
+                } else {
+                  for (const [key, value] of currentSnapshot) {
+                    const prev = lastMetricsSnapshot.get(key);
+                    errors += value.errors - (prev?.errors ?? 0);
+                    count += value.count - (prev?.count ?? 0);
+                  }
+                }
+                const rate = count > 0 ? errors / count : 0;
+                if (rate >= ruleConfig.threshold) {
+                  triggered = true;
+                  details = `Error rate ${(rate * 100).toFixed(1)}% over ${count} requests (threshold ${(ruleConfig.threshold * 100).toFixed(1)}%)`;
+                }
+                break;
+              }
+              case 'error_count': {
+                let errors = 0;
+                if (routeKey) {
+                  errors = deltaErrors(routeKey);
+                } else {
+                  for (const [key, value] of currentSnapshot) {
+                    const prev = lastMetricsSnapshot.get(key);
+                    errors += value.errors - (prev?.errors ?? 0);
+                  }
+                }
+                if (errors >= ruleConfig.threshold) {
+                  triggered = true;
+                  details = `${errors} errors since last tick (threshold ${ruleConfig.threshold})`;
+                }
+                break;
+              }
+              case 'p95_latency': {
+                let maxP95 = 0;
+                if (routeKey) {
+                  const value = currentSnapshot.get(routeKey);
+                  if (value) maxP95 = p95(value);
+                } else {
+                  for (const value of currentSnapshot.values()) maxP95 = Math.max(maxP95, p95(value));
+                }
+                if (maxP95 >= ruleConfig.threshold) {
+                  triggered = true;
+                  details = `p95 latency ${maxP95.toFixed(0)}ms (threshold ${ruleConfig.threshold}ms)`;
+                }
+                break;
+              }
+              case 'dead_letter_depth': {
+                let total = 0;
+                for (const count of deadLetterDepths.values()) total += count;
+                if (total >= ruleConfig.threshold) {
+                  triggered = true;
+                  details = `${total} dead-letter jobs (threshold ${ruleConfig.threshold})`;
+                }
+                break;
+              }
+              case 'quota_usage': {
+                // Approximate: compare the last minute of observed requests against the per-project limit.
+                // This is intentionally coarse; detailed billing quotas live outside the API.
+                let total = 0;
+                for (const value of currentSnapshot.values()) total += value.count;
+                const quotaLimit = Number(process.env.QB_DEFAULT_REQUESTS_PER_MINUTE ?? 600);
+                const usage = total / Math.max(1, quotaLimit);
+                if (usage >= ruleConfig.threshold) {
+                  triggered = true;
+                  details = `Request volume ${Math.round(usage * 100)}% of ${quotaLimit}/min limit`;
+                }
+                break;
+              }
+              case 'backup_failure': {
+                const count = (await db
+                  .query(
+                    "SELECT COUNT(*) AS c FROM recovery_findings WHERE project_id IN (SELECT id FROM projects WHERE org_id=?) AND resolved_at IS NULL",
+                  )
+                  .get(rule.org_id)) as any;
+                if (Number(count?.c ?? 0) >= ruleConfig.threshold) {
+                  triggered = true;
+                  details = `${count.c} unresolved recovery findings (threshold ${ruleConfig.threshold})`;
+                }
+                break;
+              }
+              case 'snapshot_age': {
+                const latest = (await db
+                  .query(
+                    'SELECT MAX(created_at) AS m FROM backups WHERE branch_id IN (SELECT id FROM branches WHERE project_id IN (SELECT id FROM projects WHERE org_id=?))',
+                  )
+                  .get(rule.org_id)) as any;
+                const ageHours = latest?.m
+                  ? (nowTime - Date.parse(latest.m)) / 3600000
+                  : Number.POSITIVE_INFINITY;
+                if (ageHours >= ruleConfig.threshold) {
+                  triggered = true;
+                  details = `Latest backup is ${ageHours >= 1000 ? 'over 1000' : ageHours.toFixed(1)} hours old (threshold ${ruleConfig.threshold}h)`;
+                }
+                break;
+              }
+            }
+            if (!triggered) continue;
+            const notificationId = crypto.randomUUID();
+            const nowStr = now();
+            await db
+              .query('INSERT INTO notifications VALUES(?,?,?,?,?,?,?,?)')
+              .run(
+                notificationId,
+                rule.org_id,
+                rule.project_id,
+                rule.severity,
+                title,
+                details,
+                null,
+                nowStr,
+              );
+            const silenceMinutes = Math.max(1, Math.min(1440, Number((config as any).silenceMinutes ?? 15)));
+            const silencedUntilStr = new Date(nowTime + silenceMinutes * 60000).toISOString();
+            await db
+              .query(
+                'INSERT INTO alert_states VALUES(?,?,?,?) ON CONFLICT(rule_id) DO UPDATE SET window_start=excluded.window_start,last_fired_at=excluded.last_fired_at,silenced_until=excluded.silenced_until',
+              )
+              .run(rule.id, windowStart, nowStr, silencedUntilStr);
+            const channels = JSON.parse(rule.channels) as { type: 'email'; to: string }[];
+            for (const channel of channels) {
+              if (channel.type !== 'email') continue;
+              const deliveryId = crypto.randomUUID();
+              try {
+                await mailer.sendAlert(channel.to, {
+                  severity: rule.severity,
+                  title,
+                  details,
+                  studioUrl,
+                });
+                await db
+                  .query('INSERT INTO alert_deliveries VALUES(?,?,?,?,?)')
+                  .run(deliveryId, rule.id, `email:${channel.to}`, 'sent', nowStr);
+              } catch (err) {
+                log({ action: 'alert.delivery_failed', code: rule.id });
+                await db
+                  .query('INSERT INTO alert_deliveries VALUES(?,?,?,?,?)')
+                  .run(deliveryId, rule.id, `email:${channel.to}`, 'failed', nowStr);
+              }
+            }
+          } catch (err) {
+            log({ action: 'alert.evaluate_failed', code: rule.id });
+          }
+        }
+        lastMetricsSnapshot = currentSnapshot;
+      }
       {
         const request = new Request(config.publicURL + '/internal/maintenance');
         const branches = (await db
@@ -875,6 +1083,14 @@ export async function createService(override?: Partial<ReturnType<typeof configu
             }
             await o.call('cleanup');
             cleaned++;
+            try {
+              const depth = (await o.call('dead-letter-depth')) as { kind: string; count: number }[];
+              for (const { kind, count } of depth) {
+                deadLetterDepths.set(kind, (deadLetterDepths.get(kind) ?? 0) + Number(count));
+              }
+            } catch {
+              log({ action: 'alerts.dead_letter_depth.failed' });
+            }
             const pending = await o.call('object-maintenance');
             for (const object of pending) {
               try {
@@ -967,6 +1183,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
             if (age >= dailyDays * 86400000 && !weekly) rmSync(join(folder, name), { force: true });
           }
         }
+        await evaluateAlerts();
         await db
           .query('DELETE FROM audit_events WHERE time<?')
           .run(new Date(Date.now() - 90 * 86400000).toISOString());
@@ -2441,6 +2658,165 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           return success(result, request);
         },
       )
+      .get('/management/v1/organizations/:id/alert-rules', async ({ request, params }) => {
+        const actor = await user(request);
+        await member(params.id, actor.id, 'viewer');
+        const rows = (await db
+          .query(
+            'SELECT id,org_id,project_id,name,kind,config,severity,channels,enabled,created_by,created_at,updated_at FROM alert_rules WHERE org_id=? ORDER BY updated_at DESC',
+          )
+          .all(params.id)) as any[];
+        return success(
+          rows.map((r) => ({
+            id: r.id,
+            orgId: r.org_id,
+            projectId: r.project_id,
+            name: r.name,
+            kind: r.kind,
+            config: JSON.parse(r.config),
+            severity: r.severity,
+            channels: JSON.parse(r.channels),
+            enabled: Boolean(r.enabled),
+            createdBy: r.created_by,
+            createdAt: r.created_at,
+            updatedAt: r.updated_at,
+          })),
+          request,
+        );
+      })
+      .post('/management/v1/organizations/:id/alert-rules', async ({ request, params, body }) => {
+        const actor = await user(request);
+        await member(params.id, actor.id, 'admin');
+        const input = body as any;
+        const id = crypto.randomUUID();
+        const nowStr = now();
+        const channels = Array.isArray(input?.channels) ? input.channels : [];
+        if (!input?.name || typeof input.name !== 'string' || input.name.length > 120)
+          throw new QBError('VALIDATION', 'Alert rule name is required (max 120 chars)');
+        if (!isValidAlertKind(input?.kind)) throw new QBError('VALIDATION', 'Invalid alert kind');
+        if (!isValidAlertSeverity(input?.severity))
+          throw new QBError('VALIDATION', 'Invalid alert severity');
+        for (const ch of channels) {
+          if (ch?.type !== 'email' || typeof ch?.to !== 'string' || !ch.to.includes('@'))
+            throw new QBError('VALIDATION', 'Each channel must be an email object with a valid to address');
+        }
+        if (input?.projectId) {
+          const proj = (await db.query('SELECT org_id FROM projects WHERE id=?').get(input.projectId)) as any;
+          if (!proj || proj.org_id !== params.id)
+            throw new QBError('VALIDATION', 'Project does not belong to this organization');
+        }
+        const ruleConfig = input?.config && typeof input.config === 'object' ? input.config : {};
+        if (typeof ruleConfig.threshold !== 'number' || !Number.isFinite(ruleConfig.threshold))
+          throw new QBError('VALIDATION', 'Alert config threshold must be a finite number');
+        await db
+          .query(
+            'INSERT INTO alert_rules VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+          )
+          .run(
+            id,
+            params.id,
+            input.projectId ?? null,
+            input.name,
+            input.kind,
+            JSON.stringify(ruleConfig),
+            input.severity,
+            JSON.stringify(channels),
+            input.enabled === false ? 0 : 1,
+            actor.id,
+            nowStr,
+            nowStr,
+          );
+        await audit(actor.id, 'alert-rule.create', id, { id: input.projectId ?? null, org_id: params.id }, request);
+        return success(
+          {
+            id,
+            orgId: params.id,
+            projectId: input.projectId ?? null,
+            name: input.name,
+            kind: input.kind,
+            config: ruleConfig,
+            severity: input.severity,
+            channels,
+            enabled: input.enabled !== false,
+            createdBy: actor.id,
+            createdAt: nowStr,
+            updatedAt: nowStr,
+          },
+          request,
+        );
+      })
+      .get('/management/v1/organizations/:id/alert-rules/:rule', async ({ request, params }) => {
+        const actor = await user(request);
+        await member(params.id, actor.id, 'viewer');
+        const r = (await db
+          .query(
+            'SELECT id,org_id,project_id,name,kind,config,severity,channels,enabled,created_by,created_at,updated_at FROM alert_rules WHERE id=? AND org_id=?',
+          )
+          .get(params.rule, params.id)) as any;
+        if (!r) throw new QBError('NOT_FOUND', 'Alert rule not found', 404);
+        return success(
+          {
+            id: r.id,
+            orgId: r.org_id,
+            projectId: r.project_id,
+            name: r.name,
+            kind: r.kind,
+            config: JSON.parse(r.config),
+            severity: r.severity,
+            channels: JSON.parse(r.channels),
+            enabled: Boolean(r.enabled),
+            createdBy: r.created_by,
+            createdAt: r.created_at,
+            updatedAt: r.updated_at,
+          },
+          request,
+        );
+      })
+      .delete('/management/v1/organizations/:id/alert-rules/:rule', async ({ request, params, set }) => {
+        const actor = await user(request);
+        await member(params.id, actor.id, 'admin');
+        const existing = (await db
+          .query('SELECT project_id FROM alert_rules WHERE id=? AND org_id=?')
+          .get(params.rule, params.id)) as any;
+        if (!existing) throw new QBError('NOT_FOUND', 'Alert rule not found', 404);
+        await db.query('DELETE FROM alert_rules WHERE id=? AND org_id=?').run(params.rule, params.id);
+        await audit(actor.id, 'alert-rule.delete', params.rule, { id: existing.project_id ?? null, org_id: params.id }, request);
+        set.status = 204;
+        return null;
+      })
+      .get('/management/v1/organizations/:id/notifications', async ({ request, params }) => {
+        const actor = await user(request);
+        await member(params.id, actor.id, 'viewer');
+        const rows = (await db
+          .query(
+            'SELECT id,org_id,project_id,severity,title,body,read_at,created_at FROM notifications WHERE org_id=? ORDER BY created_at DESC LIMIT 200',
+          )
+          .all(params.id)) as any[];
+        return success(
+          rows.map((r) => ({
+            id: r.id,
+            orgId: r.org_id,
+            projectId: r.project_id,
+            severity: r.severity,
+            title: r.title,
+            body: r.body,
+            readAt: r.read_at,
+            createdAt: r.created_at,
+          })),
+          request,
+        );
+      })
+      .post('/management/v1/organizations/:id/notifications/:notification/read', async ({ request, params }) => {
+        const actor = await user(request);
+        await member(params.id, actor.id, 'viewer');
+        const nowStr = now();
+        const result = await db
+          .query('UPDATE notifications SET read_at=? WHERE id=? AND org_id=? AND read_at IS NULL')
+          .run(nowStr, params.notification, params.id);
+        if (result.changes === 0)
+          throw new QBError('NOT_FOUND', 'Notification not found or already read', 404);
+        return success({ id: params.notification, readAt: nowStr }, request);
+      })
       .post(
         '/management/v1/projects/:id/branches/:branch/webhooks',
         async ({ request, params, body }) => {

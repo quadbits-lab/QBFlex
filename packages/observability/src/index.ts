@@ -84,6 +84,9 @@ export class Metrics {
     });
     this.values.set(key, value);
   }
+  snapshot() {
+    return new Map(this.values);
+  }
   render(gauges: Record<string, number>) {
     const lines = [
       '# TYPE qb_http_requests_total counter',

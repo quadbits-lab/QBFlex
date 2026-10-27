@@ -50,7 +50,7 @@ Scrape `/internal/metrics` with the worker bearer token from the private network
 
 `bun run qb doctor --directory .` runs read-only redacted inventory without network probes or secret-file reads. Explicit `--probe-url https://your-api.example.com` performs a bounded readiness GET and refuses redirects/credential-bearing URLs. Exit0: no blocking inventory errors;1: errors;2: invalid invocation. Unknown/unconfigured findings remain visible. S3/mail/push presence is not connectivity or certification; no email or notification is sent.
 
-The private scrape now includes `qb_http_request_duration_seconds` cumulative latency histograms. Existing counter names remain. Route labels come from declared contracts rather than arbitrary paths, row keys or query values. The full expanded dashboard and alerts remain under development.
+The private scrape now includes `qb_http_request_duration_seconds` cumulative latency histograms. Existing counter names remain. Route labels come from declared contracts rather than arbitrary paths, row keys or query values. An authorized [Studio Notifications](/docs/studio/notifications) center and configurable organization-level alert rules are available; the full expanded dashboard remains under development.
 
 ### Read the latency histogram
 
@@ -58,4 +58,4 @@ Private Prometheus output adds `qb_http_request_duration_seconds_bucket{route,le
 
 Expose the scrape only inside the trusted network with the maintenance worker credential. The restricted push principal cannot read metrics or invoke maintenance. Do not embed credentials in URLs, browser examples or telemetry labels. A histogram is not a per-project Operations Dashboard, query tracing or alert service.
 
-See [Deployment Doctor](/docs/self-hosting/doctor) for finding/exit-code interpretation and [Job Inbox](/docs/studio/job-inbox) for experimental private attempt history. Scheduled Studio/email/signed-webhook operational alerts, acknowledgment/deduplication/recovery notifications and advanced owner/outbox/job-health summaries remain under development.
+See [Deployment Doctor](/docs/self-hosting/doctor) for finding/exit-code interpretation, [Job Inbox](/docs/studio/job-inbox) for experimental private attempt history and [Notifications](/docs/studio/notifications) for the Studio alert center and rule settings. Studio/email operational alerts are available; signed-webhook channels, acknowledgment/deduplication/recovery notifications and advanced owner/outbox/job-health summaries remain under development.

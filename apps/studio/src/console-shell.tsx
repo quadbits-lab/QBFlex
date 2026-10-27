@@ -31,6 +31,7 @@ import {
   Layers,
   ScanSearch,
   FlaskConical,
+  Bell,
 } from 'lucide-react';
 import {
   Brand,
@@ -95,6 +96,7 @@ const navigation = [
   { name: 'Data Lab', path: '/lab', icon: FlaskConical, group: 'Build' },
   { name: 'Backups', path: '/backups', icon: Archive, group: 'Manage' },
   { name: 'Activity', path: '/logs', icon: Activity, group: 'Manage' },
+  { name: 'Notifications', path: '/notifications', icon: Bell, group: 'Manage' },
   { name: 'Job Inbox', path: '/jobs', icon: Inbox, group: 'Manage' },
   { name: 'Webhooks', path: '/webhooks', icon: Webhook, group: 'Manage' },
   { name: 'Security', path: '/security', icon: Shield, group: 'Manage' },
@@ -116,6 +118,7 @@ const helpLinks: Record<string, string> = {
   '/ai': 'studio/assistant',
   '/backups': 'self-hosting/backups',
   '/logs': 'self-hosting/monitoring',
+  '/notifications': 'studio/notifications',
   '/jobs': 'studio/job-inbox',
   '/webhooks': 'studio/webhooks',
   '/security': 'studio/security-advisor',
