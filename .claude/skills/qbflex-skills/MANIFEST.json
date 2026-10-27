@@ -320,7 +320,7 @@
     },
     {
       "path": "packages/sdk-js/package.json",
-      "sha256": "31e260265bb489a75ac82f7922a4570dd4cbb2645420554403879248c074e75a"
+      "sha256": "19208786180bd2703d69855eed3ce3c9c73adf96ea86e03bc1c9ed5e8196f7e7"
     },
     {
       "path": "packages/sdk-js/src/index.ts",
@@ -328,7 +328,7 @@
     },
     {
       "path": "packages/sdk-react/package.json",
-      "sha256": "cee073294b5a3e9487f79e52b428f5d44896a907fb6224fa1846342734968362"
+      "sha256": "ba1852033679104c46924710809e5bc3b3b3c7c1f5a25fe528af2dd53b27438c"
     },
     {
       "path": "packages/sdk-react/src/index.tsx",
@@ -883,6 +883,10 @@
       "sha256": "ceded08ba176b50143934055c2bfaf8683c4066c28d97fcdce6b2b5092730e51"
     },
     {
+      "path": "tests/bootstrap-hint.test.ts",
+      "sha256": "c861e426ad6253ac9e6f9cc4a3f93fb65b7503f4dc8928ba86937caa48147de8"
+    },
+    {
       "path": "tests/bootstrap-token.test.ts",
       "sha256": "2b49f38e0060caddb1d0064229bec0f46626ab87a6438c5e9034328123b6ffeb"
     },
@@ -1135,7 +1139,7 @@
     "references/generated/api.md": "dd591a07ad47ec56792ef91be7dd0e1dfacdd2606ac05f5946dcd5758e288964",
     "references/generated/cli.md": "c16d4a8b6b2640d2e2ad305d61b66da7b0a25bb699da428809ac6bac889647b5",
     "references/generated/sdk.md": "e6cdf116938376a2801606c41a7d3d4d6ff86f53713dc3e4fb8843f42acedc05",
-    "references/generated/tests.md": "62571f6928fb9643e4847b381ab92806fc555ec61a718698f4e063607cbeff68",
+    "references/generated/tests.md": "82dde155d240d213b8951e40ff6a8cccf292d43b1e8e91aa7ca7c3d3f626ecde",
     "references/operations.md": "9c1dc6a69256eb6bd287f7d022c90c6d48813d4354f54be147e9852c1bbb3f2a",
     "references/platform.md": "7441170dfe8cd682a9e3a0788dbe5a916bcbba34e9c85413eb8b4588d7deab2e",
     "references/react.md": "c250195d731a7ffa21d4fc0341f59e5aa1570975ba00fd7d8152bb2521180e67",

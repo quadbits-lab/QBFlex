@@ -41,7 +41,11 @@ export const platformSessionOptions = (request: Request = raw) =>
     refetchOnWindowFocus: true,
   });
 
-const setupOptions = (request: Request = raw) =>
+export type SetupState = {
+  data: { required: boolean; tokenSource?: 'environment' | 'environment-file' | 'file' | 'none' };
+};
+
+export const setupOptions = (request: Request = raw) =>
   queryOptions({
     queryKey: ['setup'],
     queryFn: async ({ signal }) => {
@@ -51,7 +55,7 @@ const setupOptions = (request: Request = raw) =>
       });
       if (typeof value?.data?.required !== 'boolean')
         throw new Error('The API returned an invalid setup state.');
-      return value as { data: { required: boolean; tokenSource?: string } };
+      return value as SetupState;
     },
     retry: false,
     staleTime: 0,

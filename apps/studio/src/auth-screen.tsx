@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { useForm } from '@tanstack/react-form';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   useNavigate,
   useRouter,
@@ -27,8 +27,9 @@ import {
   toast,
 } from '@qb-flex/ui';
 import { raw, docsURL } from './api';
+import { bootstrapHint } from './bootstrap-hint';
 import { platformAuth } from './platform-auth';
-import { confirmPlatformSignIn } from './session';
+import { confirmPlatformSignIn, setupOptions, type SetupState } from './session';
 
 function AuthLayout({ children }: { children: ReactNode }) {
   return (
@@ -208,9 +209,28 @@ export function SignInScreen() {
   );
 }
 
+/**
+ * Tell the operator which credential the API actually expects. The API reports the
+ * source without exposing the secret, so this avoids guessing across deployment modes.
+ */
+function BootstrapHint({ source }: { source?: SetupState['data']['tokenSource'] }) {
+  const hint = bootstrapHint(source);
+  return (
+    <>
+      {hint.message}
+      {hint.commands.map((command) => (
+        <code key={command} className="mt-1 block text-[11px] break-all">
+          {command}
+        </code>
+      ))}
+    </>
+  );
+}
+
 export function SetupScreen() {
   const navigate = useNavigate();
   const cache = useQueryClient();
+  const setup = useQuery(setupOptions());
   const onDone = async () => {
     await cache.cancelQueries();
     cache.clear();
@@ -294,13 +314,7 @@ export function SetupScreen() {
                       />
                       {name === 'bootstrapToken' && (
                         <FieldDescription>
-                          Use QB_BOOTSTRAP_TOKEN from the API environment. Without it, read the
-                          generated token with{' '}
-                          <code className="text-[11px]">
-                            docker compose exec api cat /var/lib/qb-flex/bootstrap.token
-                          </code>{' '}
-                          (native installs: <code className="text-[11px]">.data/bootstrap.token</code>
-                          ).
+                          <BootstrapHint source={setup.data?.data.tokenSource} />
                         </FieldDescription>
                       )}
                     </Field>

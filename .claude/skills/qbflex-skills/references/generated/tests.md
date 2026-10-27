@@ -55,6 +55,14 @@ SHA-256: `ceded08ba176b50143934055c2bfaf8683c4066c28d97fcdce6b2b5092730e51`
 - assistant includes fixture rows only when the developer opts in
 - assistant rejects private and link-local base URLs
 
+## tests/bootstrap-hint.test.ts
+
+SHA-256: `c861e426ad6253ac9e6f9cc4a3f93fb65b7503f4dc8928ba86937caa48147de8`
+
+- each token source points at the place the API actually reads
+- an older API without tokenSource still gets usable guidance
+- hints never include a token value placeholder that could be mistaken for a real secret
+
 ## tests/bootstrap-token.test.ts
 
 SHA-256: `2b49f38e0060caddb1d0064229bec0f46626ab87a6438c5e9034328123b6ffeb`
