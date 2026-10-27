@@ -17,6 +17,8 @@ SDK artifacts are built and packed locally. They are not yet published to the np
 bun run sdk:pack
 ```
 
+Release owners should follow [SDK publishing and maintenance](/docs/sdk/releases). Its publish command is dry-run by default and does not authorize a registry release.
+
 ## Client configuration
 
 Provide an API URL, project ID, branch alias/ID and publishable key. Set an exact application origin in project settings. Create one browser client for the application. SSR applications must create a separate client and query cache per request.

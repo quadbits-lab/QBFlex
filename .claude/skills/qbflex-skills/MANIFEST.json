@@ -836,7 +836,7 @@
     },
     {
       "path": "scripts/dev.ts",
-      "sha256": "9697ac8eacb4ff80c1949f10e5c730da48f52e93f69d18f0ef168dc5cf1f24e8"
+      "sha256": "157b8291579ac478ad9840ad94f5d7716ae1388313aef6958b7651c3ddb923d5"
     },
     {
       "path": "scripts/pglite-benchmark.ts",
@@ -900,7 +900,7 @@
     },
     {
       "path": "tests/dev-startup.test.ts",
-      "sha256": "331198b2a1a3155149eaf9af60bccb786c68e33ba6a3d935533c48a1bb3e8f2f"
+      "sha256": "2a1c391fb32170f48547af6de695d00930fd84698c72f99f2c4c4b5ba13267fa"
     },
     {
       "path": "tests/docs-generation.test.ts",
@@ -1123,8 +1123,8 @@
     "references/generated/api.md": "dd591a07ad47ec56792ef91be7dd0e1dfacdd2606ac05f5946dcd5758e288964",
     "references/generated/cli.md": "c16d4a8b6b2640d2e2ad305d61b66da7b0a25bb699da428809ac6bac889647b5",
     "references/generated/sdk.md": "081809e7c0b5ada4f3a01b6ef6c3b256e8e9eeb59ed7a5e11b933b8b87e96874",
-    "references/generated/tests.md": "0cd273edbc8554862e479e586b88b4e2643fddf45feca37b29a849bc42ddf852",
-    "references/operations.md": "f013cf5a56505e52fb8c8d9f2b009f83666888758752cdef4a2e02393704a522",
+    "references/generated/tests.md": "bb301539e5877a4759ff07de9f92a0830d644f66bd40424e65dbd4c2dbc86a21",
+    "references/operations.md": "9c1dc6a69256eb6bd287f7d022c90c6d48813d4354f54be147e9852c1bbb3f2a",
     "references/platform.md": "7441170dfe8cd682a9e3a0788dbe5a916bcbba34e9c85413eb8b4588d7deab2e",
     "references/react.md": "f47239565782aacebfe4b37509c5a0a36cadf048715166cb29efeafe4243dd33",
     "references/security.md": "4e602f731b0844e00bf132416ba3c4785682f6cd10b60374cf01fdba93b20e5f",

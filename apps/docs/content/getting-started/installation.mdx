@@ -19,10 +19,10 @@ bun run dev
 
 Studio runs on 7610, Docs on 7611 and API on 7612. The terminal startup panel confirms readiness and shows the service links; see [terminal logging](/docs/self-hosting/monitoring#terminal-display) for display controls. Each app has independent workspace commands. Database files and generated local secrets live under ignored `.data`.
 
-The launcher checks occupied ports and waits for the API to create/accept its worker credential. If the full Docker local profile owns these ports, use its running apps or stop those application services before hot reload:
+The launcher checks occupied ports and waits for the API to create/accept its worker credential. If the full Docker stack owns these ports, use its running apps or stop those application services before hot reload:
 
 ```sh
-docker compose --profile local stop studio docs api worker
+docker compose stop studio docs api worker
 bun run dev
 ```
 
@@ -35,7 +35,7 @@ Run RustFS or your chosen provider independently. For native development `.env.e
 For local SMTP inbox capture:
 
 ```sh
-docker compose --profile dependencies up -d mailpit
+docker compose up -d mailpit
 ```
 
 Select `QB_MAIL_PROVIDER=smtp`, `QB_SMTP_HOST=127.0.0.1` and `QB_SMTP_PORT=7615` for native API development. Mailpit's inbox is on 7616. Alternatively configure [Resend and React Email](/docs/authentication/email); explicit SMTP selection overrides a present Resend key.
@@ -43,7 +43,7 @@ Select `QB_MAIL_PROVIDER=smtp`, `QB_SMTP_HOST=127.0.0.1` and `QB_SMTP_PORT=7615`
 The optional `storage-init` service runs inside Docker, so use a container-reachable endpoint when invoking it:
 
 ```sh
-QB_S3_ENDPOINT=http://host.docker.internal:9000 docker compose --profile dependencies run --rm --build storage-init
+QB_S3_ENDPOINT=http://host.docker.internal:9000 docker compose run --rm --build storage-init
 ```
 
 The service needs your configured bucket/credentials; provider provisioning failure is not a healthy storage configuration. Do not reuse example placeholders as real credentials.

@@ -1,22 +1,30 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import ts from 'typescript';
 import { fixture } from '../tests/helpers';
+import { publicSDKPackages, readSDKManifest, sdkTarballPath } from './sdk-packages';
 const directory = mkdtempSync(join(tmpdir(), 'qb-sdk-consumer-')),
   f = await fixture();
 try {
   const manifest = await Bun.file('package.json').json();
+  const [clientPackage, reactPackage] = publicSDKPackages;
+  const [clientManifest, reactManifest] = await Promise.all([
+    readSDKManifest(clientPackage),
+    readSDKManifest(reactPackage),
+  ]);
   writeFileSync(
     join(directory, 'package.json'),
     JSON.stringify({
       private: true,
       type: 'module',
       dependencies: {
-        '@qb-flex/client': 'file:' + resolve('dist/packages/qb-flex-client-0.1.0.tgz'),
-        '@qb-flex/react': 'file:' + resolve('dist/packages/qb-flex-react-0.1.0.tgz'),
+        '@qb-flex/client': 'file:' + sdkTarballPath(clientPackage, clientManifest.version),
+        '@qb-flex/react': 'file:' + sdkTarballPath(reactPackage, reactManifest.version),
         react: manifest.dependencies.react,
         'react-dom': manifest.dependencies['react-dom'],
+        '@types/react': manifest.dependencies['@types/react'],
+        '@types/react-dom': manifest.dependencies['@types/react-dom'],
       },
     }),
   );
@@ -49,7 +57,7 @@ qb.from('tasks').insert({});
     module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler,
     strict: true,
-    skipLibCheck: true,
+    skipLibCheck: false,
     noEmit: true,
   });
   const diagnostics = ts.getPreEmitDiagnostics(program);
@@ -64,18 +72,18 @@ qb.from('tasks').insert({});
   writeFileSync(
     join(directory, 'consumer.js'),
     `import {createClient} from '@qb-flex/client';import {QBProvider,useQBAuth} from '@qb-flex/react';import {createElement} from 'react';import {renderToString} from 'react-dom/server';
-const qb=createClient(${JSON.stringify({ url: f.url, projectId: project.id, branch: project.branchId, publishableKey: project.key })});
+const qb=createClient({...${JSON.stringify({ url: f.url, projectId: project.id, branch: project.branchId, publishableKey: project.key })},fetch:(input,init)=>{const headers=new Headers(init?.headers);headers.set('origin','http://localhost:7610');return fetch(input,{...init,headers});}});
 function Status(){return createElement('span',null,useQBAuth().user?.id??'anonymous');}
 if(!renderToString(createElement(QBProvider,{client:qb},createElement(Status))).includes('anonymous'))throw new Error('Packaged SSR failed');
 const session=await qb.auth.signUp({name:'Artifact',email:'artifact@example.com',password:'artifact-password-12345'});
 let joined=false,events=[];const channel=qb.channel({table:'tasks',onStatus:status=>{joined=status==='connected';},onEvent:event=>events.push(event)}).subscribe();
-for(let i=0;i<50&&!joined;i++)await Bun.sleep(20);if(!joined)throw new Error('Artifact realtime did not join');
+for(let i=0;i<50&&!joined;i++)await new Promise(resolve=>setTimeout(resolve,20));if(!joined)throw new Error('Artifact realtime did not join');
 const inserted=await qb.from('tasks').insert({title:'Artifact task',owner_id:session.user.id},{idempotencyKey:crypto.randomUUID()});
-for(let i=0;i<50&&!events.some(event=>event.payload.title==='Artifact task');i++)await Bun.sleep(20);if(!events.length)throw new Error('Artifact realtime event missing');
+for(let i=0;i<50&&!events.some(event=>event.payload.title==='Artifact task');i++)await new Promise(resolve=>setTimeout(resolve,20));if(!events.length)throw new Error('Artifact realtime event missing');
 const rows=await qb.from('tasks').eq('id',inserted.data[0].id).execute();if(rows.data.length!==1)throw new Error('Artifact CRUD failed');
 await qb.from('tasks').delete(inserted.data[0].id);channel.unsubscribe();await qb.auth.signOut();qb.dispose();console.log('Packaged ESM imports, declarations, SSR, authentication, CRUD and realtime passed.');`,
   );
-  const consumer = Bun.spawn(['bun', 'consumer.js'], {
+  const consumer = Bun.spawn(['node', 'consumer.js'], {
     cwd: directory,
     stdout: 'pipe',
     stderr: 'pipe',
@@ -86,7 +94,7 @@ await qb.from('tasks').delete(inserted.data[0].id);channel.unsubscribe();await q
     consumer.exited,
   ]);
   if (result[2]) throw new Error('Packaged SDK consumer failed: ' + result[1]);
-  console.log(result[0].trim());
+  console.log(result[0].trim().replace('Packaged ESM', 'Packaged Node ESM'));
   project.client.dispose();
 } finally {
   await f.close();

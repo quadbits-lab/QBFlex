@@ -1,16 +1,17 @@
 import { cpSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { publicSDKPackages, readSDKManifest, sdkPeerRange } from './sdk-packages';
 await import('./sdk-build');
-for (const [folder, name] of [
-  ['sdk-js', 'client'],
-  ['sdk-react', 'react'],
-]) {
-  const dir = `.cache/pack/${name}`;
+for (const sdkPackage of publicSDKPackages) {
+  const { folder, artifact } = sdkPackage;
+  const dir = `.cache/pack/${artifact}`;
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   cpSync(`packages/${folder}/dist`, `${dir}/dist`, { recursive: true });
   cpSync(`packages/${folder}/README.md`, `${dir}/README.md`);
-  const manifest = await Bun.file(`packages/${folder}/package.json`).json();
+  const manifest = await readSDKManifest(sdkPackage);
   manifest.exports = { '.': { types: './dist/index.d.ts', import: './dist/index.js' } };
+  manifest.types = './dist/index.d.ts';
+  manifest.module = './dist/index.js';
   delete manifest.private;
   manifest.dependencies =
     folder === 'sdk-react'
@@ -21,7 +22,10 @@ for (const [folder, name] of [
         }
       : {};
   if (folder === 'sdk-react')
-    manifest.peerDependencies = { ...manifest.peerDependencies, '@qb-flex/client': '^0.1.0' };
+    manifest.peerDependencies = {
+      ...manifest.peerDependencies,
+      '@qb-flex/client': sdkPeerRange(manifest.version),
+    };
   writeFileSync(`${dir}/package.json`, JSON.stringify(manifest, null, 2));
   const result = Bun.spawnSync(
     ['bun', 'pm', 'pack', '--destination', process.cwd() + '/dist/packages'],

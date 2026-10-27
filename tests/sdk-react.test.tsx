@@ -194,3 +194,31 @@ test('client cancellation, timeouts and disposal produce normalized errors', asy
   source.dispose();
   expect(source.from('tasks').execute()).rejects.toMatchObject({ code: 'DISPOSED' });
 });
+
+test('passkey transport honors the configured fetch, credentials and rotated bearer token', async () => {
+  const requests: { url: string; credentials?: RequestCredentials; key: string | null }[] = [];
+  const client = createClient({
+    url: 'http://localhost:7612',
+    projectId: 'p',
+    publishableKey: 'publishable',
+    credentials: 'omit',
+    fetch: async (input, init) => {
+      requests.push({
+        url: String(input),
+        credentials: init?.credentials,
+        key: new Headers(init?.headers).get('x-qb-key'),
+      });
+      return Response.json([], { headers: { 'set-auth-token': 'rotated-token' } });
+    },
+  });
+  expect(await client.auth.passkey.list()).toEqual([]);
+  expect(requests).toEqual([
+    {
+      url: 'http://localhost:7612/v1/projects/p/branches/primary/auth/passkey/list-user-passkeys',
+      credentials: 'omit',
+      key: 'publishable',
+    },
+  ]);
+  expect(client.getToken()).toBe('rotated-token');
+  client.dispose();
+});

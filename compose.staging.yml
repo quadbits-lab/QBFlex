@@ -1,5 +1,5 @@
 # Always combine with compose.yml. Production-like behavior on localhost without TLS or a gateway.
-# Copy .env.staging.example to .env, replace every placeholder, then run with --profile staging.
+# Copy .env.staging.example to .env, replace every placeholder, then run without a profile flag.
 # A separate project name keeps staging volumes and containers isolated from the local stack.
 name: qb-flex-staging
 x-logging: &logging
@@ -9,7 +9,6 @@ x-logging: &logging
     max-file: '3'
 services:
   storage-init:
-    profiles: [staging]
     environment:
       QB_S3_ENDPOINT: ${QB_S3_ENDPOINT:?point at an S3-compatible backend (e.g. RustFS)}
       QB_S3_REGION: ${QB_S3_REGION:-us-east-1}
@@ -25,7 +24,6 @@ services:
           memory: ${QB_STORAGE_INIT_MEMORY:-256m}
     logging: *logging
   api:
-    profiles: [staging]
     environment:
       NODE_ENV: production
       QB_PUBLIC_URL: http://localhost:7612
@@ -57,7 +55,6 @@ services:
           memory: ${QB_API_MEMORY:-8g}
     logging: *logging
   worker:
-    profiles: [staging]
     environment:
       QB_WORKER_TOKEN: ${QB_WORKER_TOKEN}
       QB_INTERNAL_API_URL: 'http://api:7612'
@@ -73,7 +70,6 @@ services:
           memory: ${QB_WORKER_MEMORY:-512m}
     logging: *logging
   studio:
-    profiles: [staging]
     environment:
       NODE_ENV: production
     security_opt: ['no-new-privileges:true']
@@ -91,7 +87,6 @@ services:
           memory: ${QB_STUDIO_MEMORY:-512m}
     logging: *logging
   docs:
-    profiles: [staging]
     environment:
       NODE_ENV: production
     security_opt: ['no-new-privileges:true']

@@ -136,7 +136,7 @@ test('a foreign ready API or occupied app port cannot bootstrap the native worke
     expect(await run.child.exited).toBe(1);
     await run.drained;
     expect(run.output).toContain(`api port ${ports.api}: already in use`);
-    expect(run.output).toContain('docker compose --profile local stop studio docs api worker');
+    expect(run.output).toContain('docker compose stop studio docs api worker');
     expect(run.output).not.toContain('ENOENT');
     expect(run.output).not.toContain('api.started');
     expect(existsSync(join(directory, 'control.pglite'))).toBe(false);

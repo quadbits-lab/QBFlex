@@ -4,6 +4,7 @@ node_modules/
 !.env.example
 !.env.production.example
 !.env.staging.example
+!.env.dokploy.example
 .data/
 .output/
 dist/

@@ -99,7 +99,7 @@ SHA-256: `b4c135c14f7730c7a42a69cb5c844b738db6a222962b52ccb43be03354615ca7`
 
 ## tests/dev-startup.test.ts
 
-SHA-256: `331198b2a1a3155149eaf9af60bccb786c68e33ba6a3d935533c48a1bb3e8f2f`
+SHA-256: `2a1c391fb32170f48547af6de695d00930fd84698c72f99f2c4c4b5ba13267fa`
 
 - worker credentials belong to the API; missing configuration fails without minting a token
 - a foreign ready API or occupied app port cannot bootstrap the native worker or local data

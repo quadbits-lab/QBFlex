@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { fixture } from '../tests/helpers';
+import { publicSDKPackages, readSDKManifest, sdkTarballPath } from './sdk-packages';
 const root = process.cwd(),
   directory = mkdtempSync(join(tmpdir(), 'qb-skill-detached-'));
 const processes: ReturnType<typeof Bun.spawn>[] = [];
@@ -133,9 +134,14 @@ try {
   await run(['bun', 'scripts/sdk-pack.ts']);
   const install = async (kind: string) => {
     const cwd = join(skill, 'assets/examples', kind);
+    const [clientPackage, reactPackage] = publicSDKPackages;
+    const [clientManifest, reactManifest] = await Promise.all([
+      readSDKManifest(clientPackage),
+      readSDKManifest(reactPackage),
+    ]);
     const tarballs = [
-      resolve('dist/packages/qb-flex-client-0.1.0.tgz'),
-      ...(kind === 'react' ? [resolve('dist/packages/qb-flex-react-0.1.0.tgz')] : []),
+      sdkTarballPath(clientPackage, clientManifest.version),
+      ...(kind === 'react' ? [sdkTarballPath(reactPackage, reactManifest.version)] : []),
     ];
     await run(['npm', 'install', '--ignore-scripts', '--no-audit', '--no-fund', ...tarballs], cwd);
     await run(['npm', 'run', 'typecheck'], cwd);

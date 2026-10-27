@@ -88,9 +88,9 @@ When using an SMTP relay on an implicit-TLS port (for example Resend's `smtp.res
 set `QB_SMTP_SECURE=true`; STARTTLS relays on 587 work with the default.
 
 `storage-init` is a one-shot service that provisions the bucket on first start
-(HeadBucket → CreateBucket when 404). It runs best-effort; if it fails, the API still
-boots and storage requests report `STORAGE_UNCONFIGURED`-class errors until you fix
-credentials and re-run:
+(HeadBucket → CreateBucket when 404). The API, worker and Studio wait for it to
+complete, so a credential or connectivity failure stops the deployment instead of
+booting with broken storage. Fix the backend, then rerun:
 
 ```sh
 docker compose -f compose.yml -f compose.selfhost.yml --profile selfhost run --rm storage-init
@@ -102,6 +102,12 @@ docker compose -f compose.yml -f compose.selfhost.yml --profile selfhost run --r
 docker compose -f compose.yml -f compose.selfhost.yml --profile selfhost build
 docker compose -f compose.yml -f compose.selfhost.yml --profile selfhost up -d
 ```
+
+Dokploy, Coolify and Portainer instead run a bare `docker compose up` and provide their
+own proxy. Core services have no profile, so point the platform at `compose.yml` alone,
+supply `.env.dokploy.example` values in its environment UI, and route API 7612, Studio
+7610 and Docs 7611 through its proxy. Do not add this self-host overlay there: its Caddy
+gateway would compete for ports 80/443. Keep `/internal/*` blocked at the platform proxy.
 
 Verify:
 

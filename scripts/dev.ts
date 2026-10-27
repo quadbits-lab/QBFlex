@@ -39,7 +39,7 @@ export async function assertDevPortsAvailable(ports: Ports) {
       throw new Error(
         `Cannot start native development: ${failures.join('; ')}.\n` +
           'If the Docker local stack is running, use its apps directly or switch to hot reload with:\n' +
-          'docker compose --profile local stop studio docs api worker\n' +
+          'docker compose stop studio docs api worker\n' +
           'bun run dev\n' +
           'This stop command preserves database and object volumes. Otherwise stop the process occupying the listed ports.',
       );

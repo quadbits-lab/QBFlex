@@ -9,14 +9,14 @@ Use **Bun 1.4.2** and Docker Compose. The lockfile and container images pin veri
 ```sh
 bun install --frozen-lockfile
 cp .env.example .env
-docker compose --profile dependencies up -d --build
+docker compose up -d --build mailpit storage-init
 bun run dev
 ```
 
 The development command checks application ports, starts the API and waits for its local worker credential to authenticate before starting the maintenance worker, Studio and Docs. If the full local Compose profile is already running, use those applications directly. To switch to native hot reload, stop only its application services first:
 
 ```sh
-docker compose --profile local stop studio docs api worker
+docker compose stop studio docs api worker
 bun run dev
 ```
 
@@ -38,11 +38,11 @@ Create your own first owner in Studio using the token in `.data/bootstrap.token`
 For an entirely containerized local deployment:
 
 ```sh
-docker compose --profile local up -d --build
+docker compose up -d --build
 docker compose exec api cat /var/lib/qb-flex/bootstrap.token
 ```
 
-The second command deliberately displays your one-time local setup token. Keep it private. Container databases use the `database` named volume; native development uses `.data`. They are separate installations. Stop containers with `docker compose --profile local stop`; preserve the volumes for subsequent runs.
+The second command deliberately displays your one-time local setup token. Keep it private. Container databases use the `database` named volume; native development uses `.data`. They are separate installations. Stop containers with `docker compose stop`; preserve the volumes for subsequent runs.
 
 ## Build the same task application in React and JavaScript
 
@@ -64,6 +64,8 @@ bun run sdk:pack
 ```
 
 The artifacts are `dist/packages/qb-flex-client-0.1.0.tgz` and `dist/packages/qb-flex-react-0.1.0.tgz`. Install both tarballs with npm when testing React in another application (`npm install /path/to/qb-flex-client-0.1.0.tgz /path/to/qb-flex-react-0.1.0.tgz`). Bun 1.4.2 attempts to resolve the unpublished client peer from npm even when both local tarballs are supplied; npm installation passes the isolated consumer check. Nothing is published to npm. The framework-independent browser module is also available at `/sdk/client.js` on Docs.
+
+For npm scope setup, lockstep semantic versioning, dry-run validation, trusted publishing and post-release checks, use the [client SDK release runbook](docs/sdk-releases.md). The repository's publish command is dry-run by default; external publication remains an explicit release action.
 
 ## Documentation application
 
@@ -120,4 +122,3 @@ Integration/browser checks need the local dependencies. Browser verification use
 No external deployment or registry publication is performed. The existing Sites Studio prototype remains the visual reference and its audience is unchanged.
 
 Existing SQLite installations require [offline conversion](apps/docs/content/self-hosting/engine-migration.mdx) into a separate directory before activation. PGlite owners default to four (`QB_MAX_BRANCH_OWNERS`, range 1–32); provision memory for independent WASM instances and complete snapshot exports.
-

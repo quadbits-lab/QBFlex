@@ -3,24 +3,38 @@ x-build: &build
   context: .
   dockerfile: infra/Dockerfile
 x-environment: &environment
-  # Images default to NODE_ENV=production; the local profile overrides back to
-  # development so http://localhost remains valid outside the deployment overlays.
+  # Core services deliberately have no profiles: a bare `docker compose up` (Dokploy,
+  # Coolify, Portainer, plain hosts) must select them. Mailpit stays opt-in for local use.
+  # For a real deployment set NODE_ENV=production and public HTTPS URLs; see
+  # .env.dokploy.example. Studio and Docs bake VITE_* values at image build time.
   NODE_ENV: ${NODE_ENV:-development}
   QB_DATA_DIR: /var/lib/qb-flex
   QB_HOST: 0.0.0.0
   QB_LOG_FORMAT: ${QB_LOG_FORMAT:-auto}
   QB_LOG_INTERNAL: ${QB_LOG_INTERNAL:-false}
   QB_MAX_BRANCH_OWNERS: ${QB_MAX_BRANCH_OWNERS:-4}
-  QB_PUBLIC_URL: http://localhost:7612
-  QB_STUDIO_URL: http://localhost:7610
-  QB_ALLOWED_ORIGINS: http://localhost:7610,http://127.0.0.1:7610,http://localhost:7617,http://127.0.0.1:7617,http://localhost:7618,http://127.0.0.1:7618
+  QB_PUBLIC_URL: ${QB_PUBLIC_URL:-http://localhost:7612}
+  QB_STUDIO_URL: ${QB_STUDIO_URL:-http://localhost:7610}
+  QB_ALLOWED_ORIGINS: ${QB_ALLOWED_ORIGINS:-http://localhost:7610,http://127.0.0.1:7610,http://localhost:7617,http://127.0.0.1:7617,http://localhost:7618,http://127.0.0.1:7618}
+  QB_MASTER_KEY: ${QB_MASTER_KEY:-}
+  QB_BOOTSTRAP_TOKEN: ${QB_BOOTSTRAP_TOKEN:-}
+  QB_WORKER_TOKEN: ${QB_WORKER_TOKEN:-}
+  QB_REQUIRE_ADMIN_MFA: ${QB_REQUIRE_ADMIN_MFA:-false}
+  # Loopback-only escape hatch for production-like staging without TLS.
+  QB_ALLOW_INSECURE_HTTP: ${QB_ALLOW_INSECURE_HTTP:-false}
   QB_S3_ENDPOINT: ${QB_S3_ENDPOINT:-}
   QB_S3_REGION: ${QB_S3_REGION:-us-east-1}
   QB_S3_BUCKET: ${QB_S3_BUCKET:-qb-flex}
   QB_S3_ACCESS_KEY: ${QB_S3_ACCESS_KEY:-}
   QB_S3_SECRET_KEY: ${QB_S3_SECRET_KEY:-}
-  QB_SMTP_HOST: mailpit
-  QB_SMTP_PORT: 1025
+  QB_MAIL_PROVIDER: ${QB_MAIL_PROVIDER:-auto}
+  QB_RESEND_API_KEY: ${QB_RESEND_API_KEY:-}
+  QB_SMTP_HOST: ${QB_SMTP_HOST:-mailpit}
+  QB_SMTP_PORT: ${QB_SMTP_PORT:-1025}
+  QB_SMTP_USER: ${QB_SMTP_USER:-}
+  QB_SMTP_PASSWORD: ${QB_SMTP_PASSWORD:-}
+  QB_SMTP_SECURE: ${QB_SMTP_SECURE:-false}
+  QB_MAIL_FROM: "${QB_MAIL_FROM:-QB Flex <hello@localhost>}"
   QB_WEBHOOK_INTERNAL_ALLOWLIST: ${QB_WEBHOOK_INTERNAL_ALLOWLIST:-}
 services:
   mailpit:
@@ -30,16 +44,14 @@ services:
     restart: unless-stopped
   storage-init:
     build: { <<: *build, target: storage-init }
-    profiles: [local, selfhost, staging, dependencies]
     environment: *environment
     extra_hosts: ['host.docker.internal:host-gateway']
     restart: 'no'
   api:
     build: { <<: *build, target: api }
-    profiles: [local, selfhost, staging]
     extra_hosts: ['host.docker.internal:host-gateway']
     environment: *environment
-    ports: ['127.0.0.1:7612:7612']
+    ports: ['${QB_BIND_ADDRESS:-127.0.0.1}:${QB_API_PORT:-7612}:7612']
     volumes: [database:/var/lib/qb-flex]
     healthcheck:
       test:
@@ -53,7 +65,6 @@ services:
     restart: unless-stopped
   worker:
     build: { <<: *build, target: worker }
-    profiles: [local, selfhost, staging]
     extra_hosts: ['host.docker.internal:host-gateway']
     environment: { <<: *environment, QB_INTERNAL_API_URL: 'http://api:7612' }
     volumes: [database:/var/lib/qb-flex:ro]
@@ -70,9 +81,15 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
   studio:
-    build: { <<: *build, target: studio }
-    profiles: [local, selfhost, staging]
-    ports: ['127.0.0.1:7610:7610']
+    build:
+      <<: *build
+      target: studio
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:7612}
+        VITE_DOCS_URL: ${VITE_DOCS_URL:-http://localhost:7611}
+        VITE_STUDIO_URL: ${VITE_STUDIO_URL:-http://localhost:7610}
+        QB_DOCS_URL: ${QB_DOCS_URL:-http://localhost:7611}
+    ports: ['${QB_BIND_ADDRESS:-127.0.0.1}:${QB_STUDIO_PORT:-7610}:7610']
     depends_on:
       api:
         condition: service_healthy
@@ -86,11 +103,17 @@ services:
       retries: 6
     restart: unless-stopped
   docs:
-    build: { <<: *build, target: docs }
-    # No dependencies: the docs service is static content and must stay deployable
-    # through the docs-only profile without starting the database stack.
-    profiles: [local, selfhost, staging, docs]
-    ports: ['127.0.0.1:7611:7611']
+    build:
+      <<: *build
+      target: docs
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:7612}
+        VITE_DOCS_URL: ${VITE_DOCS_URL:-http://localhost:7611}
+        VITE_STUDIO_URL: ${VITE_STUDIO_URL:-http://localhost:7610}
+        QB_DOCS_URL: ${QB_DOCS_URL:-http://localhost:7611}
+    # No dependencies: docs is static content and must stay deployable on its own
+    # with `docker compose up -d docs`.
+    ports: ['${QB_BIND_ADDRESS:-127.0.0.1}:${QB_DOCS_PORT:-7611}:7611']
     healthcheck:
       test:
         [CMD, bun, -e, 'fetch("http://localhost:7611/").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))']

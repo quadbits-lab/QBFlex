@@ -2930,7 +2930,15 @@ class QBClient {
             headers.set("x-qb-key", client.options.publishableKey);
             if (client.token)
               headers.set("authorization", `Bearer ${client.token}`);
-            return await fetch(input, { ...init, headers, credentials: "include" });
+            const response = await (client.options.fetch ?? globalThis.fetch)(input, {
+              ...init,
+              headers,
+              credentials: client.options.credentials ?? "include"
+            });
+            const rotated = response.headers.get("set-auth-token");
+            if (rotated)
+              client.token = rotated;
+            return response;
           }
         }
       });
@@ -3432,4 +3440,4 @@ export {
   createClient
 };
 
-//# debugId=281D40DBDF7A550E64756E2164756E21
+//# debugId=A6614A921BCE87D064756E2164756E21

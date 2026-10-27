@@ -1,0 +1,48 @@
+export const frontmatter = {"title": "Publishing and maintaining SDK packages", "description": "Validate, version and publish the QB Flex web SDK package pair to npm.", "section": "Client SDK", "slug": "sdk/releases", "order": 40.5};
+
+# Publishing and maintaining SDK packages
+
+The publishable web packages are `@qb-flex/client` and `@qb-flex/react`. They release at the same version; React declares the matching client line as a peer. `@qb-flex/management-client` stays private. The planned React Native package is a separate incomplete expanded-release requirement.
+
+## Before the first release
+
+The release owner must control the `@qb-flex` npm scope, enable npm two-factor authentication, and choose the package license. This private checkout currently has no license file, so do not infer or add an open-source license during publication.
+
+Authenticate and confirm the target registry:
+
+```sh
+npm login
+npm whoami
+npm config get registry
+```
+
+Package manifests explicitly use the public npm registry and public access. An unavailable public package name does not prove that the current account owns the scope.
+
+## Version both packages
+
+Use a patch for compatible fixes, a minor for compatible features, and a major for breaking APIs after `1.0.0`. Below `1.0.0`, the React peer range intentionally keeps consumers on the same minor SDK line.
+
+```sh
+bun run sdk:version 0.1.1
+bun run sdk:release:check
+```
+
+Review and commit the version and user-visible release notes. npm versions are immutable; never reuse a published version. Prerelease versions such as `0.2.0-rc.1` use the `next` distribution tag by default.
+
+## Dry run and publish
+
+```sh
+bun run sdk:publish
+```
+
+This is a dry run. It packs both packages, installs them into an isolated npm consumer, checks declarations without `skipLibCheck`, exercises SSR and the client under Node, and runs npm's publication inspection without changing the registry.
+
+From a clean, reviewed checkout, publish the client followed by React:
+
+```sh
+bun run sdk:publish -- --execute
+```
+
+Override the tag with `--tag next`. Use `--provenance` only in a supported public CI environment; npm does not provide provenance for a private source repository. Publication is not atomic across the package pair. If React fails after the client succeeds, fix the release condition and publish React at the same version—never overwrite or reuse the client version.
+
+After release, verify `npm view` metadata and install both exact versions in a clean application. The complete maintainer checklist is in `docs/sdk-releases.md` in the source repository. No npm package is published merely by building, packing or running a dry run.

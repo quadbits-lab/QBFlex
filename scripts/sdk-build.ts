@@ -1,7 +1,8 @@
 import ts from 'typescript';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 const packages = ['sdk-js', 'sdk-react'];
 for (const name of packages) {
+  rmSync(`packages/${name}/dist`, { recursive: true, force: true });
   mkdirSync(`packages/${name}/dist`, { recursive: true });
   const result = await Bun.build({
     entrypoints: [`packages/${name}/src/index.${name === 'sdk-react' ? 'tsx' : 'ts'}`],
@@ -50,15 +51,13 @@ if (errors.length)
     }),
   );
 for (const name of packages) {
-  const declarations = readFileSync(
-    `.cache/declarations/${name}/src/index.d.ts`,
-    'utf8',
-  ).replaceAll("'@qb-flex/contracts'", "'./contracts'");
+  const declarations = readFileSync(`.cache/declarations/${name}/src/index.d.ts`, 'utf8')
+    .replaceAll("'@qb-flex/contracts'", "'./contracts/index'")
+    .replaceAll('"@qb-flex/contracts"', '"./contracts/index"');
   writeFileSync(`packages/${name}/dist/index.d.ts`, declarations);
-  writeFileSync(
-    `packages/${name}/dist/contracts.d.ts`,
-    readFileSync('.cache/declarations/contracts/src/index.d.ts', 'utf8'),
-  );
+  cpSync('.cache/declarations/contracts/src', `packages/${name}/dist/contracts`, {
+    recursive: true,
+  });
 }
 mkdirSync('apps/docs/public/sdk', { recursive: true });
 writeFileSync('apps/docs/public/sdk/client.js', readFileSync('packages/sdk-js/dist/index.js'));

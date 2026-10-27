@@ -103,7 +103,14 @@ export class QBClient<D = DatabaseShape, R = RPCShape> {
             const headers = new Headers(init?.headers);
             headers.set('x-qb-key', client.options.publishableKey);
             if (client.token) headers.set('authorization', `Bearer ${client.token}`);
-            return await fetch(input, { ...init, headers, credentials: 'include' });
+            const response = await (client.options.fetch ?? globalThis.fetch)(input, {
+              ...init,
+              headers,
+              credentials: client.options.credentials ?? 'include',
+            });
+            const rotated = response.headers.get('set-auth-token');
+            if (rotated) client.token = rotated;
+            return response;
           },
         },
       });

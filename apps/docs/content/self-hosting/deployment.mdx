@@ -55,14 +55,14 @@ Production startup requires injected configuration, not an already-created owner
 
 ## Local staging before public domains
 
-Use the `staging` profile to validate production-like secrets, S3 and mail configuration on `localhost` before pointing real DNS at the TLS gateway. Staging runs with `NODE_ENV=production`, resource limits and security hardening, but exposes the services directly on `127.0.0.1` with no Caddy gateway or TLS.
+Use the staging overlay to validate production-like secrets, S3 and mail configuration on `localhost` before pointing real DNS at the TLS gateway. Staging runs with `NODE_ENV=production`, resource limits and security hardening, but exposes the services directly on `127.0.0.1` with no Caddy gateway or TLS.
 
 Copy `.env.staging.example` to `.env`, generate local secrets and fill the same required values as production (master key, bootstrap token, worker token, S3 credentials and Resend or SMTP). Then validate, build and start:
 
 ```sh
-docker compose -f compose.yml -f compose.staging.yml --profile staging config --quiet
-docker compose -f compose.yml -f compose.staging.yml --profile staging build
-docker compose -f compose.yml -f compose.staging.yml --profile staging up -d
+docker compose -f compose.yml -f compose.staging.yml config --quiet
+docker compose -f compose.yml -f compose.staging.yml build
+docker compose -f compose.yml -f compose.staging.yml up -d
 ```
 
 The overlay pins public URLs to `http://localhost:7612` (API), `http://localhost:7610` (Studio) and `http://localhost:7611` (Docs), and sets Compose project name `qb-flex-staging`, so its database volume is isolated from the local `qb-flex` stack. It also sets `QB_ALLOW_INSECURE_HTTP=true`, which the API accepts only for loopback URLs; never set that variable on a public host.
@@ -71,10 +71,18 @@ Verify readiness after `storage-init` completes:
 
 ```sh
 curl -fsS http://localhost:7612/ready
-docker compose -f compose.yml -f compose.staging.yml --profile staging logs --tail 100 storage-init
+docker compose -f compose.yml -f compose.staging.yml logs --tail 100 storage-init
 ```
 
 Use the bootstrap token to create the first owner at `http://localhost:7610`, then remove the token from the host. Staging is not a public deployment target; switch to `compose.selfhost.yml` with real domains and TLS once validation passes.
+
+## Platform deploys without the bundled gateway
+
+Dokploy, Coolify, Portainer and similar platforms run a bare `docker compose up` and add their own reverse proxy. `compose.yml` therefore starts `storage-init`, API, worker, Studio and Docs without a profile flag; Mailpit stays opt-in via `--profile local` or an explicit service name, and the Caddy gateway stays opt-in via `--profile selfhost`.
+
+Use the platform's environment-variable UI with `.env.dokploy.example` as the template. Set `NODE_ENV=production`, the public HTTPS URLs, `QB_ALLOWED_ORIGINS`, the three secrets, S3 and mail configuration. Studio and Docs bake `VITE_API_URL`, `VITE_STUDIO_URL` and `VITE_DOCS_URL` at image build time, so change them before the first build and rebuild after any public-URL change.
+
+Published container ports default to `127.0.0.1` to avoid bypassing the platform proxy. If your platform's proxy reaches services through host ports instead of the Docker network, set `QB_BIND_ADDRESS=0.0.0.0`. Route the API to port 7612, Studio to 7610 and Docs to 7611 in the platform's domain settings. Do not add the `compose.selfhost.yml` overlay there: its Caddy gateway would compete for ports 80/443 with the platform proxy. Keep `/internal/*` blocked at the platform proxy, because the API metrics and maintenance routes rely on that boundary.
 
 ## Day-two capacity and recovery
 
