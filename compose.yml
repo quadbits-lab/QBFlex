@@ -17,8 +17,8 @@ x-environment: &environment
   QB_STUDIO_URL: ${QB_STUDIO_URL:-http://localhost:7610}
   QB_ALLOWED_ORIGINS: ${QB_ALLOWED_ORIGINS:-http://localhost:7610,http://127.0.0.1:7610,http://localhost:7617,http://127.0.0.1:7617,http://localhost:7618,http://127.0.0.1:7618}
   QB_MASTER_KEY: ${QB_MASTER_KEY:-}
+  # Required only until the first owner exists; safe to remove afterwards.
   QB_BOOTSTRAP_TOKEN: ${QB_BOOTSTRAP_TOKEN:-}
-  # Optional path to a mounted secret file when the platform injects secrets as files.
   QB_WORKER_TOKEN: ${QB_WORKER_TOKEN:-}
   QB_REQUIRE_ADMIN_MFA: ${QB_REQUIRE_ADMIN_MFA:-false}
   # Loopback-only escape hatch for production-like staging without TLS.
@@ -37,6 +37,14 @@ x-environment: &environment
   QB_SMTP_SECURE: ${QB_SMTP_SECURE:-false}
   QB_MAIL_FROM: "${QB_MAIL_FROM:-QB Flex <hello@localhost>}"
   QB_WEBHOOK_INTERNAL_ALLOWLIST: ${QB_WEBHOOK_INTERNAL_ALLOWLIST:-}
+  # Optional settings the API reads directly; forward them so .env values take effect.
+  QB_AI_BASE_URL: ${QB_AI_BASE_URL:-}
+  QB_AI_API_KEY: ${QB_AI_API_KEY:-}
+  QB_AI_MODEL: ${QB_AI_MODEL:-}
+  QB_PUSH_ENABLED: ${QB_PUSH_ENABLED:-false}
+  QB_PUSH_WORKER_TOKEN: ${QB_PUSH_WORKER_TOKEN:-}
+  QB_BACKUP_RETENTION_DAYS: ${QB_BACKUP_RETENTION_DAYS:-7}
+  QB_BACKUP_RETENTION_WEEKS: ${QB_BACKUP_RETENTION_WEEKS:-4}
 services:
   mailpit:
     image: axllent/mailpit@sha256:b68349e3a014b90c5610bfb26b2ae36f3892d7b8cf25ee140c6c71c98d2fcf48
