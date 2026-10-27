@@ -355,7 +355,11 @@ test('complete installation conversion preserves catalog, branch policies, event
       const b = await db.query('SELECT path FROM backups').get();
       expect(b!.path).toBe(realpathSync(join(destination, 'backups', 'historical.sqlite.enc')));
       expect(readFileSync(b!.path, 'utf8')).toBe('authenticated-archive-fixture');
-      expect((await db.query('SELECT count(*) AS n FROM engine_migrations').get())!.n).toBe(3);
+      expect((await db.query('SELECT count(*) AS n FROM engine_migrations').get())!.n).toBe(
+        readdirSync(join(import.meta.dir, '..', 'migrations', 'pglite')).filter((f) =>
+          f.endsWith('.sql'),
+        ).length,
+      );
     } finally {
       await db.close();
     }

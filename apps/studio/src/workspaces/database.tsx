@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useReactTable, getCoreRowModel, flexRender, type ColumnDef } from '@tanstack/react-table';
+import {
+  useTable,
+  tableFeatures,
+  columnVisibilityFeature,
+  flexRender,
+  type ColumnDef,
+} from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   Plus,
@@ -21,6 +27,7 @@ import {
   RefreshCw,
   X,
   Filter,
+  Eye,
 } from 'lucide-react';
 import {
   Alert,
@@ -82,9 +89,9 @@ import {
   notifyError,
 } from '@qb-flex/ui';
 import { management } from '../api';
-import { ErrorMessage, download, useWrite } from './shared';
+import { ErrorMessage, applyReviewedMigration, download, useWrite } from './shared';
 import { CreateTableDialog } from './create-table-dialog';
-import type { TableSchema } from '@qb-flex/contracts';
+import type { RowAccessResult, TableSchema } from '@qb-flex/contracts';
 
 export function DatabaseWorkspace({ base }: { base: string }) {
   const schema = useQuery({
@@ -360,6 +367,8 @@ export function DatabaseWorkspace({ base }: { base: string }) {
 
 const EMPTY_ROWS: any[] = [];
 
+const tableFeatureSet = tableFeatures({ columnVisibilityFeature });
+
 function DataGrid({
   base,
   table,
@@ -380,6 +389,12 @@ function DataGrid({
   const [importText, setImportText] = useState('');
   const [rowDialog, setRowDialog] = useState(false);
   const [edit, setEdit] = useState<any>(null);
+  const [selectedRow, setSelectedRow] = useState<any>(null);
+  const [accessOpen, setAccessOpen] = useState(false);
+  const [accessSub, setAccessSub] = useState('');
+  const [accessRoles, setAccessRoles] = useState('');
+  const [accessResult, setAccessResult] = useState<RowAccessResult[] | null>(null);
+  const accessWrite = useWrite();
   const [values, setValues] = useState<Record<string, string>>({});
   const [nulls, setNulls] = useState<Record<string, boolean>>({});
   const parent = useRef<HTMLDivElement>(null);
@@ -401,6 +416,9 @@ function DataGrid({
     setVisibility({});
     setSort(null);
     setFilterColumn(table.columns[0]?.name ?? '');
+    setSelectedRow(null);
+    setAccessOpen(false);
+    setAccessResult(null);
   }, [table.name]);
   const openRow = (row: any = null) => {
     setEdit(row);
@@ -424,7 +442,7 @@ function DataGrid({
           .replace(/\//g, '_')
           .replace(/=+$/, '');
   };
-  const columns = useMemo<ColumnDef<any>[]>(
+  const columns = useMemo<ColumnDef<any, any>[]>(
     () => [
       ...table.columns.map((c) => ({
         accessorKey: c.name,
@@ -458,7 +476,7 @@ function DataGrid({
         id: 'actions',
         header: '',
         cell: ({ row }: any) => (
-          <div className="flex justify-end gap-1">
+          <div className="flex justify-end gap-1" onClick={(event) => event.stopPropagation()}>
             <ShadcnButton
               variant="ghost"
               size="icon"
@@ -483,10 +501,10 @@ function DataGrid({
     ],
     [table.columns, sort],
   );
-  const grid = useReactTable({
+  const grid = useTable({
+    features: tableFeatureSet,
     data: rows.data?.data ?? EMPTY_ROWS,
     columns,
-    getCoreRowModel: getCoreRowModel(),
     state: { columnVisibility: visibility },
     onColumnVisibilityChange: setVisibility,
   });
@@ -743,6 +761,19 @@ function DataGrid({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <ShadcnButton
+            size="sm"
+            variant="outline"
+            disabled={!selectedRow}
+            onClick={() => {
+              accessWrite.reset();
+              setAccessResult(null);
+              setAccessOpen(true);
+            }}
+          >
+            <Eye data-icon="inline-start" />
+            Who can see this?
+          </ShadcnButton>
           <ShadcnButton size="sm" onClick={() => openRow()}>
             <Plus data-icon="inline-start" /> Insert
           </ShadcnButton>
@@ -781,7 +812,11 @@ function DataGrid({
                     return (
                       <tr
                         key={row.id}
-                        className="border-b border-border/60 transition-colors last:border-0 hover:bg-muted/40"
+                        className={
+                          'cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-muted/40' +
+                          (selectedRow && key(selectedRow) === key(row.original) ? ' bg-muted/60' : '')
+                        }
+                        onClick={() => setSelectedRow(row.original)}
                       >
                         {row.getVisibleCells().map((cell) => (
                           <td key={cell.id} className="px-3 py-2 align-middle font-mono text-xs">
@@ -832,6 +867,113 @@ function DataGrid({
           </div>
         </div>
       </div>
+      <Dialog
+        open={accessOpen}
+        onOpenChange={(open) => {
+          if (!accessWrite.isPending) setAccessOpen(open);
+        }}
+      >
+        <DialogContent className="max-h-[85dvh] overflow-y-auto">
+          <DialogTitle>Who can see this?</DialogTitle>
+          <DialogDescription>
+            Checks the selected row against anonymous access and, if you provide a subject, one
+            authenticated identity. Insert is not evaluated for an existing row.
+          </DialogDescription>
+          <form
+            className="grid gap-4"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              if (!selectedRow) return;
+              const roles = accessRoles
+                .split(',')
+                .map((role) => role.trim())
+                .filter(Boolean);
+              const identities: {
+                sub: string | null;
+                role: 'anonymous' | 'authenticated';
+                roles?: string[];
+              }[] = [{ sub: null, role: 'anonymous' }];
+              if (accessSub.trim()) {
+                identities.push({
+                  sub: accessSub.trim(),
+                  role: 'authenticated',
+                  ...(roles.length ? { roles } : {}),
+                });
+              }
+              try {
+                const result = await accessWrite.mutateAsync({
+                  path: base + '/policies/access',
+                  body: { table: table.name, key: key(selectedRow), identities },
+                });
+                setAccessResult(result.data as RowAccessResult[]);
+              } catch {
+                setAccessResult(null);
+              }
+            }}
+          >
+            <p className="m-0 truncate font-mono text-xs text-muted-foreground">
+              {selectedRow ? `${table.name} · ${key(selectedRow)}` : 'Select a row'}
+            </p>
+            <Field>
+              <FieldLabel htmlFor="access-sub">Authenticated subject</FieldLabel>
+              <Input
+                id="access-sub"
+                value={accessSub}
+                maxLength={200}
+                onChange={(event) => setAccessSub(event.target.value)}
+                placeholder="Leave empty to check anonymous only"
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="access-roles">Application roles</FieldLabel>
+              <Input
+                id="access-roles"
+                value={accessRoles}
+                onChange={(event) => setAccessRoles(event.target.value)}
+                placeholder="member, editor"
+              />
+            </Field>
+            {accessWrite.error && (
+              <p role="alert" className="text-sm text-destructive">
+                {accessWrite.error.message}
+              </p>
+            )}
+            <Button type="submit" disabled={accessWrite.isPending || !selectedRow}>
+              {accessWrite.isPending && <Spinner data-icon="inline-start" />}
+              Check access
+            </Button>
+          </form>
+          {accessResult && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Identity</TableHead>
+                  <TableHead>Select</TableHead>
+                  <TableHead>Update</TableHead>
+                  <TableHead>Delete</TableHead>
+                  <TableHead>Columns</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {accessResult.map((entry, index) => (
+                  <TableRow key={`${entry.identity.role}-${entry.identity.sub ?? 'anon'}-${index}`}>
+                    <TableCell className="font-mono text-xs">
+                      {entry.identity.role}
+                      {entry.identity.sub ? ` · ${entry.identity.sub}` : ''}
+                    </TableCell>
+                    <TableCell>{entry.select ? 'yes' : 'no'}</TableCell>
+                    <TableCell>{entry.update === null ? '—' : entry.update ? 'yes' : 'no'}</TableCell>
+                    <TableCell>{entry.delete === null ? '—' : entry.delete ? 'yes' : 'no'}</TableCell>
+                    <TableCell className="max-w-48 truncate font-mono text-xs">
+                      {entry.columns.join(', ') || '—'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </DialogContent>
+      </Dialog>
       <Dialog open={rowDialog} onOpenChange={setRowDialog}>
         <DialogContent>
           <DialogTitle>
@@ -1041,10 +1183,7 @@ function SchemaEditor({ base, table }: { base: string; table: TableSchema }) {
             disabled={!sql || write.isPending}
             onClick={async () => {
               try {
-                await write.mutateAsync({
-                  path: base + '/migrations',
-                  body: { id: 'schema_' + Date.now(), sql },
-                });
+                await applyReviewedMigration(base, 'schema_' + Date.now(), sql);
                 toast.success('Migration applied');
                 setSql('');
               } catch {}
@@ -1422,7 +1561,7 @@ function Migrations({ base }: { base: string }) {
           <Button
             disabled={!id || !sql || write.isPending}
             onClick={async () => {
-              await write.mutateAsync({ path: base + '/migrations', body: { id, sql } });
+              await applyReviewedMigration(base, id, sql);
               toast.success('Migration ' + id + ' applied');
               setId('');
               setSql('');

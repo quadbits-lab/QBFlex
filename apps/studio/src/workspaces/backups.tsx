@@ -421,7 +421,7 @@ export function BackupWorkspace({ base, project }: { base: string; project: any 
         </div>
         {(inventory.data?.data.findings ?? []).length > 0 ? (
           <div className="mt-4 space-y-2">
-            {inventory.data.data.findings.map((finding: any) => (
+            {(inventory.data?.data.findings ?? []).map((finding: any) => (
               <p key={finding.id} className="text-sm text-muted-foreground">
                 <span className="font-mono text-xs">{finding.code}</span> {finding.message}
               </p>

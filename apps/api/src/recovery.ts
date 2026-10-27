@@ -1,4 +1,4 @@
-import { mkdirSync, existsSync, rmSync, statSync } from 'node:fs';
+import { mkdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   QBError,
@@ -18,7 +18,7 @@ import {
   isRecoveryTestEndpoint,
   RECOVERY_TEST_HOST,
 } from '@qb-flex/storage';
-import { openDatabase, restoreDatabase, branchPath } from '@qb-flex/database';
+import { openDatabase, restoreDatabase } from '@qb-flex/database';
 import { realmSecret } from '@qb-flex/auth';
 import { decryptArchive } from '../../../packages/database/src/archive';
 import { webhookURL } from '../../worker/src/webhook-delivery';
@@ -724,8 +724,8 @@ export async function executeDrill(options: {
 
     const allPassed =
       databaseResult === 'passed' && objectsResult === 'passed' && keyResult === 'passed';
-    const anyFailed =
-      databaseResult === 'failed' || objectsResult === 'failed' || keyResult === 'failed';
+    // keyResult failures return early above, so only database/objects can fail here.
+    const anyFailed = databaseResult === 'failed' || objectsResult === 'failed';
     // Database-only success cannot become complete when objects or keys are unverified.
     const state = allPassed ? 'complete' : anyFailed && databaseResult === 'passed' ? 'partial' : 'failed';
     await finishDrill(db, drillId, state, databaseResult, objectsResult, keyResult, {
@@ -768,4 +768,4 @@ async function finishDrill(
     );
 }
 
-export { RECOVERY_TEST_HOST, branchPath, existsSync };
+export { RECOVERY_TEST_HOST };
