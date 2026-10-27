@@ -1,0 +1,27 @@
+export const frontmatter = {"title":"Disposable previews","description":"Create schema-only preview branches with a bounded TTL and optional synthetic fixtures.","section":"Studio","slug":"studio/previews","order":12.4};
+
+# Disposable previews
+
+## Schema fork, not a data copy
+
+Open **Previews** (`/previews`) for the selected project. A preview copies schema, exposure, relationships and policies into a disposable branch. It does not copy production rows, users, sessions, provider credentials, push registrations or webhook destinations.
+
+Optional fixtures are synthetic rows you supply in Studio. They are not an anonymized export of the primary branch. Previews are not merged back to primary.
+
+## TTL and states
+
+The default lifetime is 72 hours. Studio offers 24 hours, 72 hours and 7 days (168 hours). States are `queued`, `provisioning`, `ready`, `expiring`, `deleting`, `deleted` and `failed`. Extend and delete act on that disposable branch only.
+
+## Management contract
+
+Prefix with `/management/v1/projects/{projectId}`:
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET | `/previews` | List previews. |
+| POST | `/previews` | Create from name, TTL hours and optional fixtures. |
+| GET | `/previews/{id}` | Read status. |
+| POST | `/previews/{id}/extend` | Extend TTL. |
+| DELETE | `/previews/{id}` | Delete the preview branch. |
+
+The management client exposes `previews(projectId).list/create/get/extend/remove`. Provisioning is asynchronous. A failed preview reports an error string and does not change the primary branch.

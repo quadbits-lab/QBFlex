@@ -1,1 +1,0 @@
-{"extends":"../../tsconfig.json","compilerOptions":{"paths":{"@qb-flex/client":["packages/sdk-js/src/index.ts"],"@qb-flex/react":["packages/sdk-react/src/index.tsx"],"@qb-flex/ui":["packages/ui/src/index.tsx"]}},"include":["src","server.ts","scripts","tests","vite.config.ts"],"exclude":["dist"]}

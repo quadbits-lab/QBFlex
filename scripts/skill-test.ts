@@ -168,15 +168,16 @@ try {
       branch: created.data.branchId,
       base: `/management/v1/projects/${created.data.id}/branches/${created.data.branchId}`,
     };
-    await f.call(
-      project.base + '/migrations',
+    const schemaSql = readFileSync(join(skill, 'assets/examples/schema.sql'), 'utf8');
+    const review = await f.call(
+      project.base + '/reviews',
       'POST',
-      {
-        id: prerequisites.migrationId,
-        sql: readFileSync(join(skill, 'assets/examples/schema.sql'), 'utf8'),
-      },
+      { migrationId: prerequisites.migrationId, sql: schemaSql },
       f.token,
     );
+    await f.call(project.base + '/reviews/' + review.data.id + '/rehearse', 'POST', {}, f.token);
+    await f.call(project.base + '/reviews/' + review.data.id + '/approve', 'POST', {}, f.token);
+    await f.call(project.base + '/migrations', 'POST', { reviewId: review.data.id }, f.token);
     await f.call(project.base + '/exposure/tasks', 'PUT', prerequisites.exposure, f.token);
     for (const policy of prerequisites.policies)
       await f.call(project.base + '/policies', 'PUT', policy, f.token);

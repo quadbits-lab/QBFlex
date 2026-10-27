@@ -46,14 +46,49 @@ export declare function useQBAuth(): {
         user: any;
         token: any;
     } | null>;
+    signInWithMagicLink: (email: string, options?: {
+        callbackURL?: string;
+        redirectTo?: string;
+    }) => Promise<{
+        status: boolean;
+    }>;
     signOut: () => Promise<void>;
     refresh: () => Promise<Session | null>;
+    passkey: {
+        enroll: (opts?: {
+            name?: string;
+        }) => Promise<unknown>;
+        list: () => Promise<unknown[]>;
+        remove: (id: string) => Promise<void>;
+        rename: (id: string, name: string) => Promise<void>;
+        signIn: () => Promise<{
+            user: any;
+            token: any;
+        } | null>;
+    };
 };
 export declare function useQBQuery<T, D = any>(options: {
     queryKey: QueryKey;
     queryFn: (client: QBClient<D>, signal: AbortSignal) => PromiseLike<T>;
     enabled?: boolean;
 }): import("@tanstack/react-query").UseQueryResult<T, Error>;
+export declare function useQBSearch(options: {
+    collection: string;
+    q: string;
+    limit?: number;
+    cursor?: string;
+    enabled?: boolean;
+}): import("@tanstack/react-query").UseQueryResult<import("@qb-flex/contracts").Result<{
+    hits: {
+        id: string;
+        table: string;
+        rank: number;
+        snippet: string | null;
+        row: Record<string, unknown>;
+    }[];
+    count: number | null;
+    cursor: string | null;
+}>, Error>;
 export declare function useQBMutation<T, V, D = any>(options: {
     mutationFn: (client: QBClient<D>, variables: V) => Promise<T>;
     invalidate?: QueryKey[];

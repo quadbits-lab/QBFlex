@@ -3,7 +3,7 @@ import { useConsole } from '../../console-context';
 import { WorkspaceHeader, NoProject, NoticeBox } from '../../workspace-header';
 import { WebhookWorkspace } from '../../workspaces/webhooks';
 function WebhooksRoute() {
-  const { project, base, branch } = useConsole();
+  const { project, base, branch, state } = useConsole();
   return (
     <div className="grid min-w-0 gap-5">
       <WorkspaceHeader
@@ -17,7 +17,12 @@ function WebhooksRoute() {
       ) : project.status !== 'ready' ? (
         <NoticeBox>Project is {project.status}.</NoticeBox>
       ) : (
-        <WebhookWorkspace key={base} base={base} projectId={project.id} />
+        <WebhookWorkspace
+          key={base}
+          base={base}
+          projectId={project.id}
+          branchId={state.branch}
+        />
       )}
     </div>
   );

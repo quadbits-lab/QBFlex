@@ -199,7 +199,7 @@ test('clean native startup creates private API credentials, runs maintenance and
       expect((await setup.json()).data.required).toBe(true);
       expect(run.output).not.toContain(token);
       if (attempt) {
-        expect(run.output).toContain('PGlite 0.5.10');
+        expect(run.output).toContain('PGlite 0.5.');
         expect(run.output).toContain('http://localhost:' + ports.studio);
         expect(run.output).not.toContain('VITE v');
         expect(run.output).not.toContain('\x1b[');

@@ -69,15 +69,17 @@ export async function fixture(override?: Parameters<typeof startService>[0]) {
     );
     await service.tick();
     const base = `/management/v1/projects/${p.data.id}/branches/${p.data.branchId}`;
-    await call(
-      base + '/migrations',
+    const sql =
+      "CREATE TABLE tasks(id TEXT PRIMARY KEY NOT NULL DEFAULT(replace(gen_random_uuid()::text,'-','')),owner_id TEXT NOT NULL,title TEXT NOT NULL,completed BIGINT NOT NULL DEFAULT 0,revision BIGINT NOT NULL DEFAULT 1,internal_note TEXT);CREATE INDEX tasks_owner ON tasks(owner_id);";
+    const review = await call(
+      base + '/reviews',
       'POST',
-      {
-        id: '001',
-        sql: "CREATE TABLE tasks(id TEXT PRIMARY KEY NOT NULL DEFAULT(replace(gen_random_uuid()::text,'-','')),owner_id TEXT NOT NULL,title TEXT NOT NULL,completed BIGINT NOT NULL DEFAULT 0,revision BIGINT NOT NULL DEFAULT 1,internal_note TEXT);CREATE INDEX tasks_owner ON tasks(owner_id);",
-      },
+      { migrationId: '001', sql },
       token,
     );
+    await call(base + '/reviews/' + review.data.id + '/rehearse', 'POST', {}, token);
+    await call(base + '/reviews/' + review.data.id + '/approve', 'POST', {}, token);
+    await call(base + '/migrations', 'POST', { reviewId: review.data.id }, token);
     await call(
       base + '/exposure/tasks',
       'PUT',

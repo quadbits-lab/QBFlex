@@ -31,7 +31,9 @@ console.log(result.data.id);
 
 The SDK creates an intent and uploads bytes through the authenticated gateway. Both management and application paths stream to private disk staging with backpressure and incremental native SHA-256, then stream validated bytes to S3. The object becomes ready only after backend persistence and expected-size verification. Failed/pending objects remain unavailable; retry/reconcile uncertain remote effects rather than assuming success.
 
-Uploads are limited to 100 MiB, with at most four concurrent transfers and a 120-second deadline. Staging needs the expected size plus 64 MiB disk headroom. Files use mode 0600 in private directories (0700). Recognized abandoned staging is cleaned on startup only after exclusive volume ownership. Disk/WAL/backup capacity still needs operator monitoring. Resumable multipart uploads are not implemented.
+Uploads are limited to 100 MiB, with at most four concurrent transfers and a 120-second deadline. Staging needs the expected size plus 64 MiB disk headroom. Files use mode 0600 in private directories (0700). Recognized abandoned staging is cleaned on startup only after exclusive volume ownership. Disk/WAL/backup capacity still needs operator monitoring.
+
+Resumable upload sessions and bounded image transforms are available on the storage API. Transforms use the runtime image decoder when it is present and reject oversize dimensions. A CDN in front of public objects is not configured.
 
 ## Optional expected checksum and cancellation
 

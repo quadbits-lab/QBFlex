@@ -192,13 +192,15 @@ projects
   );
 const db = program.command('db');
 scoped(db.command('migrate').requiredOption('--file <file>').requiredOption('--id <id>')).action(
-  async (options) =>
-    output(
-      await client(options).request(target(options).base + '/migrations', 'POST', {
-        id: options.id,
-        sql: readFileSync(options.file, 'utf8'),
-      }),
-    ),
+  async (options) => {
+    const sql = readFileSync(options.file, 'utf8');
+    const c = client(options);
+    const { base, project, branch } = target(options);
+    const review = await c.reviews(project, branch).create({ migrationId: options.id, sql });
+    await c.reviews(project, branch).rehearse(review.data.id);
+    await c.reviews(project, branch).approve(review.data.id);
+    output(await c.request(base + '/migrations', 'POST', { reviewId: review.data.id }));
+  },
 );
 scoped(
   db.command('diff').requiredOption('--file <file>', 'Expected schema JSON exported from /schema'),
@@ -365,6 +367,39 @@ scoped(backups.command('restore').requiredOption('--backup <id>')).action(async 
 const branches = program.command('branches');
 scoped(branches.command('list')).action(async (options) =>
   output(await client(options).request(`/projects/${target(options).project}/branches`)),
+);
+const previews = program.command('previews');
+scoped(
+  previews
+    .command('create')
+    .option('--name <name>', 'Preview name')
+    .option('--ttl <hours>', 'TTL hours (1–168)', '72'),
+).action(async (options) =>
+  output(
+    await client(options).previews(target(options).project).create({
+      name: options.name,
+      ttlHours: Number(options.ttl),
+    }),
+  ),
+);
+scoped(previews.command('list')).action(async (options) =>
+  output(await client(options).previews(target(options).project).list()),
+);
+scoped(previews.command('status').argument('<id>', 'Preview id')).action(async (id, options) =>
+  output(await client(options).previews(target(options).project).get(id)),
+);
+scoped(
+  previews
+    .command('extend')
+    .argument('<id>', 'Preview id')
+    .option('--ttl <hours>', 'TTL hours (1–168)', '72'),
+).action(async (id, options) =>
+  output(
+    await client(options).previews(target(options).project).extend(id, Number(options.ttl)),
+  ),
+);
+scoped(previews.command('delete').argument('<id>', 'Preview id')).action(async (id, options) =>
+  output(await client(options).previews(target(options).project).remove(id)),
 );
 const storage = program.command('storage');
 scoped(storage.command('list')).action(async (options) =>

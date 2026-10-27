@@ -18,6 +18,14 @@ Enable email verification in project settings and configure [Resend or SMTP](/do
 
 Use an allowlisted callback URL. Local SMTP messages can appear in Mailpit. Provider failures are surfaced, not silently treated as delivered messages; provider acceptance is not proof of inbox delivery.
 
+## Magic links
+
+Application realms accept single-use magic links. Studio sign-in stays password, passkey and authenticator. A successful request does not reveal whether the address has an account, and it does not prove the message arrived. Links expire after five minutes.
+
+```ts
+await client.auth.signInWithMagicLink(email);
+```
+
 ## Google and GitHub
 
 Register an OAuth application with the selected provider. Configure its callback to the explicit branch auth endpoint, then store its client ID and secret in project settings. Add the browser application origin to the project allowlist.

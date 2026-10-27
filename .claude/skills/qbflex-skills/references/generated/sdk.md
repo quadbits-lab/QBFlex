@@ -5,7 +5,7 @@ Generated from the actual 0.1.0 SDK declaration artifacts. Integer types preserv
 ## @qb-flex/client
 
 ```ts
-import { type DatabaseShape, type RowOf, type InsertOf, type UpdateOf, type Query, type Result, type Session, type Filter, type RelationsOf } from './contracts';
+import { type DatabaseShape, type RowOf, type InsertOf, type UpdateOf, type Query, type Result, type Session, type Filter, type AggregateExpr, type HavingClause, type RelationsOf } from './contracts';
 export { QBError } from './contracts';
 export type { Result, Session, Query } from './contracts';
 export interface ClientOptions {
@@ -92,6 +92,13 @@ export declare class QBClient<D = DatabaseShape, R = RPCShape> {
             user: any;
             token: any;
         }>;
+        /** Requests a single-use magic link. The success body does not reveal whether the account exists. */
+        signInWithMagicLink: (email: string, options?: {
+            callbackURL?: string;
+            redirectTo?: string;
+        }) => Promise<{
+            status: boolean;
+        }>;
         signOut: () => Promise<void>;
         passkey: {
             /** Runs the WebAuthn registration ceremony for the current application user. */
@@ -129,6 +136,22 @@ export declare class QBClient<D = DatabaseShape, R = RPCShape> {
     } ? A : never, options?: RequestOptions): Promise<Result<R[K] extends {
         Returns: infer T;
     } ? T : unknown>>;
+    search(input: {
+        collection: string;
+        q: string;
+        limit?: number;
+        cursor?: string;
+    }, options?: RequestOptions): Promise<Result<{
+        hits: {
+            id: string;
+            table: string;
+            rank: number;
+            snippet: string | null;
+            row: Record<string, unknown>;
+        }[];
+        count: number | null;
+        cursor: string | null;
+    }>>;
     channel(options: ChannelOptions): QBChannel;
     storage: {
         listBuckets: () => Promise<Result<any[]>>;
@@ -165,6 +188,9 @@ export declare class QueryBuilder<D, K extends keyof D & string, R> implements P
         limit?: number;
     }[]): QueryBuilder<D, K, R & Pick<RelationsOf<D, K>, N>>;
     count(): QueryBuilder<D, K, R>;
+    groupBy(columns: (keyof RowOf<D, K> & string)[]): QueryBuilder<D, K, R>;
+    aggregate(fn: AggregateExpr['fn'], column?: keyof RowOf<D, K> & string, alias?: string): QueryBuilder<D, K, R>;
+    having(alias: string, op: HavingClause['op'], value: HavingClause['value']): QueryBuilder<D, K, R>;
     abortSignal(signal: AbortSignal): QueryBuilder<D, K, R>;
     execute(): Promise<Result<R[]>>;
     then<A = Result<R[]>, B = never>(fulfilled?: ((result: Result<R[]>) => A | PromiseLike<A>) | null, rejected?: ((reason: any) => B | PromiseLike<B>) | null): PromiseLike<A | B>;
@@ -237,14 +263,49 @@ export declare function useQBAuth(): {
         user: any;
         token: any;
     } | null>;
+    signInWithMagicLink: (email: string, options?: {
+        callbackURL?: string;
+        redirectTo?: string;
+    }) => Promise<{
+        status: boolean;
+    }>;
     signOut: () => Promise<void>;
     refresh: () => Promise<Session | null>;
+    passkey: {
+        enroll: (opts?: {
+            name?: string;
+        }) => Promise<unknown>;
+        list: () => Promise<unknown[]>;
+        remove: (id: string) => Promise<void>;
+        rename: (id: string, name: string) => Promise<void>;
+        signIn: () => Promise<{
+            user: any;
+            token: any;
+        } | null>;
+    };
 };
 export declare function useQBQuery<T, D = any>(options: {
     queryKey: QueryKey;
     queryFn: (client: QBClient<D>, signal: AbortSignal) => PromiseLike<T>;
     enabled?: boolean;
 }): import("@tanstack/react-query").UseQueryResult<T, Error>;
+export declare function useQBSearch(options: {
+    collection: string;
+    q: string;
+    limit?: number;
+    cursor?: string;
+    enabled?: boolean;
+}): import("@tanstack/react-query").UseQueryResult<import("@qb-flex/contracts").Result<{
+    hits: {
+        id: string;
+        table: string;
+        rank: number;
+        snippet: string | null;
+        row: Record<string, unknown>;
+    }[];
+    count: number | null;
+    cursor: string | null;
+}>, Error>;
 export declare function useQBMutation<T, V, D = any>(options: {
     mutationFn: (client: QBClient<D>, variables: V) => Promise<T>;
     invalidate?: QueryKey[];

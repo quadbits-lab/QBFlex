@@ -29,9 +29,18 @@ import {
 import type { TableSchema, WebhookInput, WebhookSummary } from '@qb-flex/contracts';
 import { management } from '../api';
 
-export function WebhookWorkspace({ base, projectId }: { base: string; projectId: string }) {
+export function WebhookWorkspace({
+  base,
+  projectId,
+  branchId,
+}: {
+  base: string;
+  projectId: string;
+  branchId: string;
+}) {
   const [creating, setCreating] = useState(false);
   const [secret, setSecret] = useState<string | null>(null);
+  const [sampleView, setSampleView] = useState<unknown>(null);
   const [confirm, setConfirm] = useState<{
     id: string;
     name: string;
@@ -87,6 +96,14 @@ export function WebhookWorkspace({ base, projectId }: { base: string; projectId:
       write.reset();
     },
   });
+  const sample = useMutation({
+    mutationFn: async (input: { id: string; deliver: boolean }) => {
+      const api = management.webhooks(projectId, branchId);
+      if (input.deliver) return (await api.deliverSample(input.id)).data;
+      return (await api.sample(input.id)).data;
+    },
+    onSuccess: (result) => setSampleView(result),
+  });
   const open = () => {
     write.reset();
     void keys.refetch();
@@ -136,6 +153,11 @@ export function WebhookWorkspace({ base, projectId }: { base: string; projectId:
       {hooks.error && (
         <p role="alert" className="text-sm text-destructive">
           {hooks.error.message}
+        </p>
+      )}
+      {sample.error && (
+        <p role="alert" className="text-sm text-destructive">
+          {sample.error.message}
         </p>
       )}
       <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -215,6 +237,26 @@ export function WebhookWorkspace({ base, projectId }: { base: string; projectId:
                             }}
                           >
                             Rotate secret
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            disabled={sample.isPending}
+                            onClick={() => {
+                              setSampleView(null);
+                              sample.mutate({ id: hook.id, deliver: false });
+                            }}
+                          >
+                            Sample
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            disabled={sample.isPending}
+                            onClick={() => {
+                              setSampleView(null);
+                              sample.mutate({ id: hook.id, deliver: true });
+                            }}
+                          >
+                            Deliver sample
                           </Button>
                           <Button
                             variant="secondary"
@@ -442,6 +484,26 @@ export function WebhookWorkspace({ base, projectId }: { base: string; projectId:
               Copy secret
             </Button>
             <Button onClick={() => setSecret(null)}>I saved it</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={sampleView !== null}
+        onOpenChange={(open) => {
+          if (!open) setSampleView(null);
+        }}
+      >
+        <DialogContent className="max-h-[85dvh] overflow-y-auto">
+          <DialogTitle>Webhook sample</DialogTitle>
+          <DialogDescription>
+            Synthetic signed event for this subscription. It is not a production row. Deliver sample
+            sends it to the configured HTTPS receiver.
+          </DialogDescription>
+          <pre className="m-0 max-h-96 overflow-auto rounded-md bg-muted p-3 font-mono text-xs">
+            {JSON.stringify(sampleView, null, 2)}
+          </pre>
+          <div className="flex justify-end">
+            <Button onClick={() => setSampleView(null)}>Close</Button>
           </div>
         </DialogContent>
       </Dialog>

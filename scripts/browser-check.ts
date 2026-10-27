@@ -132,15 +132,26 @@ try {
   await page.goto('http://localhost:3031/docs/does-not-exist');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('isn’t here');
   const project = await f.project('browser-tutorial');
-  await f.call(
-    project.base + '/migrations',
+  const booleanSql = 'ALTER TABLE tasks ADD COLUMN enabled boolean NOT NULL DEFAULT false';
+  const booleanReview = await f.call(
+    project.base + '/reviews',
     'POST',
-    {
-      id: 'native-boolean-editor',
-      sql: 'ALTER TABLE tasks ADD COLUMN enabled boolean NOT NULL DEFAULT false',
-    },
+    { migrationId: 'native-boolean-editor', sql: booleanSql },
     f.token,
   );
+  await f.call(
+    project.base + '/reviews/' + booleanReview.data.id + '/rehearse',
+    'POST',
+    {},
+    f.token,
+  );
+  await f.call(
+    project.base + '/reviews/' + booleanReview.data.id + '/approve',
+    'POST',
+    {},
+    f.token,
+  );
+  await f.call(project.base + '/migrations', 'POST', { reviewId: booleanReview.data.id }, f.token);
   await f.call(
     project.base + '/exposure/tasks',
     'PUT',

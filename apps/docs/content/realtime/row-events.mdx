@@ -36,4 +36,6 @@ Presence, broadcast, binary channels and multi-node fan-out are planned capabili
 
 ## Debugger status
 
-Connection callbacks, reconnect/replay and resynchronization behavior are available in the client. A dedicated Realtime Debugger with bounded metadata traces, replay-gap/latency diagnostics and scoped application debug sessions is still required by specification 1.1. Studio management privileges must not masquerade as a user's authorization proof. Do not record protected payloads or credential-bearing URLs when diagnosing your application.
+Studio **Realtime** (`/realtime`) can open a debug session for an application subject and role and list trace entries: connecting, joined, replaying, resync and disconnected, plus latency and replay gap when the owner records them. Traces are metadata only. They do not include row bodies, credentials or URLs, and a management session does not prove that identity can read a table.
+
+Connection callbacks, reconnect/replay and resynchronization remain available in the client. Presence, broadcast and multi-node fan-out stay planned.

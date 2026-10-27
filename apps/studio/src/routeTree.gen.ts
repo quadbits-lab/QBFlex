@@ -19,10 +19,14 @@ import { Route as ConsoleAuthRouteImport } from './routes/_console/auth'
 import { Route as ConsoleBackupsRouteImport } from './routes/_console/backups'
 import { Route as ConsoleDatabaseRouteImport } from './routes/_console/database'
 import { Route as ConsoleFunctionsRouteImport } from './routes/_console/functions'
+import { Route as ConsoleInspectorRouteImport } from './routes/_console/inspector'
 import { Route as ConsoleJobsRouteImport } from './routes/_console/jobs'
+import { Route as ConsoleLabRouteImport } from './routes/_console/lab'
 import { Route as ConsoleLogsRouteImport } from './routes/_console/logs'
 import { Route as ConsoleOverviewRouteImport } from './routes/_console/overview'
+import { Route as ConsolePreviewsRouteImport } from './routes/_console/previews'
 import { Route as ConsoleRealtimeRouteImport } from './routes/_console/realtime'
+import { Route as ConsoleReviewsRouteImport } from './routes/_console/reviews'
 import { Route as ConsoleSchemaRouteImport } from './routes/_console/schema'
 import { Route as ConsoleSecurityRouteImport } from './routes/_console/security'
 import { Route as ConsoleSettingsRouteImport } from './routes/_console/settings'
@@ -80,9 +84,19 @@ const ConsoleFunctionsRoute = ConsoleFunctionsRouteImport.update({
   path: '/functions',
   getParentRoute: () => ConsoleRoute,
 } as any)
+const ConsoleInspectorRoute = ConsoleInspectorRouteImport.update({
+  id: '/inspector',
+  path: '/inspector',
+  getParentRoute: () => ConsoleRoute,
+} as any)
 const ConsoleJobsRoute = ConsoleJobsRouteImport.update({
   id: '/jobs',
   path: '/jobs',
+  getParentRoute: () => ConsoleRoute,
+} as any)
+const ConsoleLabRoute = ConsoleLabRouteImport.update({
+  id: '/lab',
+  path: '/lab',
   getParentRoute: () => ConsoleRoute,
 } as any)
 const ConsoleLogsRoute = ConsoleLogsRouteImport.update({
@@ -95,9 +109,19 @@ const ConsoleOverviewRoute = ConsoleOverviewRouteImport.update({
   path: '/overview',
   getParentRoute: () => ConsoleRoute,
 } as any)
+const ConsolePreviewsRoute = ConsolePreviewsRouteImport.update({
+  id: '/previews',
+  path: '/previews',
+  getParentRoute: () => ConsoleRoute,
+} as any)
 const ConsoleRealtimeRoute = ConsoleRealtimeRouteImport.update({
   id: '/realtime',
   path: '/realtime',
+  getParentRoute: () => ConsoleRoute,
+} as any)
+const ConsoleReviewsRoute = ConsoleReviewsRouteImport.update({
+  id: '/reviews',
+  path: '/reviews',
   getParentRoute: () => ConsoleRoute,
 } as any)
 const ConsoleSchemaRoute = ConsoleSchemaRouteImport.update({
@@ -146,10 +170,14 @@ export interface FileRoutesByFullPath {
   '/backups': typeof ConsoleBackupsRoute
   '/database': typeof ConsoleDatabaseRoute
   '/functions': typeof ConsoleFunctionsRoute
+  '/inspector': typeof ConsoleInspectorRoute
   '/jobs': typeof ConsoleJobsRoute
+  '/lab': typeof ConsoleLabRoute
   '/logs': typeof ConsoleLogsRoute
   '/overview': typeof ConsoleOverviewRoute
+  '/previews': typeof ConsolePreviewsRoute
   '/realtime': typeof ConsoleRealtimeRoute
+  '/reviews': typeof ConsoleReviewsRoute
   '/schema': typeof ConsoleSchemaRoute
   '/security': typeof ConsoleSecurityRoute
   '/settings': typeof ConsoleSettingsRoute
@@ -168,10 +196,14 @@ export interface FileRoutesByTo {
   '/backups': typeof ConsoleBackupsRoute
   '/database': typeof ConsoleDatabaseRoute
   '/functions': typeof ConsoleFunctionsRoute
+  '/inspector': typeof ConsoleInspectorRoute
   '/jobs': typeof ConsoleJobsRoute
+  '/lab': typeof ConsoleLabRoute
   '/logs': typeof ConsoleLogsRoute
   '/overview': typeof ConsoleOverviewRoute
+  '/previews': typeof ConsolePreviewsRoute
   '/realtime': typeof ConsoleRealtimeRoute
+  '/reviews': typeof ConsoleReviewsRoute
   '/schema': typeof ConsoleSchemaRoute
   '/security': typeof ConsoleSecurityRoute
   '/settings': typeof ConsoleSettingsRoute
@@ -192,10 +224,14 @@ export interface FileRoutesById {
   '/_console/backups': typeof ConsoleBackupsRoute
   '/_console/database': typeof ConsoleDatabaseRoute
   '/_console/functions': typeof ConsoleFunctionsRoute
+  '/_console/inspector': typeof ConsoleInspectorRoute
   '/_console/jobs': typeof ConsoleJobsRoute
+  '/_console/lab': typeof ConsoleLabRoute
   '/_console/logs': typeof ConsoleLogsRoute
   '/_console/overview': typeof ConsoleOverviewRoute
+  '/_console/previews': typeof ConsolePreviewsRoute
   '/_console/realtime': typeof ConsoleRealtimeRoute
+  '/_console/reviews': typeof ConsoleReviewsRoute
   '/_console/schema': typeof ConsoleSchemaRoute
   '/_console/security': typeof ConsoleSecurityRoute
   '/_console/settings': typeof ConsoleSettingsRoute
@@ -216,10 +252,14 @@ export interface FileRouteTypes {
     | '/backups'
     | '/database'
     | '/functions'
+    | '/inspector'
     | '/jobs'
+    | '/lab'
     | '/logs'
     | '/overview'
+    | '/previews'
     | '/realtime'
+    | '/reviews'
     | '/schema'
     | '/security'
     | '/settings'
@@ -238,10 +278,14 @@ export interface FileRouteTypes {
     | '/backups'
     | '/database'
     | '/functions'
+    | '/inspector'
     | '/jobs'
+    | '/lab'
     | '/logs'
     | '/overview'
+    | '/previews'
     | '/realtime'
+    | '/reviews'
     | '/schema'
     | '/security'
     | '/settings'
@@ -261,10 +305,14 @@ export interface FileRouteTypes {
     | '/_console/backups'
     | '/_console/database'
     | '/_console/functions'
+    | '/_console/inspector'
     | '/_console/jobs'
+    | '/_console/lab'
     | '/_console/logs'
     | '/_console/overview'
+    | '/_console/previews'
     | '/_console/realtime'
+    | '/_console/reviews'
     | '/_console/schema'
     | '/_console/security'
     | '/_console/settings'
@@ -354,11 +402,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConsoleFunctionsRouteImport
       parentRoute: typeof ConsoleRoute
     }
+    '/_console/inspector': {
+      id: '/_console/inspector'
+      path: '/inspector'
+      fullPath: '/inspector'
+      preLoaderRoute: typeof ConsoleInspectorRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
     '/_console/jobs': {
       id: '/_console/jobs'
       path: '/jobs'
       fullPath: '/jobs'
       preLoaderRoute: typeof ConsoleJobsRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
+    '/_console/lab': {
+      id: '/_console/lab'
+      path: '/lab'
+      fullPath: '/lab'
+      preLoaderRoute: typeof ConsoleLabRouteImport
       parentRoute: typeof ConsoleRoute
     }
     '/_console/logs': {
@@ -375,11 +437,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConsoleOverviewRouteImport
       parentRoute: typeof ConsoleRoute
     }
+    '/_console/previews': {
+      id: '/_console/previews'
+      path: '/previews'
+      fullPath: '/previews'
+      preLoaderRoute: typeof ConsolePreviewsRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
     '/_console/realtime': {
       id: '/_console/realtime'
       path: '/realtime'
       fullPath: '/realtime'
       preLoaderRoute: typeof ConsoleRealtimeRouteImport
+      parentRoute: typeof ConsoleRoute
+    }
+    '/_console/reviews': {
+      id: '/_console/reviews'
+      path: '/reviews'
+      fullPath: '/reviews'
+      preLoaderRoute: typeof ConsoleReviewsRouteImport
       parentRoute: typeof ConsoleRoute
     }
     '/_console/schema': {
@@ -441,10 +517,14 @@ interface ConsoleRouteChildren {
   ConsoleBackupsRoute: typeof ConsoleBackupsRoute
   ConsoleDatabaseRoute: typeof ConsoleDatabaseRoute
   ConsoleFunctionsRoute: typeof ConsoleFunctionsRoute
+  ConsoleInspectorRoute: typeof ConsoleInspectorRoute
   ConsoleJobsRoute: typeof ConsoleJobsRoute
+  ConsoleLabRoute: typeof ConsoleLabRoute
   ConsoleLogsRoute: typeof ConsoleLogsRoute
   ConsoleOverviewRoute: typeof ConsoleOverviewRoute
+  ConsolePreviewsRoute: typeof ConsolePreviewsRoute
   ConsoleRealtimeRoute: typeof ConsoleRealtimeRoute
+  ConsoleReviewsRoute: typeof ConsoleReviewsRoute
   ConsoleSchemaRoute: typeof ConsoleSchemaRoute
   ConsoleSecurityRoute: typeof ConsoleSecurityRoute
   ConsoleSettingsRoute: typeof ConsoleSettingsRoute
@@ -460,10 +540,14 @@ const ConsoleRouteChildren: ConsoleRouteChildren = {
   ConsoleBackupsRoute: ConsoleBackupsRoute,
   ConsoleDatabaseRoute: ConsoleDatabaseRoute,
   ConsoleFunctionsRoute: ConsoleFunctionsRoute,
+  ConsoleInspectorRoute: ConsoleInspectorRoute,
   ConsoleJobsRoute: ConsoleJobsRoute,
+  ConsoleLabRoute: ConsoleLabRoute,
   ConsoleLogsRoute: ConsoleLogsRoute,
   ConsoleOverviewRoute: ConsoleOverviewRoute,
+  ConsolePreviewsRoute: ConsolePreviewsRoute,
   ConsoleRealtimeRoute: ConsoleRealtimeRoute,
+  ConsoleReviewsRoute: ConsoleReviewsRoute,
   ConsoleSchemaRoute: ConsoleSchemaRoute,
   ConsoleSecurityRoute: ConsoleSecurityRoute,
   ConsoleSettingsRoute: ConsoleSettingsRoute,

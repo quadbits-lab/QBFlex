@@ -1,0 +1,28 @@
+export const frontmatter = {"title":"Schema reviews","description":"Draft, rehearse and approve SQL before it is applied to the live branch.","section":"Studio","slug":"studio/reviews","order":12.3};
+
+# Schema reviews
+
+## Draft before apply
+
+Open **Schema Reviews** (`/reviews`) for the selected project and branch. A review stores a migration id and SQL, classifies destructive statements, and moves through `draft`, `rehearsed`, `approved`, `applied`, `stale` or `rejected`.
+
+Creating a draft does not change the live schema. Rehearsal runs in an isolated scratch catalog. Approval is allowed only from `rehearsed`, and it is bound to the base schema version and SQL digest. If that version changes, rehearsal or approval marks the review stale.
+
+## Destructive badges
+
+Studio shows badges when the classifier sees `DROP TABLE`, `DROP COLUMN`, type changes, `DELETE`, `TRUNCATE` or `RENAME`. A badge is a hint. It does not prove the statement is safe, and a statement without a badge is not certified safe.
+
+## Management contract
+
+Prefix with `/management/v1/projects/{projectId}/branches/{branchId}`:
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET | `/reviews` | List up to 100 review summaries. |
+| POST | `/reviews` | Create a draft from `{ migrationId, sql }`. |
+| GET | `/reviews/{id}` | Read SQL, digest and type-check result. |
+| POST | `/reviews/{id}/rehearse` | Rehearse on a scratch catalog. |
+| POST | `/reviews/{id}/approve` | Approve a rehearsed review. |
+| POST | `/reviews/{id}/reject` | Reject a non-terminal review. |
+
+The management client exposes `reviews(projectId, branchId).list/create/get/rehearse/approve/reject`. Applying an approved review still uses the existing audited migration path. This screen does not apply SQL itself.

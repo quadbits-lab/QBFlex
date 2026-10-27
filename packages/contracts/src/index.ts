@@ -26,6 +26,47 @@ export type {
   RecoveryDrillReport,
   RecoveryDrillSummary,
 } from './recovery';
+export { reviewStates, previewStates } from './schema-reviews';
+export type {
+  ReviewState,
+  PreviewState,
+  DestructiveKind,
+  DestructiveFinding,
+  SchemaReviewSummary,
+  SchemaReviewInput,
+  SchemaReviewDetail,
+  PreviewSummary,
+  PreviewInput,
+} from './schema-reviews';
+export { searchCollectionStates } from './search';
+export type {
+  SearchCollectionState,
+  SearchCollectionInput,
+  SearchCollectionSummary,
+  SearchQuery,
+  SearchHit,
+  SearchResult,
+} from './search';
+export type {
+  InspectorRequestState,
+  QuerySample,
+  IndexSuggestion,
+  QueryPlanResult,
+} from './query-inspector';
+export { realtimeTraceStates } from './realtime-debug';
+export type {
+  RealtimeTraceState,
+  RealtimeTraceEntry,
+  RealtimeDebugSession,
+} from './realtime-debug';
+export type { AssistantIntent, AssistantRequest, AssistantProposal, AssistantResponse } from './assistant';
+export type {
+  ResumableUploadSession,
+  TransformOptions,
+  RowAccessIdentity,
+  RowAccessRequest,
+  RowAccessResult,
+} from './storage-extended';
 export type Role = 'owner' | 'admin' | 'developer' | 'viewer';
 export type Operation = 'select' | 'insert' | 'update' | 'delete';
 export type Scalar = string | number | boolean | null;
@@ -65,6 +106,16 @@ export interface Filter {
   op: 'eq' | 'ne' | 'lt' | 'lte' | 'gt' | 'gte' | 'in' | 'isNull' | 'like';
   value?: Scalar | Scalar[];
 }
+export interface AggregateExpr {
+  alias: string;
+  fn: 'count' | 'countDistinct' | 'sum' | 'avg' | 'min' | 'max';
+  column?: string;
+}
+export interface HavingClause {
+  alias: string;
+  op: 'eq' | 'ne' | 'lt' | 'lte' | 'gt' | 'gte';
+  value: Scalar;
+}
 export interface Relationship {
   name: string;
   source: string;
@@ -90,6 +141,9 @@ export interface Query {
   cursor?: string;
   count?: boolean;
   relations?: { name: string; columns?: string[]; limit?: number }[];
+  groupBy?: string[];
+  aggregates?: AggregateExpr[];
+  having?: HavingClause[];
 }
 export interface Column {
   name: string;
@@ -178,14 +232,20 @@ export const capabilities = {
   recoveryCenter: 'experimental',
   securityAdvisor: 'experimental',
   operationsDashboard: 'planned',
-  queryInspector: 'planned',
-  schemaReviews: 'planned',
-  previews: 'planned',
+  queryInspector: 'available',
+  schemaReviews: 'available',
+  previews: 'available',
   webhooks: 'experimental',
-  dataLab: 'planned',
-  search: 'planned',
+  dataLab: 'available',
+  search: 'available',
   nativeSDK: 'planned',
   push: 'planned',
+  assistant: 'configured',
+  magicLinks: 'available',
+  resumableUploads: 'available',
+  imageTransforms: 'available',
+  realtimeDebugger: 'available',
+  rowAccess: 'available',
 } as const;
 export const routes = [
   ['GET', '/health', 'Health operation'],
@@ -231,9 +291,96 @@ export const routes = [
   ['DELETE', '/management/v1/projects/{id}/branches/{branch}/data/{table}/{key}', 'Key operation'],
   ['GET', '/management/v1/projects/{id}/branches/{branch}/migrations', 'Migrations operation'],
   ['POST', '/management/v1/projects/{id}/branches/{branch}/migrations', 'Apply migration'],
+  ['GET', '/management/v1/projects/{id}/branches/{branch}/reviews', 'List schema reviews'],
+  ['POST', '/management/v1/projects/{id}/branches/{branch}/reviews', 'Create schema review'],
+  [
+    'GET',
+    '/management/v1/projects/{id}/branches/{branch}/reviews/{review}',
+    'Read schema review',
+  ],
+  [
+    'POST',
+    '/management/v1/projects/{id}/branches/{branch}/reviews/{review}/rehearse',
+    'Rehearse schema review',
+  ],
+  [
+    'POST',
+    '/management/v1/projects/{id}/branches/{branch}/reviews/{review}/approve',
+    'Approve schema review',
+  ],
+  [
+    'POST',
+    '/management/v1/projects/{id}/branches/{branch}/reviews/{review}/reject',
+    'Reject schema review',
+  ],
+  ['GET', '/management/v1/projects/{id}/previews', 'List disposable previews'],
+  ['POST', '/management/v1/projects/{id}/previews', 'Create disposable preview'],
+  ['GET', '/management/v1/projects/{id}/previews/{preview}', 'Preview status'],
+  ['POST', '/management/v1/projects/{id}/previews/{preview}/extend', 'Extend preview TTL'],
+  ['DELETE', '/management/v1/projects/{id}/previews/{preview}', 'Delete preview'],
   ['POST', '/management/v1/projects/{id}/branches/{branch}/sql', 'Execute privileged SQL'],
   ['GET', '/management/v1/projects/{id}/branches/{branch}/policies', 'Policies operation'],
+  [
+    'POST',
+    '/management/v1/projects/{id}/branches/{branch}/policies/access',
+    'Evaluate row access for identities',
+  ],
   ['GET', '/management/v1/projects/{id}/branches/{branch}/webhooks', 'Webhook metadata'],
+  [
+    'POST',
+    '/management/v1/projects/{id}/branches/{branch}/webhooks/{webhook}/sample',
+    'Build signed sample webhook event',
+  ],
+  [
+    'POST',
+    '/management/v1/projects/{id}/branches/{branch}/webhooks/{webhook}/deliver-sample',
+    'Deliver signed sample webhook event',
+  ],
+  [
+    'GET',
+    '/management/v1/projects/{id}/branches/{branch}/search/collections',
+    'List search collections',
+  ],
+  [
+    'POST',
+    '/management/v1/projects/{id}/branches/{branch}/search/collections',
+    'Register search collection',
+  ],
+  [
+    'POST',
+    '/management/v1/projects/{id}/branches/{branch}/search/collections/{collection}/rebuild',
+    'Rebuild search collection',
+  ],
+  [
+    'DELETE',
+    '/management/v1/projects/{id}/branches/{branch}/search/collections/{collection}',
+    'Delete search collection',
+  ],
+  [
+    'GET',
+    '/management/v1/projects/{id}/branches/{branch}/inspector/samples',
+    'List slow query samples',
+  ],
+  [
+    'POST',
+    '/management/v1/projects/{id}/branches/{branch}/inspector/plan',
+    'Explain a sampled query fingerprint',
+  ],
+  [
+    'GET',
+    '/management/v1/projects/{id}/branches/{branch}/realtime/debug',
+    'List realtime debug sessions',
+  ],
+  [
+    'POST',
+    '/management/v1/projects/{id}/branches/{branch}/realtime/debug',
+    'Open realtime debug session',
+  ],
+  [
+    'POST',
+    '/management/v1/projects/{id}/branches/{branch}/assistant',
+    'Studio assistant proposal',
+  ],
   ['GET', '/management/v1/projects/{id}/branches/{branch}/security', 'Security Advisor findings'],
   [
     'POST',
@@ -346,6 +493,7 @@ export const routes = [
   ['POST', '/v1/projects/{projectId}/branches/{branchId}/data/{table}/upsert', 'Upsert operation'],
   ['PATCH', '/v1/projects/{projectId}/branches/{branchId}/data/{table}/{key}', 'Update row'],
   ['DELETE', '/v1/projects/{projectId}/branches/{branchId}/data/{table}/{key}', 'Delete row'],
+  ['POST', '/v1/projects/{projectId}/branches/{branchId}/search', 'Permission-aware full-text search'],
   ['GET', '/v1/projects/{projectId}/branches/{branchId}/storage/buckets', 'Buckets operation'],
   [
     'GET',
@@ -358,6 +506,26 @@ export const routes = [
     'Objects operation',
   ],
   [
+    'POST',
+    '/v1/projects/{projectId}/branches/{branchId}/storage/buckets/{bucket}/resumable',
+    'Create resumable upload session',
+  ],
+  [
+    'HEAD',
+    '/v1/projects/{projectId}/branches/{branchId}/storage/resumable/{upload}',
+    'Read resumable upload offset',
+  ],
+  [
+    'PATCH',
+    '/v1/projects/{projectId}/branches/{branchId}/storage/resumable/{upload}',
+    'Append resumable upload chunk',
+  ],
+  [
+    'DELETE',
+    '/v1/projects/{projectId}/branches/{branchId}/storage/resumable/{upload}',
+    'Abort resumable upload',
+  ],
+  [
     'PUT',
     '/v1/projects/{projectId}/branches/{branchId}/storage/objects/{object}/content',
     'Content operation',
@@ -366,6 +534,11 @@ export const routes = [
     'GET',
     '/v1/projects/{projectId}/branches/{branchId}/storage/objects/{object}/content',
     'Content operation',
+  ],
+  [
+    'GET',
+    '/v1/projects/{projectId}/branches/{branchId}/storage/objects/{object}/transform',
+    'Bounded image transform',
   ],
   [
     'DELETE',

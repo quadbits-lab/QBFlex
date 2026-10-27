@@ -9,6 +9,40 @@ Before editing files for a substantial task:
 - Multiple matches: prefer the most specific skill; load additional skills only when the task spans their concerns.
 <!-- intent-skills:end -->
 
+## Repository overview
+
+QB Flex 0.1.0 (private, Bun 1.4.2 workspaces): a local-first, self-hostable PGlite backend
+with generated REST, application auth, row policies, realtime, S3-compatible storage,
+encrypted recovery, a maintenance worker, Studio (admin), Docs and CLI.
+Layout: `apps/*` (api, worker, studio, docs, cli), `packages/*` (schema, database,
+query-engine, auth, policies, realtime, storage, contracts, observability, management-client,
+sdk-js, sdk-react, ui), `examples/*` (react, vanilla). `qb-flex-development-spec.md` is the
+authoritative specification; `docs/expanded-release-status.md` is the implementation ledger.
+Files under `.claude/skills/qbflex-skills/references/generated/` and Docs reference pages are
+generated — refresh them with the scripts below, never hand-edit.
+
+## Commands
+
+Use Bun (not npm/pnpm) from the workspace root:
+
+- `bun run dev` — start API, worker, Studio and Docs with dependency/port checks
+- `bun run build`, `bun run typecheck` — all workspaces
+- `bun test tests` — unit tests; focused gates: `bun run test:integration`, `test:browser`,
+  `test:cli`, `test:compose`, `test:studio-auth`, `test:studio-ui`, `test:upload-queue`
+- `bun run check` — full gate (typecheck + tests + generated-types + docs examples +
+  contracts + docs:check); run before handing off broad changes
+- SDK: `bun run sdk:build`, `bun run sdk:pack` (tarballs in `dist/packages/`)
+- CLI entry point: `bun run qb`
+
+## Local environment gotchas
+
+- Local ports start at 7610: Studio 7610, Docs 7611, API 7612 (readiness at `/ready`),
+  Mailpit UI 7616, examples 7617–7618.
+- Native `.data` and the Docker Compose `database` volume are separate installations; never
+  copy or invent `worker.token` to connect one installation's worker to another API.
+- The first Studio owner is created with the one-time token in `.data/bootstrap.token`;
+  no default administrator is seeded. Production requires operator secrets and HTTPS.
+
 ## QB Flex development
 
 For applications using QB Flex, platform contributions, operations or debugging, load

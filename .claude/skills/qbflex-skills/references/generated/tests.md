@@ -11,6 +11,26 @@ SHA-256: `17fa246b1e9ee4f10b99b1cd0e9cc59e33dcaceb6961a0ee23906020a9f240e2`
 - counts top labels by key
 - summarizes totals, failures, and success rate
 
+## tests/aggregates.test.ts
+
+SHA-256: `2f895e7a55b9e28d22fb7e180f5fdf9c182b99a0e9e054db1cd79b491ae1de27`
+
+- compileQuery: basic count aggregate
+- compileQuery: sum/avg/min/max with numeric column
+- compileQuery: countDistinct aggregate
+- compileQuery: having clause
+- compileQuery: multiple having clauses
+- compileQuery: rejects cursor with aggregates
+- compileQuery: rejects relations with aggregates
+- compileQuery: rejects order with aggregates
+- compileQuery: validates groupBy column allowlist
+- compileQuery: validates aggregate column allowlist
+- compileQuery: sum/avg require numeric column
+- compileQuery: validates aggregate bounds
+- compileQuery: having alias must match aggregate alias
+- compileQuery: duplicate aggregate alias rejected
+- compileQuery: cursorCodec scope includes query shape
+
 ## tests/app-rbac.test.ts
 
 SHA-256: `d08c24e69fc79705d1d9426438eb81b8c09b081b4f15471d875358cb59aa8082`
@@ -18,6 +38,15 @@ SHA-256: `d08c24e69fc79705d1d9426438eb81b8c09b081b4f15471d875358cb59aa8082`
 - compilePolicies matches system role or assigned app roles
 - role name validation reserves system policy roles
 - custom role policies and banned-style deny via missing app role
+
+## tests/assistant.test.ts
+
+SHA-256: `ceded08ba176b50143934055c2bfaf8683c4066c28d97fcdce6b2b5092730e51`
+
+- assistant is unconfigured until base URL, key, and model are set
+- assistant posts schema without fixture rows and records a migration review
+- assistant includes fixture rows only when the developer opts in
+- assistant rejects private and link-local base URLs
 
 ## tests/client-disconnect.test.ts
 
@@ -56,7 +85,7 @@ SHA-256: `b4c135c14f7730c7a42a69cb5c844b738db6a222962b52ccb43be03354615ca7`
 
 ## tests/dev-startup.test.ts
 
-SHA-256: `3bebf4d91af3ccb8cf05b0e774cb5f808af6492e2b08d63a438a6d4039509a72`
+SHA-256: `331198b2a1a3155149eaf9af60bccb786c68e33ba6a3d935533c48a1bb3e8f2f`
 
 - worker credentials belong to the API; missing configuration fails without minting a token
 - a foreign ready API or occupied app port cannot bootstrap the native worker or local data
@@ -119,9 +148,16 @@ Shared test fixture; scenario names are in its consuming test files.
 
 ## tests/helpers.ts
 
-SHA-256: `f05563d61519f98d7f53e4d9f2df48104d29840c778ac012f3b196d142e54c34`
+SHA-256: `bb79daa9ca3931b8db3b271e31d8d275a24a0b48c9d154fefa8c7f5253d3ccff`
 
 Shared test fixture; scenario names are in its consuming test files.
+
+## tests/integration/aggregates.test.ts
+
+SHA-256: `cdfa98aa81749ba5d4b0fdfe87b438d9aafcdb5638df17fe1d959d2fa1bf5b62`
+
+- integration: aggregate query via /query endpoint
+- integration: aggregate rejects unsupported combos via SDK
 
 ## tests/integration/control-backup.test.ts
 
@@ -137,7 +173,7 @@ SHA-256: `b03acc884bf6806d06937cf47bc8fcc02a53cc355ead9f3190485667004bc4c9`
 
 ## tests/integration/core.test.ts
 
-SHA-256: `871a307a450562503427d3e602479881228833d7d43231a2a0a1e3fa049feb9a`
+SHA-256: `3f4394b27312556238828d22d9a792bb0832900cda44392f296e94239f68563a`
 
 - default deny, owner checks, atomic batches, cursor scopes, migration checksums and outbox
 - real API: first owner, provisioning, realm isolation, SDK CRUD, backup and isolated restore
@@ -175,6 +211,14 @@ SHA-256: `ef1b897143a96f28f589fe7e0bbf8d06482f8c263351e6e6a675e75329325629`
 SHA-256: `004060fdf417777f9accd1458e2a80ea34ee6bc54608640ab121da621bb28d34`
 
 - management scopes, signed pagination, quotas, corrupt backup denial and cancellation
+
+## tests/integration/recovery-center.test.ts
+
+SHA-256: `3f5a5013d063327cd89d155ab4425a0ab5452fc8773f67b1f651c306e0440015`
+
+- configures schedule, uploads to a destination, inventories freshness and runs a drill without cutover
+- keeps the newest checkpoint during retention and reports stale inventory
+- corrupt archives and cancelled drills stay isolated from the primary alias
 
 ## tests/integration/relations.test.ts
 
@@ -226,7 +270,7 @@ SHA-256: `c884e488b3e6b1b2023d687a3d4a359428f9bc7f65245f13db4c97195365c3fd`
 
 ## tests/pglite-migration.test.ts
 
-SHA-256: `2655fc5fe695774acbf456cb8fc8fb43db0576159ed1b2c238b77f19a07637ed`
+SHA-256: `c9a3079964c1c0f72b6e5c6da41bf601c9f5662420d6b29d640bed2247337ccd`
 
 - SQL parameter numbering preserves literals, comments, quoted identifiers and function bodies
 - PGlite transactions isolate nested work, roll back policy failures and persist committed rows
@@ -255,6 +299,25 @@ SHA-256: `1d940225d672139f27b87922feacf59d3feab8f4c84bb2c87f76d344c94c2db8`
 
 Shared test fixture; scenario names are in its consuming test files.
 
+## tests/query-inspector.test.ts
+
+SHA-256: `8af0f2f943cb54cdbbc231423bc7e6dcc9252dd1f5e6049ce0eb90434e504575`
+
+- query inspector stores redacted fingerprints and plans generated SELECT statements
+
+## tests/resumable-upload.test.ts
+
+SHA-256: `7f92d7edee14c97af437af0365caa6bcba83aa3efeeaf6a1da80c4d5f0dc094b`
+
+- resumable uploads append at the expected offset and finalize the staged file
+- resumable uploads reject a concurrent chunk, abort, expire, and enforce 100 MiB
+
+## tests/row-access.test.ts
+
+SHA-256: `aeaf1b227ca035093d62cc95d3af91f6d926c44af7090f09c94a581f97d43fbc`
+
+- row access reports select visibility, update/delete using checks, and exposed columns
+
 ## tests/schema-graph.test.ts
 
 SHA-256: `eb5a409e3fba89f46fba18393002ca0106669f5b6fd2ab771240542519c84956`
@@ -264,6 +327,14 @@ SHA-256: `eb5a409e3fba89f46fba18393002ca0106669f5b6fd2ab771240542519c84956`
 - non-exposed tables still render (policy state is data, not structure)
 - duplicate foreign keys dedupe; relationships become labeled edges
 
+## tests/schema-reviews.test.ts
+
+SHA-256: `7da76cd234cb8f80bb8e1bd61640b5f874ec8f60f2f6dd23f11ed2bbf9cb6cbc`
+
+- classifyDestructive flags drop and delete patterns
+- schema review rehearses, approves, and applies; stale digest is rejected
+- live apply requires an approved review with matching digest
+
 ## tests/sdk-react.test.tsx
 
 SHA-256: `153fde89680b7aaab85b66a1bbf4682428e8f2bce1b4472ae559b12810c214ba`
@@ -272,6 +343,12 @@ SHA-256: `153fde89680b7aaab85b66a1bbf4682428e8f2bce1b4472ae559b12810c214ba`
 - shared auth updates, single-flight refresh, explicit identity cache keys and cache cancellation
 - Strict Mode and unmount dispose subscriptions without duplicate sockets
 - client cancellation, timeouts and disposal produce normalized errors
+
+## tests/search-collections.test.ts
+
+SHA-256: `205b128470f87e3fc96c20a9ce075d846c0b5fa1e5b46c8b4beaef127b28e778`
+
+- search applies SELECT ownership to hits, counts, snippets and projected columns
 
 ## tests/security-advisor.test.ts
 
@@ -360,6 +437,12 @@ SHA-256: `46db0150bc0d24493524d0fd99ec50bc4140f221b414c4747e49a3f1d9d54564`
 - all DNS answers are screened on every dispatch and only a validated address is selected
 - delivery rejects prohibited destinations and cancellation before issuing HTTPS requests
 - real HTTPS uses the fixed address, verifies original TLS hostname, does not forward secrets or follow redirects
+
+## tests/webhook-sample.test.ts
+
+SHA-256: `cf23f6042731061b4fa43ceab2279c24bed46d9f2b84117eaa0805bc0fabe126`
+
+- webhook sample signs timestamp.eventId.body and does not advance the checkpoint
 
 ## tests/workspace-lifecycle.test.ts
 

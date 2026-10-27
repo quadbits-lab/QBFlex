@@ -44,9 +44,9 @@ export function projectOpenAPI(
         type: 'object',
         properties: {
           requestId: { type: 'string' },
-          schemaVersion: { type: 'BIGINT' },
+          schemaVersion: { type: 'integer' },
           cursor: { type: 'string' },
-          count: { type: 'BIGINT' },
+          count: { type: 'integer' },
           consistencyToken: { type: 'string' },
         },
       },
@@ -129,12 +129,39 @@ export function projectOpenAPI(
                 type: 'object',
                 properties: {
                   columns: { type: 'array', items: { type: 'string', enum: t.allowedColumns } },
-                  limit: { type: 'BIGINT', minimum: 1, maximum: 500 },
+                  limit: { type: 'integer', minimum: 1, maximum: 500 },
                   cursor: { type: 'string' },
                   count: { type: 'boolean' },
                   filters: { type: 'array', maxItems: 30, items: { type: 'object' } },
                   order: { type: 'array', maxItems: 10, items: { type: 'object' } },
                   relations: { type: 'array', maxItems: 3, items: { type: 'object' } },
+                  groupBy: { type: 'array', items: { type: 'string', enum: t.allowedColumns }, maxItems: 5 },
+                  aggregates: {
+                    type: 'array',
+                    maxItems: 8,
+                    items: {
+                      type: 'object',
+                      properties: {
+                        alias: { type: 'string' },
+                        fn: { type: 'string', enum: ['count', 'countDistinct', 'sum', 'avg', 'min', 'max'] },
+                        column: { type: 'string', enum: t.allowedColumns },
+                      },
+                      required: ['alias', 'fn'],
+                    },
+                  },
+                  having: {
+                    type: 'array',
+                    maxItems: 10,
+                    items: {
+                      type: 'object',
+                      properties: {
+                        alias: { type: 'string' },
+                        op: { type: 'string', enum: ['eq', 'ne', 'lt', 'lte', 'gt', 'gte'] },
+                        value: { type: ['string', 'number', 'boolean', 'null'] },
+                      },
+                      required: ['alias', 'op', 'value'],
+                    },
+                  },
                 },
                 additionalProperties: false,
               },

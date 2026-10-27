@@ -33,6 +33,8 @@ import {
 import { normalize, cursorCodec } from '@qb-flex/query-engine';
 import { ObjectBackend } from '@qb-flex/storage';
 import { stageTransfer } from '../../../packages/storage/src/transfer';
+import { ResumableUploads } from '../../../packages/storage/src/resumable';
+import { transformImage } from '../../../packages/storage/src/transform';
 import { acquireLease } from '../../../packages/database/src/lease';
 import {
   writeControlSnapshot,
@@ -46,6 +48,7 @@ import {
   webhookURL,
   publicAddress,
   parseInternalAllowlist,
+  deliverWebhook,
 } from '../../worker/src/webhook-delivery';
 import { controlFindings } from '../../../packages/database/src/security-advisor';
 import {
@@ -60,6 +63,11 @@ import {
   executeDrill,
   scheduledBackupsEnabled,
 } from './recovery';
+import {
+  previewTtlHours,
+  previewSummary,
+  previewPath,
+} from '../../../packages/database/src/previews';
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 const now = () => new Date().toISOString();
 export async function createService(override?: Partial<ReturnType<typeof configuration>>) {
@@ -81,6 +89,8 @@ export async function createService(override?: Partial<ReturnType<typeof configu
   try {
     cleanupControlStaging(config.dataDir);
     const transferDirectory = join(config.dataDir, 'transfers');
+    const resumableDirectory = join(config.dataDir, 'resumable');
+    const resumableUploads = new ResumableUploads(resumableDirectory);
     // Exclusive data-volume lease is held: these are abandoned staging files, never object bytes.
     if (existsSync(transferDirectory))
       for (const entry of readdirSync(transferDirectory))
@@ -114,6 +124,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
       '003-delivery-security',
       '004-workspace-lifecycle',
       '005-recovery',
+      '006-reviews-previews',
     ]) {
       const migration = readFileSync(
         new URL(`../../../migrations/pglite/${id}.sql`, import.meta.url),
@@ -1420,7 +1431,16 @@ export async function createService(override?: Partial<ReturnType<typeof configu
       })
       .get('/management/v1/capabilities', ({ request }) =>
         success(
-          { ...capabilities, storage: process.env.QB_S3_ENDPOINT ? 'available' : 'unconfigured' },
+          {
+            ...capabilities,
+            storage: process.env.QB_S3_ENDPOINT ? 'available' : 'unconfigured',
+            assistant:
+              process.env.QB_AI_BASE_URL &&
+              process.env.QB_AI_API_KEY &&
+              process.env.QB_AI_MODEL
+                ? 'available'
+                : 'unconfigured',
+          },
           request,
         ),
       )
@@ -1704,8 +1724,10 @@ export async function createService(override?: Partial<ReturnType<typeof configu
               now(),
             );
           await tx
-            .query('INSERT INTO branches VALUES(?,?,?,?,?,?)')
-            .run(bid, id, 'main', 'provisioning', 1, now());
+            .query(
+              'INSERT INTO branches(id,project_id,name,status,generation,created_at,kind) VALUES(?,?,?,?,?,?,?)',
+            )
+            .run(bid, id, 'main', 'provisioning', 1, now(), 'primary');
           await tx
             .query('INSERT INTO operations VALUES(?,?,?,?,?,?,?)')
             .run(operationId, id, 'provision', 'requested', 0, null, now());
@@ -1779,6 +1801,145 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           request,
           actor.id,
         );
+      })
+      .get('/management/v1/projects/:id/previews', async ({ request, params }) => {
+        await projectAccess(request, params.id);
+        const rows = (await db
+          .query(
+            "SELECT * FROM branches WHERE project_id=? AND kind='preview' ORDER BY created_at DESC LIMIT 100",
+          )
+          .all(params.id)) as any[];
+        return success(
+          rows.map((row) =>
+            previewSummary({
+              ...row,
+              expires_at: row.expires_at,
+              error: row.error,
+            }),
+          ),
+          request,
+        );
+      })
+      .post('/management/v1/projects/:id/previews', async ({ request, params, body, set }) => {
+        const { p, actor } = await projectAccess(request, params.id, 'developer');
+        const input = (body ?? {}) as {
+          name?: string;
+          fixtures?: Record<string, Record<string, unknown>[]>;
+          ttlHours?: number;
+        };
+        const ttl = previewTtlHours(input.ttlHours);
+        const id = crypto.randomUUID();
+        const name =
+          (typeof input.name === 'string' && input.name.trim()) ||
+          'preview-' + id.slice(0, 8);
+        if (!/^[A-Za-z0-9_-]{1,64}$/.test(name))
+          throw new QBError('VALIDATION', 'Invalid preview name');
+        const existing = (await db
+          .query("SELECT count(*) AS n FROM branches WHERE project_id=? AND kind='preview' AND status NOT IN('deleted','failed')")
+          .get(p.id)) as { n: number | bigint };
+        if (Number(existing.n) >= 10)
+          throw new QBError('LIMIT_EXCEEDED', 'At most 10 active previews per project');
+        const expiresAt = new Date(Date.now() + ttl * 3600_000).toISOString();
+        const operationId = crypto.randomUUID();
+        await db.transaction(async (tx) => {
+          await tx
+            .query(
+              'INSERT INTO branches(id,project_id,name,status,generation,created_at,kind,expires_at,error) VALUES(?,?,?,?,?,?,?,?,?)',
+            )
+            .run(id, p.id, name, 'queued', 1, now(), 'preview', expiresAt, null);
+          await tx
+            .query('INSERT INTO operations VALUES(?,?,?,?,?,?,?)')
+            .run(operationId, p.id, 'preview', 'requested', 0, null, now());
+        })();
+        // Provision from primary schema/policies only; never copy rows, users, sessions, webhooks, or jobs.
+        try {
+          await db.query("UPDATE branches SET status='provisioning' WHERE id=?").run(id);
+          await db
+            .query("UPDATE operations SET status='running',progress=25 WHERE id=?")
+            .run(operationId);
+          const primary = await branch(p.id, 'primary');
+          await owner(p, primary).call('preview-provision', {
+            path: previewPath(config.dataDir, p.id, id),
+            fixtures: input.fixtures ?? {},
+          });
+          await db.transaction(async (tx) => {
+            await tx.query("UPDATE branches SET status='ready',error=NULL WHERE id=?").run(id);
+            await tx
+              .query("UPDATE operations SET status='succeeded',progress=100 WHERE id=?")
+              .run(operationId);
+          })();
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message.slice(0, 500) : 'Preview provisioning failed';
+          rmSync(previewPath(config.dataDir, p.id, id), { recursive: true, force: true });
+          await db
+            .query("UPDATE branches SET status='failed',error=? WHERE id=?")
+            .run(message, id);
+          await db
+            .query("UPDATE operations SET status='failed',error=? WHERE id=?")
+            .run(message, operationId);
+        }
+        const row = (await db.query('SELECT * FROM branches WHERE id=?').get(id)) as any;
+        await audit(actor.id, 'preview.create', id, p, request);
+        set.status = 202;
+        return success(previewSummary(row), request);
+      })
+      .get('/management/v1/projects/:id/previews/:preview', async ({ request, params }) => {
+        await projectAccess(request, params.id);
+        const row = (await db
+          .query("SELECT * FROM branches WHERE id=? AND project_id=? AND kind='preview'")
+          .get(params.preview, params.id)) as any;
+        if (!row) throw new QBError('NOT_FOUND', 'Preview not found', 404);
+        return success(previewSummary(row), request);
+      })
+      .post(
+        '/management/v1/projects/:id/previews/:preview/extend',
+        async ({ request, params, body }) => {
+          const { p, actor } = await projectAccess(request, params.id, 'developer');
+          const row = (await db
+            .query("SELECT * FROM branches WHERE id=? AND project_id=? AND kind='preview'")
+            .get(params.preview, params.id)) as any;
+          if (!row) throw new QBError('NOT_FOUND', 'Preview not found', 404);
+          if (!['ready', 'expiring'].includes(row.status))
+            throw new QBError('CONFLICT', 'Preview cannot be extended', 409);
+          const ttl = previewTtlHours((body as any)?.ttlHours);
+          const created = Date.parse(row.created_at);
+          const maxExpiry = created + 7 * 24 * 3600_000;
+          const next = Math.min(Date.now() + ttl * 3600_000, maxExpiry);
+          if (next <= Date.now())
+            throw new QBError('VALIDATION', 'Preview has reached the 7-day maximum');
+          await db
+            .query("UPDATE branches SET expires_at=?,status='ready' WHERE id=?")
+            .run(new Date(next).toISOString(), row.id);
+          await audit(actor.id, 'preview.extend', row.id, p, request);
+          return success(
+            previewSummary({
+              ...(await db.query('SELECT * FROM branches WHERE id=?').get(row.id)),
+            } as any),
+            request,
+          );
+        },
+      )
+      .delete('/management/v1/projects/:id/previews/:preview', async ({ request, params, set }) => {
+        const { p, actor } = await projectAccess(request, params.id, 'admin');
+        const row = (await db
+          .query("SELECT * FROM branches WHERE id=? AND project_id=? AND kind='preview'")
+          .get(params.preview, params.id)) as any;
+        if (!row) throw new QBError('NOT_FOUND', 'Preview not found', 404);
+        await db.query("UPDATE branches SET status='deleting' WHERE id=?").run(row.id);
+        try {
+          if (owners.has(row.id)) {
+            await owners.get(row.id)!.close();
+            owners.delete(row.id);
+          }
+          rmSync(previewPath(config.dataDir, p.id, row.id), { recursive: true, force: true });
+        } catch {
+          /* best-effort */
+        }
+        await db.query("UPDATE branches SET status='deleted' WHERE id=?").run(row.id);
+        await audit(actor.id, 'preview.delete', row.id, p, request);
+        set.status = 204;
+        return '';
       })
       .get('/management/v1/projects/:id/keys', async ({ request, params }) => {
         const { actor } = await projectAccess(request, params.id);
@@ -2048,10 +2209,180 @@ export async function createService(override?: Partial<ReturnType<typeof configu
             'developer',
           );
           const input = body as any;
-          if (/\b(drop|alter|delete)\b/i.test(input.sql)) await backup(p, b, actor.id, request);
+          if (input.reviewId) {
+            const result = await o.call('migration', {
+              reviewId: input.reviewId,
+              author: actor.id,
+            });
+            await audit(actor.id, 'migration.apply', input.reviewId, p, request);
+            return success(result, request);
+          }
+          if (/\b(drop|alter|delete)\b/i.test(input.sql ?? ''))
+            await backup(p, b, actor.id, request);
           const result = await o.call('migration', { ...input, author: actor.id });
           await audit(actor.id, 'migration.apply', input.id, p, request);
           return success(result, request);
+        },
+      )
+      .get(
+        '/management/v1/projects/:id/branches/:branch/reviews',
+        async ({ request, params }) => {
+          const { o } = await management(request, params.id, params.branch);
+          return success(await o.call('reviews-list'), request);
+        },
+      )
+      .post(
+        '/management/v1/projects/:id/branches/:branch/reviews',
+        async ({ request, params, body }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'developer');
+          const result = await o.call('reviews-create', { ...(body as object), author: actor.id });
+          await audit(actor.id, 'review.create', result.id, p, request);
+          return success(result, request);
+        },
+      )
+      .get(
+        '/management/v1/projects/:id/branches/:branch/reviews/:review',
+        async ({ request, params }) => {
+          const { o } = await management(request, params.id, params.branch);
+          return success(await o.call('reviews-get', { id: params.review }), request);
+        },
+      )
+      .post(
+        '/management/v1/projects/:id/branches/:branch/reviews/:review/rehearse',
+        async ({ request, params }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'developer');
+          const result = await o.call('reviews-rehearse', { id: params.review });
+          await audit(actor.id, 'review.rehearse', params.review, p, request);
+          return success(result, request);
+        },
+      )
+      .post(
+        '/management/v1/projects/:id/branches/:branch/reviews/:review/approve',
+        async ({ request, params }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'developer');
+          const result = await o.call('reviews-approve', { id: params.review });
+          await audit(actor.id, 'review.approve', params.review, p, request);
+          return success(result, request);
+        },
+      )
+      .post(
+        '/management/v1/projects/:id/branches/:branch/reviews/:review/reject',
+        async ({ request, params }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'developer');
+          const result = await o.call('reviews-reject', { id: params.review });
+          await audit(actor.id, 'review.reject', params.review, p, request);
+          return success(result, request);
+        },
+      )
+      .post(
+        '/management/v1/projects/:id/branches/:branch/policies/access',
+        async ({ request, params, body }) => {
+          const { o } = await management(request, params.id, params.branch, 'developer');
+          return success(await o.call('policies-access', body), request);
+        },
+      )
+      .get(
+        '/management/v1/projects/:id/branches/:branch/search/collections',
+        async ({ request, params }) => {
+          const { o } = await management(request, params.id, params.branch);
+          return success(await o.call('search-collections-list'), request);
+        },
+      )
+      .post(
+        '/management/v1/projects/:id/branches/:branch/search/collections',
+        async ({ request, params, body }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'developer');
+          const result = await o.call('search-collections-create', body);
+          await audit(actor.id, 'search.create', result.id, p, request);
+          return success(result, request);
+        },
+      )
+      .post(
+        '/management/v1/projects/:id/branches/:branch/search/collections/:collection/rebuild',
+        async ({ request, params }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'developer');
+          const result = await o.call('search-collections-rebuild', { id: params.collection });
+          await audit(actor.id, 'search.rebuild', params.collection, p, request);
+          return success(result, request);
+        },
+      )
+      .delete(
+        '/management/v1/projects/:id/branches/:branch/search/collections/:collection',
+        async ({ request, params }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'developer');
+          const result = await o.call('search-collections-delete', { id: params.collection });
+          await audit(actor.id, 'search.delete', params.collection, p, request);
+          return success(result, request);
+        },
+      )
+      .get(
+        '/management/v1/projects/:id/branches/:branch/inspector/samples',
+        async ({ request, params }) => {
+          const { o } = await management(request, params.id, params.branch);
+          return success(await o.call('inspector-samples'), request);
+        },
+      )
+      .post(
+        '/management/v1/projects/:id/branches/:branch/inspector/plan',
+        async ({ request, params, body }) => {
+          const { o } = await management(request, params.id, params.branch, 'developer');
+          return success(await o.call('inspector-plan', body), request);
+        },
+      )
+      .get(
+        '/management/v1/projects/:id/branches/:branch/realtime/debug',
+        async ({ request, params }) => {
+          const { o } = await management(request, params.id, params.branch);
+          return success(await o.call('realtime-debug-list'), request);
+        },
+      )
+      .post(
+        '/management/v1/projects/:id/branches/:branch/realtime/debug',
+        async ({ request, params, body }) => {
+          const { o } = await management(request, params.id, params.branch, 'developer');
+          return success(await o.call('realtime-debug-open', body), request);
+        },
+      )
+      .post(
+        '/management/v1/projects/:id/branches/:branch/assistant',
+        async ({ request, params, body }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'developer');
+          const result = await o.call('assistant', { ...(body as object), author: actor.id });
+          await audit(actor.id, 'assistant.propose', p.id, p, request);
+          return success(result, request);
+        },
+      )
+      .post(
+        '/management/v1/projects/:id/branches/:branch/webhooks/:webhook/sample',
+        async ({ request, params }) => {
+          const { o } = await management(request, params.id, params.branch, 'developer');
+          return success(await o.call('webhooks-sample', { id: params.webhook }), request);
+        },
+      )
+      .post(
+        '/management/v1/projects/:id/branches/:branch/webhooks/:webhook/deliver-sample',
+        async ({ request, params }) => {
+          const { o, p, actor } = await management(request, params.id, params.branch, 'admin');
+          const sample = await o.call('webhooks-sample', { id: params.webhook });
+          const result = await deliverWebhook(
+            {
+              skipped: false,
+              url: sample.url,
+              body: sample.body,
+              headers: sample.headers,
+            },
+            { allowlist: webhookAllowlist },
+          );
+          await audit(actor.id, 'webhook.sample_deliver', params.webhook, p, request);
+          return success(
+            {
+              delivered: result.success,
+              status: result.success ? 200 : null,
+              skipped: !result.success,
+              code: result.success ? null : result.code,
+            },
+            request,
+          );
         },
       )
       .post(
@@ -2683,8 +3014,10 @@ export async function createService(override?: Partial<ReturnType<typeof configu
             } catch {}
           }
           await db
-            .query('INSERT INTO branches VALUES(?,?,?,?,?,?)')
-            .run(id, p.id, 'restore-' + id.slice(0, 8), 'ready', 1, now());
+            .query(
+              'INSERT INTO branches(id,project_id,name,status,generation,created_at,kind) VALUES(?,?,?,?,?,?,?)',
+            )
+            .run(id, p.id, 'restore-' + id.slice(0, 8), 'ready', 1, now(), 'restore');
           await audit(actor.id, 'backup.restore', id, p, request);
           return success({ branchId: id, status: 'ready', sessionsExcluded: true }, request);
         } finally {
@@ -3022,6 +3355,10 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         });
         return success(r.data, request, r.meta);
       })
+      .post('/v1/projects/:id/branches/:branch/search', async ({ request, params, body }) => {
+        const { o, identity } = await application(request, params.id, params.branch);
+        return success(await o.call('search', { ...(body as object), identity }), request);
+      })
       .get('/v1/projects/:id/branches/:branch/storage/buckets', async ({ request, params }) => {
         const { o } = await application(request, params.id, params.branch);
         return success(await o.call('buckets'), request);
@@ -3052,6 +3389,92 @@ export async function createService(override?: Partial<ReturnType<typeof configu
             }),
             request,
           );
+        },
+      )
+      .post(
+        '/v1/projects/:id/branches/:branch/storage/buckets/:bucket/resumable',
+        async ({ request, params, body }) => {
+          const { o, identity, p } = await application(request, params.id, params.branch);
+          backend.check();
+          const input = body as { key?: string; size?: number; mime?: string; checksum?: string };
+          const intent = await o.call('upload-intent', {
+            key: input.key,
+            size: input.size,
+            mime: input.mime,
+            checksum: input.checksum,
+            bucket: params.bucket,
+            identity,
+            idempotency: request.headers.get('idempotency-key'),
+            maxStorageBytes: cipher.open(p.config).quotas?.storageBytes ?? 1073741824,
+          });
+          const session = await resumableUploads.createSession({
+            objectId: intent.id,
+            bucketId: params.bucket,
+            key: String(input.key),
+            length: Number(input.size),
+            ownerId: identity.sub ?? 'anonymous',
+          });
+          return success(session, request);
+        },
+      )
+      .head(
+        '/v1/projects/:id/branches/:branch/storage/resumable/:upload',
+        async ({ request, params, set }) => {
+          await application(request, params.id, params.branch);
+          const session = resumableUploads.session(params.upload);
+          set.headers['upload-offset'] = String(session.offset);
+          set.headers['upload-length'] = String(session.length);
+          set.status = 204;
+          return '';
+        },
+      )
+      .patch(
+        '/v1/projects/:id/branches/:branch/storage/resumable/:upload',
+        async ({ request, params }) => {
+          const { o, identity, p, b } = await application(request, params.id, params.branch);
+          const expected = Number(request.headers.get('upload-offset') ?? '0');
+          const chunk = new Uint8Array(await request.arrayBuffer());
+          const offset = await resumableUploads.append(params.upload, chunk, expected);
+          const session = resumableUploads.session(params.upload);
+          if (offset === session.length) {
+            const path = await resumableUploads.finalize(params.upload);
+            try {
+              await o.call('upload-claim', { id: session.objectId });
+              const meta = await o.call('object', { id: session.objectId, identity });
+              const hash = createHash('sha256');
+              hash.update(Buffer.from(await Bun.file(path).arrayBuffer()));
+              const contentSha = hash.digest('hex');
+              const result = await backend.putFile(
+                `${p.id}/${b.id}/${meta.id}`,
+                path,
+                session.length,
+                meta.mime,
+                AbortSignal.timeout(120000),
+              );
+              await o.call('object-state', {
+                id: meta.id,
+                state: 'ready',
+                etag: result.etag,
+                contentSha,
+              });
+            } finally {
+              try {
+                resumableUploads.abort(params.upload);
+              } catch {
+                /* session already removed after finalize path retained */
+              }
+            }
+          }
+          return success({ id: params.upload, offset, length: session.length, objectId: session.objectId }, request);
+        },
+        { parse: 'none' },
+      )
+      .delete(
+        '/v1/projects/:id/branches/:branch/storage/resumable/:upload',
+        async ({ request, params }) => {
+          await application(request, params.id, params.branch);
+          resumableUploads.abort(params.upload);
+          return success({ aborted: true }, request);
         },
       )
       .put(
@@ -3118,6 +3541,37 @@ export async function createService(override?: Partial<ReturnType<typeof configu
               'content-type': result.mime ?? 'application/octet-stream',
               'cache-control': 'private, no-store',
               'content-disposition': 'attachment',
+            },
+          });
+        },
+      )
+      .get(
+        '/v1/projects/:id/branches/:branch/storage/objects/:object/transform',
+        async ({ request, params }) => {
+          const { o, identity, p, b } = await application(request, params.id, params.branch);
+          const obj = await o.call('object', { id: params.object, identity, read: true });
+          if (obj.state !== 'ready') throw new QBError('NOT_FOUND', 'Object not ready', 404);
+          const url = new URL(request.url);
+          const options = {
+            width: url.searchParams.get('width')
+              ? Number(url.searchParams.get('width'))
+              : undefined,
+            height: url.searchParams.get('height')
+              ? Number(url.searchParams.get('height'))
+              : undefined,
+            fit: (url.searchParams.get('fit') as any) || undefined,
+            quality: url.searchParams.get('quality')
+              ? Number(url.searchParams.get('quality'))
+              : undefined,
+            format: (url.searchParams.get('format') as any) || undefined,
+          };
+          const result = await backend.get(`${p.id}/${b.id}/${obj.id}`);
+          const bytes = new Uint8Array(await new Response(result.body).arrayBuffer());
+          const transformed = await transformImage(bytes, options);
+          return new Response(Buffer.from(transformed.bytes), {
+            headers: {
+              'content-type': transformed.mime,
+              'cache-control': 'private, max-age=60',
             },
           });
         },

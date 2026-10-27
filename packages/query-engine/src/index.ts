@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { QBError, type Query, type Identity, type TableSchema } from '@qb-flex/contracts';
+import { QBError, type Query, type Identity, type TableSchema, type AggregateExpr, type HavingClause } from '@qb-flex/contracts';
 import { identifier, type Compiled } from '@qb-flex/policies';
 export const normalize = (value: unknown): unknown =>
   typeof value === 'bigint'
@@ -67,6 +67,31 @@ export function columnValue(column: TableSchema['columns'][number], value: unkno
   }
   return scalar;
 }
+function isNumericKind(type: string): boolean {
+  const kind = type.toUpperCase();
+  return /INT|REAL|FLOAT|DOUBLE|NUMERIC|DECIMAL/.test(kind);
+}
+
+function validateAggregateExpr(
+  table: TableSchema,
+  agg: AggregateExpr,
+  available: string[],
+  seenAliases: Set<string>,
+) {
+  if (!identifier(agg.alias)) throw new QBError('VALIDATION', 'Invalid aggregate alias');
+  if (seenAliases.has(agg.alias)) throw new QBError('VALIDATION', 'Duplicate aggregate alias');
+  seenAliases.add(agg.alias);
+  if (agg.fn !== 'count' && agg.fn !== 'countDistinct' && !agg.column)
+    throw new QBError('VALIDATION', `Aggregate ${agg.fn} requires a column`);
+  if (agg.column && !available.includes(agg.column))
+    throw new QBError('VALIDATION', `Unknown or hidden aggregate column: ${agg.column}`);
+  if ((agg.fn === 'sum' || agg.fn === 'avg') && agg.column) {
+    const col = table.columns.find((c) => c.name === agg.column);
+    if (!col || !isNumericKind(col.type))
+      throw new QBError('VALIDATION', `${agg.fn} requires a numeric column`);
+  }
+}
+
 export function compileQuery(
   table: TableSchema,
   query: Query,
@@ -78,6 +103,9 @@ export function compileQuery(
     column: string;
     direction: 'asc' | 'desc';
   }[];
+  aggregates?: AggregateExpr[];
+  groupBy?: string[];
+  having?: HavingClause[];
 } {
   if (!query || typeof query !== 'object') throw new QBError('VALIDATION', 'Invalid query');
   const available = table.allowedColumns;
@@ -149,6 +177,90 @@ export function compileQuery(
       }
     }
   }
+
+  const hasAggregates = Array.isArray(query.aggregates) && query.aggregates.length > 0;
+  if (hasAggregates) {
+    if ((query.groupBy?.length ?? 0) > 5) throw new QBError('VALIDATION', 'Too many groupBy columns (max 5)');
+    if ((query.aggregates?.length ?? 0) > 8) throw new QBError('VALIDATION', 'Too many aggregates (max 8)');
+    if ((query.having?.length ?? 0) > 10) throw new QBError('VALIDATION', 'Too many having clauses (max 10)');
+    if (query.cursor) throw new QBError('VALIDATION', 'Cursor pagination not supported with aggregates');
+    if (query.relations) throw new QBError('VALIDATION', 'Relations not supported with aggregates');
+    if (query.order && query.order.length > 0)
+      throw new QBError('VALIDATION', 'Order not supported with aggregates; use groupBy columns');
+
+    const groupBy = query.groupBy ?? [];
+    for (const col of groupBy) {
+      if (!available.includes(col)) throw new QBError('VALIDATION', `Unknown or hidden groupBy column: ${col}`);
+    }
+
+    const aggregates = query.aggregates!;
+    const having = query.having ?? [];
+
+    const seenAliases = new Set<string>();
+    for (const agg of aggregates) {
+      validateAggregateExpr(table, agg, available, seenAliases);
+    }
+
+    const aggregateAliases = new Set(aggregates.map((a) => a.alias));
+    for (const h of having) {
+      if (!aggregateAliases.has(h.alias))
+        throw new QBError('VALIDATION', `Having alias ${h.alias} must match an aggregate alias`);
+    }
+
+    // Build aggregate SELECT expressions
+    const aggSelect = aggregates.map((agg) => {
+      const col = agg.column ? identifier(agg.column) : null;
+      switch (agg.fn) {
+        case 'count':
+          return `COUNT(*) AS ${identifier(agg.alias)}`;
+        case 'countDistinct':
+          return col ? `COUNT(DISTINCT ${col}) AS ${identifier(agg.alias)}` : `COUNT(DISTINCT *) AS ${identifier(agg.alias)}`;
+        case 'sum':
+          return col ? `SUM(${col}) AS ${identifier(agg.alias)}` : `SUM(1) AS ${identifier(agg.alias)}`;
+        case 'avg':
+          return col ? `AVG(${col}) AS ${identifier(agg.alias)}` : `AVG(1) AS ${identifier(agg.alias)}`;
+        case 'min':
+          return col ? `MIN(${col}) AS ${identifier(agg.alias)}` : `MIN(1) AS ${identifier(agg.alias)}`;
+        case 'max':
+          return col ? `MAX(${col}) AS ${identifier(agg.alias)}` : `MAX(1) AS ${identifier(agg.alias)}`;
+      }
+    });
+
+    const limit = query.limit ?? 50;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 500)
+      throw new QBError('VALIDATION', 'Limit must be 1–500');
+
+    const innerSelect = `${groupBy.map(identifier).join(',')}${groupBy.length && aggSelect.length ? ',' : ''}${aggSelect.join(',')}`;
+    let innerSql = `SELECT ${innerSelect} FROM ${identifier(table.name)} AS "qb_row_0" WHERE ${conditions.join(' AND ')}`;
+    if (groupBy.length) innerSql += ` GROUP BY ${groupBy.map(identifier).join(',')}`;
+
+    let sql: string;
+    if (having.length) {
+      const havingConds = having.map((h) => {
+        const ops: Record<string, string> = { eq: '=', ne: '!=', lt: '<', lte: '<=', gt: '>', gte: '>=' };
+        return `${identifier(h.alias)} ${ops[h.op]} ?`;
+      });
+      // Wrap in a subquery so aggregate aliases are unambiguous in the HAVING clause.
+      sql = `SELECT * FROM (${innerSql}) AS "qb_having" WHERE ${havingConds.join(' AND ')}`;
+      params.push(...having.map((h) => sqlValue(h.value)));
+    } else {
+      sql = innerSql;
+    }
+    sql += ` LIMIT ?`;
+    params.push(limit);
+
+    return {
+      sql,
+      params,
+      limit,
+      selected: [...groupBy, ...aggregates.map((a) => a.alias)],
+      order: [],
+      aggregates,
+      groupBy,
+      having,
+    };
+  }
+
   const limit = query.limit ?? 50;
   if (!Number.isInteger(limit) || limit < 1 || limit > 500)
     throw new QBError('VALIDATION', 'Limit must be 1–500');

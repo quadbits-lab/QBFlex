@@ -32,7 +32,7 @@ No deployment, external publication, EAS credentials, production notifications, 
 
 | Required feature | What exists now | Remaining accepted scope |
 | --- | --- | --- |
-| Recovery Center | Encrypted branch/control snapshots; isolated restore and retention. | Encrypted off-node destinations/inventory, freshness alerts, scheduled isolated drills and separate database/object/key verification reports. No automatic cutover or integrated object-copy backup. |
+| Recovery Center | Encrypted branch/control snapshots; isolated restore and retention. | Experimental: per-project schedule/retention, sealed off-node destinations, inventory/freshness findings and isolated drills with database/object/key reports. No automatic cutover or integrated object-copy backup; alert delivery and provider certification remain open. |
 | Security Advisor + Policy Simulator | Real-engine simulator; bounded grant/exposure/bucket/key-age/MFA findings, evidence/remediation, expiring acknowledgment and Advisor UI. | Full relationship/type/constraint matrix, hard scratch execution budget and broader security/compatibility acceptance. No automatic fixes. |
 | Operations Dashboard | Private request counters, contract-labeled latency histograms, owner/disk basics. | Authorized latency/queue/restarts/WAL/outbox/maintenance/backup/delivery summaries with bounded labels/retention and redacted data. |
 | Bounded streaming transfers | Private disk-staged uploads, checksum/cancellation and streamed branch/control v2 archives with legacy recovery. | Full expanded stress/restart/concurrency evidence and remaining transfer validation gates. Resumable multipart remains deferred. |

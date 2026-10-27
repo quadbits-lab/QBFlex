@@ -46,7 +46,7 @@ import {
   cn,
   toast,
 } from '@qb-flex/ui';
-import { useWrite } from './shared';
+import { applyReviewedMigration, useWrite } from './shared';
 import {
   DEFAULT_TASK_SQL,
   buildCreateTableSQL,
@@ -138,13 +138,10 @@ export function CreateTableDialog({
       return;
     }
     setFormError(null);
-    await write.mutateAsync({
-      path: base + '/migrations',
-      body: { id: migrationName + '_' + Date.now(), sql },
-    });
+    await applyReviewedMigration(base, migrationName + '_' + Date.now(), sql);
     toast.success(`Migration applied for "${migrationName}"`);
     onClose();
-  }, [base, onClose, sql, sqlName, write]);
+  }, [base, onClose, sql, sqlName]);
 
   const saveGui = useCallback(async () => {
     const definition = { name, description, columns, foreignKeys };
@@ -156,10 +153,7 @@ export function CreateTableDialog({
     setFormError(null);
     const tableName = name.trim();
     const generated = buildCreateTableSQL(definition);
-    await write.mutateAsync({
-      path: base + '/migrations',
-      body: { id: tableName + '_' + Date.now(), sql: generated },
-    });
+    await applyReviewedMigration(base, tableName + '_' + Date.now(), generated);
     if (expose) {
       await write.mutateAsync({
         path: base + '/exposure/' + tableName,

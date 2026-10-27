@@ -48,7 +48,11 @@ export function QBProvider({ client, queryClient, children }: QBProviderProps) {
     try {
       return await operation();
     } catch (error) {
-      if (active.current)
+      const isAbort =
+        (error as any)?.code === 'ABORTED' ||
+        (error as any)?.name === 'AbortError' ||
+        (error as any)?.message === 'Request was cancelled';
+      if (active.current && !isAbort)
         setError(error instanceof Error ? error : new Error('Authentication failed'));
       throw error;
     } finally {
@@ -113,8 +117,19 @@ export function useQBAuth() {
       action(() => client.auth.signIn(input)),
     signUp: (input: Parameters<typeof client.auth.signUp>[0]) =>
       action(() => client.auth.signUp(input)),
+    signInWithMagicLink: (
+      email: string,
+      options?: { callbackURL?: string; redirectTo?: string },
+    ) => action(() => client.auth.signInWithMagicLink(email, options)),
     signOut: () => action(() => client.auth.signOut()),
     refresh: () => action(() => client.auth.refreshSession()),
+    passkey: {
+      enroll: (opts?: { name?: string }) => action(() => client.auth.passkey.enroll(opts)),
+      list: () => action(() => client.auth.passkey.list()),
+      remove: (id: string) => action(() => client.auth.passkey.remove(id)),
+      rename: (id: string, name: string) => action(() => client.auth.passkey.rename(id, name)),
+      signIn: () => action(() => client.auth.passkey.signIn()),
+    },
   };
 }
 function useIdentity() {
@@ -146,6 +161,28 @@ export function useQBQuery<T, D = any>(options: {
         throw new Error('QB Flex identity changed during request');
       return data;
     },
+  });
+}
+export function useQBSearch(options: {
+  collection: string;
+  q: string;
+  limit?: number;
+  cursor?: string;
+  enabled?: boolean;
+}) {
+  return useQBQuery({
+    queryKey: ['search', options.collection, options.q, options.limit, options.cursor],
+    enabled: options.enabled !== false && !!options.q.trim(),
+    queryFn: (client, signal) =>
+      client.search(
+        {
+          collection: options.collection,
+          q: options.q,
+          limit: options.limit,
+          cursor: options.cursor,
+        },
+        { signal },
+      ),
   });
 }
 export function useQBMutation<T, V, D = any>(options: {

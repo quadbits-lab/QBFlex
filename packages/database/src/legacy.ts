@@ -428,7 +428,14 @@ export async function convertSQLiteDatabase(source: string, destination: string)
           await tx.exec(
             'CREATE TABLE IF NOT EXISTS engine_migrations(id TEXT PRIMARY KEY,checksum TEXT NOT NULL,applied_at TEXT NOT NULL)',
           );
-          for (const name of ['001-foundation', '002-credentials', '003-delivery-security']) {
+          for (const name of [
+            '001-foundation',
+            '002-credentials',
+            '003-delivery-security',
+            '004-workspace-lifecycle',
+            '005-recovery',
+            '006-reviews-previews',
+          ]) {
             const sql = readFileSync(
               new URL(`../../../migrations/pglite/${name}.sql`, import.meta.url),
               'utf8',

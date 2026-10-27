@@ -1,5 +1,5 @@
 import { betterAuth, type BetterAuthOptions } from 'better-auth';
-import { bearer, twoFactor } from 'better-auth/plugins';
+import { bearer, magicLink, twoFactor } from 'better-auth/plugins';
 import { passkey } from '@better-auth/passkey';
 import { getMigrations } from 'better-auth/db/migration';
 import { createHmac, createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
@@ -84,6 +84,26 @@ export async function createRealm(
         schema: { passkey: { modelName: '_qb_auth_passkeys' } },
       }),
       twoFactor({ issuer: 'QB Flex', twoFactorTable: '_qb_auth_two_factor' }),
+      // Platform Studio login stays password/passkey/TOTP. Application realms
+      // also accept single-use magic links (Better Auth default: 5 minutes, one
+      // verification, 5 requests per 60 seconds). The endpoint returns the same
+      // success body whether or not the address already has an account.
+      ...(config.platform
+        ? []
+        : [
+            magicLink({
+              expiresIn: 60 * 5,
+              storeToken: 'hashed',
+              rateLimit: { window: 60, max: 5 },
+              sendMagicLink: async ({ email, url }) => {
+                try {
+                  await mailer.send(email, 'magic-link', url);
+                } catch {
+                  // Delivery failure must not change the success response.
+                }
+              },
+            }),
+          ]),
     ],
     rateLimit: {
       enabled: true,

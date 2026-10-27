@@ -15,12 +15,23 @@ import { DurableJobs } from './jobs';
 import { Webhooks } from './webhooks';
 import { SecurityAdvisor } from './security-advisor';
 import { simulatePolicy } from './policy-simulator';
+import { SchemaReviews } from './schema-reviews';
+import { SearchCollections } from './search';
+import { QueryInspector } from './query-inspector';
+import { evaluateRowAccess } from './row-access';
+import { RealtimeDebugger } from './realtime-debug';
+import { runAssistant, assistantConfigured } from './assistant';
+import { provisionPreviewBranch } from './previews';
 import { APP_ROLE_NAME, isReservedRoleName, QBError, type Identity } from '@qb-flex/contracts';
 import { createHash } from 'node:crypto';
 let engine: BranchEngine;
 let jobs: DurableJobs;
 let webhooks: Webhooks;
 let advisor: SecurityAdvisor;
+let reviews: SchemaReviews;
+let searchCollections: SearchCollections;
+let inspector: QueryInspector;
+let realtimeDebug: RealtimeDebugger;
 let auth: Awaited<ReturnType<typeof createRealm>>;
 let serial = Promise.resolve();
 async function loadUserRoles(userId: string) {
@@ -202,19 +213,107 @@ async function run(action: string, a: any) {
         a.privileged,
         a.revision,
       );
-    case 'migration':
-      return await engine.migration(a.id, a.sql, a.author);
+    case 'migration': {
+      if (a.reviewId) {
+        const result = await reviews.applyApproved(a.reviewId, a.author);
+        await searchCollections.invalidateForSchemaChange();
+        return result;
+      }
+      if (typeof a.id === 'string' && typeof a.sql === 'string') {
+        const previous = (await engine.db
+          .query('SELECT checksum FROM _qb_migrations WHERE id=?')
+          .get(a.id)) as { checksum: string } | null;
+        if (previous) return await engine.migration(a.id, a.sql, a.author);
+        const reviewId = await reviews.requireApproved(a.id, a.sql);
+        const result = await reviews.applyApproved(reviewId, a.author);
+        await searchCollections.invalidateForSchemaChange();
+        return result;
+      }
+      throw new QBError('VALIDATION', 'Migration requires reviewId or an approved id/sql pair');
+    }
     case 'migrations':
       return await engine.db
         .query('SELECT id,checksum,author,applied_at FROM _qb_migrations ORDER BY applied_at')
         .all();
+    case 'reviews-list':
+      return await reviews.list();
+    case 'reviews-get':
+      return await reviews.get(a.id);
+    case 'reviews-create':
+      return await reviews.create(
+        { migrationId: a.migrationId, sql: a.sql },
+        a.author,
+      );
+    case 'reviews-rehearse':
+      return await reviews.rehearse(a.id);
+    case 'reviews-approve':
+      return await reviews.approve(a.id);
+    case 'reviews-reject':
+      return await reviews.reject(a.id);
+    case 'policies-access':
+      return await evaluateRowAccess(engine, a);
+    case 'search-collections-list':
+      return await searchCollections.list();
+    case 'search-collections-create':
+      return await searchCollections.create(a);
+    case 'search-collections-rebuild':
+      return await searchCollections.rebuild(a.id);
+    case 'search-collections-delete':
+      await searchCollections.delete(a.id);
+      return { deleted: true };
+    case 'search':
+      return await searchCollections.search(engine, identity, {
+        collection: a.collection,
+        q: a.q,
+        limit: a.limit,
+        cursor: a.cursor,
+      });
+    case 'inspector-samples':
+      return await inspector.listSamples();
+    case 'inspector-plan':
+      return await inspector.plan(a.fingerprint);
+    case 'inspector-record':
+      return await inspector.recordSample(a);
+    case 'realtime-debug-list':
+      return realtimeDebug.list();
+    case 'realtime-debug-open':
+      return realtimeDebug.open(a);
+    case 'realtime-debug-record':
+      return realtimeDebug.record(a.id, a.state, a);
+    case 'webhooks-sample':
+      return await webhooks.sample(a.id);
+    case 'assistant': {
+      const tables = await schema(engine.db);
+      const policyList = await policies(engine.db);
+      return await runAssistant({
+        schema: tables,
+        policies: policyList,
+        request: a,
+        createReview: async (sql, migrationId) => {
+          const review = await reviews.create({ migrationId, sql }, a.author ?? 'assistant');
+          return review.id;
+        },
+      });
+    }
+    case 'assistant-configured':
+      return { configured: assistantConfigured() };
+    case 'preview-provision':
+      await provisionPreviewBranch(engine, a.path, a.fixtures ?? {});
+      return { path: a.path };
     case 'sql':
       engine.safeSQL(a.sql);
       if (/^\s*(select|with)\b/i.test(a.sql))
         return await engine.db
           .query(`SELECT * FROM (${a.sql.trim().replace(/;$/, '')}) LIMIT 500`)
           .all();
-      else return await engine.migration(crypto.randomUUID(), a.sql, a.author);
+      else {
+        // Privileged SQL console still applies through a review when mutating.
+        const id = crypto.randomUUID();
+        const review = await reviews.create({ migrationId: id, sql: a.sql }, a.author);
+        await reviews.rehearse(review.id);
+        await reviews.approve(review.id);
+        return await reviews.applyApproved(review.id, a.author);
+      }
     case 'types':
       return await engine.types();
     case 'snapshot':
@@ -622,6 +721,10 @@ self.onmessage = (e) => {
           message.init.branchId,
         ).initialize();
         advisor = await new SecurityAdvisor(engine).initialize();
+        reviews = await new SchemaReviews(engine).initialize();
+        searchCollections = await new SearchCollections(engine).initialize();
+        inspector = await new QueryInspector(engine).initialize();
+        realtimeDebug = new RealtimeDebugger();
         auth = await createRealm(db, message.init.auth);
         // initdb's temporary WASM heap is large and is not accounted for by JS heap pressure.
         // Release initialization garbage before admitting this owner to the bounded pool.

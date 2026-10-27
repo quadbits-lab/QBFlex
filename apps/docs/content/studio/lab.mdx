@@ -1,0 +1,23 @@
+export const frontmatter = {"title":"Local Data Lab","description":"Parse a consented CSV or JSON file in the browser with explicit size, display and time budgets.","section":"Studio","slug":"studio/lab","order":12.7};
+
+# Local Data Lab
+
+## Bounded browser table
+
+Open **Data Lab** (`/lab`). Choose a CSV or JSON file only after consent. Parsing uses a local CSV reader or `JSON.parse`. The file is not uploaded, and filters run in memory.
+
+This page is the bounded JavaScript lab. DuckDB-WASM and SQLite WASM workers are the production path for Parquet, local SQL, imported SQLite files and full profiling. Those workers are not loaded here. Parquet and SQLite files are rejected with that explanation. Login and ordinary database editing keep working when this lab is unused.
+
+## Budgets and consent
+
+| Budget | Limit |
+| --- | --- |
+| File | 100 MB |
+| Result display | 2 MB |
+| Filter | 10 seconds, cancelled with `AbortSignal` |
+
+The table is ephemeral. Leaving the page aborts in-flight work and drops the rows. There is no OPFS persistence and no outbound request for the imported data.
+
+**Export as migration review** posts a `CREATE TABLE lab_import` draft, with text columns derived from the header, to the schema review endpoint. It does not insert the imported rows and does not apply the draft.
+
+Filters are equality, inequality or contains on one column. They are not SQL, so they cannot fetch remote URLs or install extensions.

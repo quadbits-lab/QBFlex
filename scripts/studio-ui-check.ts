@@ -26,15 +26,27 @@ try {
     await Bun.sleep(100);
   }
   project = await f.project('ui-check');
-  await f.call(
-    project.base + '/migrations',
+  const fixtureSql =
+    "CREATE TABLE comments(id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id), body TEXT); INSERT INTO tasks(id,owner_id,title) VALUES('ui-task','ui-owner','Review responsive layout');";
+  const fixtureReview = await f.call(
+    project.base + '/reviews',
     'POST',
-    {
-      id: 'ui-fixture',
-      sql: "CREATE TABLE comments(id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id), body TEXT); INSERT INTO tasks(id,owner_id,title) VALUES('ui-task','ui-owner','Review responsive layout');",
-    },
+    { migrationId: 'ui-fixture', sql: fixtureSql },
     f.token,
   );
+  await f.call(
+    project.base + '/reviews/' + fixtureReview.data.id + '/rehearse',
+    'POST',
+    {},
+    f.token,
+  );
+  await f.call(
+    project.base + '/reviews/' + fixtureReview.data.id + '/approve',
+    'POST',
+    {},
+    f.token,
+  );
+  await f.call(project.base + '/migrations', 'POST', { reviewId: fixtureReview.data.id }, f.token);
   const context = await browser.newContext({
     viewport: { width: 1440, height: 960 },
     reducedMotion: 'reduce',

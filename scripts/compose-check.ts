@@ -131,10 +131,12 @@ try {
   }
   if (status !== 'succeeded') throw new Error('Provisioning deadline exceeded');
   const base = `/management/v1/projects/${project.id}/branches/${project.branchId}`;
-  await api(base + '/migrations', 'POST', {
-    id: '001',
-    sql: 'CREATE TABLE tasks(id TEXT PRIMARY KEY NOT NULL,owner_id TEXT NOT NULL,title TEXT NOT NULL);',
-  });
+  const sql =
+    'CREATE TABLE tasks(id TEXT PRIMARY KEY NOT NULL,owner_id TEXT NOT NULL,title TEXT NOT NULL);';
+  const review = await api(base + '/reviews', 'POST', { migrationId: '001', sql });
+  await api(base + '/reviews/' + review.data.id + '/rehearse', 'POST', {});
+  await api(base + '/reviews/' + review.data.id + '/approve', 'POST', {});
+  await api(base + '/migrations', 'POST', { reviewId: review.data.id });
   const key = (await api(`/management/v1/projects/${project.id}/keys`, 'POST', {})).data.key;
   client = createClient<CheckDatabase>({
     url,

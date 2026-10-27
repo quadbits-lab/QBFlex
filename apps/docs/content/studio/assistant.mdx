@@ -1,0 +1,21 @@
+export const frontmatter = {"title":"Studio assistant","description":"Request explanations and proposals. Migration proposals become schema reviews and are not applied live.","section":"Studio","slug":"studio/assistant","order":12.8};
+
+# Studio assistant
+
+## Proposals, not writes
+
+Open **Assistant** (`/ai`) for the selected branch. Choose an intent (`explain`, `migration`, `policy` or `hook`), write a prompt, and optionally attach sanitized error text. Submit sends that request to the assistant endpoint.
+
+The assistant does not apply SQL, policies or hooks. A migration proposal that includes a review id links to [Schema Reviews](/docs/studio/reviews). Row values are omitted unless a later client explicitly opts in; this Studio form sends `includeRows: false` and no fixtures.
+
+Vector search and isolated functions stay planned. Functions remains a planned navigation item.
+
+## Configuration
+
+The capability is `configured`. Proposals are generated only when the API process has all three of `QB_AI_BASE_URL`, `QB_AI_API_KEY` and `QB_AI_MODEL`. If the response says the assistant is unconfigured, Studio shows that notice and does not invent a proposal. Private and link-local base URLs are rejected by the API.
+
+## Management contract
+
+`POST /management/v1/projects/{projectId}/branches/{branchId}/assistant` accepts `{ intent, prompt, error?, includeRows? }`.
+
+The management client exposes `assistant(projectId, branchId).propose(body)` and returns `{ proposals, model, configured }`. Model output does not grant access.

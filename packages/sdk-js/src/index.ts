@@ -8,10 +8,12 @@ import {
   type Result,
   type Session,
   type Filter,
+  type AggregateExpr,
+  type HavingClause,
   type RelationsOf,
 } from '@qb-flex/contracts';
 import { createAuthClient } from 'better-auth/client';
-import { twoFactorClient } from 'better-auth/client/plugins';
+import { magicLinkClient, twoFactorClient } from 'better-auth/client/plugins';
 import { passkeyClient } from '@better-auth/passkey/client';
 export { QBError } from '@qb-flex/contracts';
 export type { Result, Session, Query } from '@qb-flex/contracts';
@@ -95,7 +97,7 @@ export class QBClient<D = DatabaseShape, R = RPCShape> {
       const client = this;
       this.betterAuthClient = createAuthClient({
         baseURL: this.baseURL + '/auth',
-        plugins: [passkeyClient(), twoFactorClient()],
+        plugins: [passkeyClient(), twoFactorClient(), magicLinkClient()],
         fetchOptions: {
           customFetchImpl: async (input, init) => {
             const headers = new Headers(init?.headers);
@@ -276,6 +278,19 @@ export class QBClient<D = DatabaseShape, R = RPCShape> {
       this.setSession(session, result.token ?? this.token);
       return session;
     },
+    /** Requests a single-use magic link. The success body does not reveal whether the account exists. */
+    signInWithMagicLink: async (
+      email: string,
+      options?: { callbackURL?: string; redirectTo?: string },
+    ) => {
+      const callbackURL = options?.callbackURL ?? options?.redirectTo;
+      return this.request<{ status: boolean }>(
+        '/auth/sign-in/magic-link',
+        'POST',
+        callbackURL ? { email, callbackURL } : { email },
+        { auth: true },
+      );
+    },
     signOut: async () => {
       await this.request('/auth/sign-out', 'POST', {}, { auth: true });
       this.setSession(null, null);
@@ -378,7 +393,13 @@ export class QBClient<D = DatabaseShape, R = RPCShape> {
           this.setSession(session, this.token ?? result.session.token);
           return session;
         } catch (error) {
-          if (error instanceof QBError && error.status === 401) {
+          if (
+            error instanceof QBError &&
+            (error.status === 401 ||
+              error.code === 'ABORTED' ||
+              error.code === 'IDENTITY_CHANGED' ||
+              error.code === 'DISPOSED')
+          ) {
             this.setSession(null, null);
             return null;
           }
@@ -414,6 +435,24 @@ export class QBClient<D = DatabaseShape, R = RPCShape> {
       args,
       options,
     );
+  }
+  search(
+    input: { collection: string; q: string; limit?: number; cursor?: string },
+    options: RequestOptions = {},
+  ) {
+    return this.request<
+      Result<{
+        hits: {
+          id: string;
+          table: string;
+          rank: number;
+          snippet: string | null;
+          row: Record<string, unknown>;
+        }[];
+        count: number | null;
+        cursor: string | null;
+      }>
+    >('/search', 'POST', input, options);
   }
   channel(options: ChannelOptions) {
     const channel = new QBChannel(this, options, () => this.channels.delete(channel));
@@ -521,6 +560,23 @@ export class QueryBuilder<D, K extends keyof D & string, R> implements PromiseLi
   }
   count() {
     return this.next({ count: true });
+  }
+  groupBy(columns: (keyof RowOf<D, K> & string)[]) {
+    return this.next({ groupBy: columns as string[] });
+  }
+  aggregate(fn: AggregateExpr['fn'], column?: keyof RowOf<D, K> & string, alias?: string) {
+    const generatedAlias = alias ?? `${fn}_${String(column ?? 'star')}`;
+    return this.next({
+      aggregates: [
+        ...(this.query.aggregates ?? []),
+        { fn, column: column as string | undefined, alias: generatedAlias },
+      ],
+    });
+  }
+  having(alias: string, op: HavingClause['op'], value: HavingClause['value']) {
+    return this.next({
+      having: [...(this.query.having ?? []), { alias, op, value }],
+    });
   }
   abortSignal(signal: AbortSignal) {
     return new QueryBuilder<D, K, R>(this.client, this.table, this.query, {

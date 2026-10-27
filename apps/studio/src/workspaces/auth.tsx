@@ -74,7 +74,16 @@ type AppRole = {
 
 export function AuthWorkspace({ base, project }: { base: string; project: any }) {
   return (
-    <Tabs defaultValue="users" className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+        <Badge variant="success">Magic links available</Badge>
+        <p className="m-0">
+          Application magic links and passkeys are supported on this branch. Magic links use the
+          configured mail adapter and do not sign in to Studio. Studio stays on password, passkey
+          and authenticator.
+        </p>
+      </div>
+      <Tabs defaultValue="users" className="flex flex-col gap-6">
       <TabsList aria-label="Authentication sections" className="w-fit">
         <TabsTrigger value="users">Users</TabsTrigger>
         <TabsTrigger value="roles">Roles</TabsTrigger>
@@ -90,6 +99,7 @@ export function AuthWorkspace({ base, project }: { base: string; project: any })
         <ProviderSettings project={project} />
       </TabsContent>
     </Tabs>
+    </div>
   );
 }
 

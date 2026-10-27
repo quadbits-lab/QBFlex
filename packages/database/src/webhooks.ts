@@ -281,6 +281,47 @@ export class Webhooks {
       def = this.definition(row);
     return { serviceKeyId: def.serviceKeyId, table: def.table };
   }
+  /** Build a signed synthetic sample without advancing the outbox checkpoint. */
+  async sample(id: string): Promise<{
+    eventId: string;
+    url: string;
+    body: string;
+    headers: Record<string, string>;
+  }> {
+    const row = await this.row(id);
+    if (row.state === 'revoked')
+      throw new QBError('CONFLICT', 'Webhook is revoked', 409);
+    const def = this.definition(row);
+    const eventId = `sample_${crypto.randomUUID()}`;
+    const body = JSON.stringify({
+      eventId,
+      type: 'database',
+      table: def.table,
+      event: def.events[0] ?? 'insert',
+      payload: Object.fromEntries(def.columns.map((c) => [c, null])),
+      schemaVersion: await schemaVersion(this.engine.db),
+      sample: true,
+    });
+    if (Buffer.byteLength(body) > 65536)
+      throw new QBError('LIMIT_EXCEEDED', 'Sample body exceeds 64 KiB');
+    const timestamp = String(Math.floor(this.clock() / 1000));
+    const sign = (secret: string) =>
+      createHmac('sha256', secret).update(`${timestamp}.${eventId}.`).update(body).digest('hex');
+    const signatures = [sign(def.secret)];
+    if (def.previousSecret && (def.rotationUntil ?? 0) > this.clock())
+      signatures.push(sign(def.previousSecret));
+    return {
+      eventId,
+      url: def.url,
+      body,
+      headers: {
+        'content-type': 'application/json',
+        'x-qb-event-id': eventId,
+        'x-qb-timestamp': timestamp,
+        'x-qb-signature': signatures.map((s) => `v1=${s}`).join(','),
+      },
+    };
+  }
   async prepare(
     id: string,
     leaseToken: string,

@@ -262,6 +262,11 @@ export function StorageWorkspace({ base }: { base: string }) {
 
   return (
     <div className="grid grid-cols-1 content-start gap-4">
+      <div className="rounded-xl border border-border bg-card p-4 text-sm leading-relaxed text-muted-foreground">
+        Resumable uploads and bounded image transforms are available for this branch. Transforms
+        stay within the declared pixel and format limits and need the runtime image decoder. A CDN
+        in front of public objects is still planned and unconfigured.
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-48 flex-1 sm:max-w-xs">
           <Select value={selected || undefined} onValueChange={setSelected} disabled={!rows.length}>

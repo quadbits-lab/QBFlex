@@ -1,0 +1,22 @@
+export const frontmatter = {"title":"Query Inspector","description":"Inspect slow SELECT fingerprints and owner-side EXPLAIN plans without parameter values.","section":"Studio","slug":"studio/inspector","order":12.6};
+
+# Query Inspector
+
+## Samples, then a plan
+
+Open **Query Inspector** (`/inspector`) for the selected branch. The list shows normalized SELECT fingerprints, table, duration, hit count and sample time. Fingerprints do not keep parameter values.
+
+**Plan** asks the branch owner to run `EXPLAIN (FORMAT JSON)` on the stored generated statement. Studio shows the plan JSON, the request state (`queued`, `planned` or `failed`) and index suggestions. Suggestions do not create indexes.
+
+Plans are diagnostics. They are not a stable application API, and they do not accept arbitrary SQL from the browser.
+
+## Management contract
+
+Prefix with `/management/v1/projects/{projectId}/branches/{branchId}`:
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET | `/inspector/samples` | List up to 200 samples. |
+| POST | `/inspector/plan` | Explain `{ fingerprint }`. |
+
+The management client exposes `inspector(projectId, branchId).samples/plan`. A missing fingerprint returns not found. A failed plan returns `state: "failed"` and an error string instead of mutating schema.

@@ -120,3 +120,4 @@ Integration/browser checks need the local dependencies. Browser verification use
 No external deployment or registry publication is performed. The existing Sites Studio prototype remains the visual reference and its audience is unchanged.
 
 Existing SQLite installations require [offline conversion](apps/docs/content/self-hosting/engine-migration.mdx) into a separate directory before activation. PGlite owners default to four (`QB_MAX_BRANCH_OWNERS`, range 1–32); provision memory for independent WASM instances and complete snapshot exports.
+

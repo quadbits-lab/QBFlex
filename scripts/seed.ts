@@ -33,10 +33,12 @@ try {
   });
   await service.tick();
   const base = `/management/v1/projects/${p.id}/branches/${p.branchId}`;
-  await call(base + '/migrations', 'POST', {
-    id: '001',
-    sql: `CREATE TABLE tasks(id TEXT PRIMARY KEY NOT NULL DEFAULT(replace(gen_random_uuid()::text,'-','')),owner_id TEXT NOT NULL,title TEXT NOT NULL,completed BIGINT NOT NULL DEFAULT 0 CHECK(completed IN(0,1)),revision BIGINT NOT NULL DEFAULT 1);CREATE INDEX tasks_owner ON tasks(owner_id);`,
-  });
+  const sql = `CREATE TABLE tasks(id TEXT PRIMARY KEY NOT NULL DEFAULT(replace(gen_random_uuid()::text,'-','')),owner_id TEXT NOT NULL,title TEXT NOT NULL,completed BIGINT NOT NULL DEFAULT 0 CHECK(completed IN(0,1)),revision BIGINT NOT NULL DEFAULT 1);CREATE INDEX tasks_owner ON tasks(owner_id);`;
+  // This helper unwraps the success envelope, so the review id is on the returned object.
+  const review = await call(base + '/reviews', 'POST', { migrationId: '001', sql });
+  await call(base + '/reviews/' + review.id + '/rehearse', 'POST', {});
+  await call(base + '/reviews/' + review.id + '/approve', 'POST', {});
+  await call(base + '/migrations', 'POST', { reviewId: review.id });
   await call(base + '/exposure/tasks', 'PUT', {
     enabled: true,
     columns: ['id', 'owner_id', 'title', 'completed', 'revision'],

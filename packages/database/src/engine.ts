@@ -181,6 +181,68 @@ export class BranchEngine {
     const codec = cursorCodec(this.secret);
     const version = await schemaVersion(this.db);
     const scope = codec.scope(name, q, identity, version);
+    const hasAggregates = Array.isArray(q.aggregates) && q.aggregates.length > 0;
+
+    if (hasAggregates) {
+      if (q.relations) throw new QBError('INVALID_QUERY', 'Relations not supported with aggregates');
+      if (q.cursor) throw new QBError('INVALID_QUERY', 'Cursor not supported with aggregates');
+      // For aggregates, count = number of groups
+      const count = q.count
+        ? Number(
+            (
+              (await this.db
+                .query(`SELECT COUNT(*) AS total FROM (${sql})`)
+                .get(...(params as any[]))) as any
+            ).total,
+          )
+        : undefined;
+
+      const fetchedColumns = compiled.selected;
+      const cost = fetchedColumns
+        .map(
+          (name) => `COALESCE(octet_length(${identifier(name)}::text),0)*6+${name.length * 6 + 32}`,
+        )
+        .join('+');
+      const bytes = Number(
+        (
+          (await this.db
+            .query(`SELECT COALESCE(SUM(${cost}),0) AS bytes FROM (${sql})`)
+            .get(...(params as any[]))) as any
+        ).bytes,
+      );
+      if (bytes > budget.remaining)
+        throw new QBError(
+          'RESULT_TOO_LARGE',
+          'Result exceeds 2 MiB; select fewer columns or reduce the page size',
+          413,
+        );
+      budget.remaining -= bytes;
+
+      const rows = (await this.db.query(sql).all(...(params as any[]))).map((row) =>
+        this.rowWire(table, row),
+      ) as Record<string, any>[];
+      const aggregateAliases = new Set(((compiled as any).aggregates as { alias: string }[] | undefined)?.map((a) => a.alias) ?? []);
+      const projected = rows.map((r) => {
+        for (const alias of aggregateAliases) {
+          const v = r[alias];
+          if (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v) && Number.isFinite(Number(v))) {
+            r[alias] = Number(v);
+          }
+        }
+        return Object.fromEntries(compiled.selected.map((c) => [c, r[c]]));
+      });
+
+      return {
+        data: projected,
+        meta: {
+          schemaVersion: version,
+          cursor: undefined,
+          count,
+          consistencyToken: String(await this.latest()),
+        },
+      };
+    }
+
     const count = q.count
       ? Number(
           (

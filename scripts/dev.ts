@@ -60,7 +60,11 @@ export async function runDevelopment(
 ) {
   const began = performance.now();
   const input = options.environment ?? process.env;
-  const ports = options.ports ?? { studio: 7610, docs: 7611, api: Number(input.PORT ?? 7612) };
+  const ports: Ports = {
+    studio: options.ports?.studio ?? 7610,
+    docs: options.ports?.docs ?? 7611,
+    api: options.ports?.api ?? Number(input.PORT ?? 7612),
+  };
   const apiURL = `http://localhost:${ports.api}`;
   const studioURL = `http://localhost:${ports.studio}`;
   const docsURL = `http://localhost:${ports.docs}`;
@@ -153,9 +157,10 @@ export async function runDevelopment(
         ],
         resolve(root, 'apps', app),
       );
-    // Show "ready" only after both frontends respond, not merely after spawning them.
+    const frontends = [studioURL, docsURL];
+    // Show "ready" only after frontends respond, not merely after spawning them.
     await Promise.all(
-      [studioURL, docsURL].map(async (address) => {
+      frontends.map(async (address) => {
         while (Date.now() < deadline && !stopped) {
           const failed = children.find((child) => child.process.exitCode !== null);
           if (failed) throw new Error(`${failed.name} exited during startup.`);
@@ -178,7 +183,11 @@ export async function runDevelopment(
       engineVersion,
       dataDir: environment.QB_DATA_DIR,
       maxOwners: Number(input.QB_MAX_BRANCH_OWNERS ?? 4),
-      services: { studio: studioURL, docs: docsURL, api: apiURL },
+      services: {
+        studio: studioURL,
+        docs: docsURL,
+        api: apiURL,
+      },
       ...(existsSync(bootstrapTokenFile) ? { bootstrapTokenFile } : {}),
     });
     const result = await Promise.race(

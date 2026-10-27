@@ -34,6 +34,6 @@ Policy-test write simulations use synthetic isolated fixtures with the actual en
 
 Security Advisor now scans bounded metadata, reports severity/evidence/remediation and stores evidence-bound expiring acknowledgments. It samples no rows and never repairs grants.
 
-Required but not implemented: full recovery/operations/alerts/Query Inspector, reviews/previews, full Advisor/simulator/webhook certification, native/offline/background/push SDK and toolkit, search/realtime debugger and all four optional WASM workers. Do not advertise their availability or include mock success examples.
+Required but not implemented: full Recovery Center certification and alert delivery, operations dashboard, Query Inspector, reviews/previews, full Advisor/simulator/webhook certification, native/offline/background/push SDK and toolkit, search/realtime debugger and all four optional WASM workers. Do not advertise planned capabilities as available or include mock success examples.
 
 The terminal logger uses the existing Elysia hooks and shared redaction for pretty/JSON output. Keep machine logs JSON in production/pipes, honor color controls, and preserve metrics when quieting successful polling. Never replace the allowlist with raw request/response logging.

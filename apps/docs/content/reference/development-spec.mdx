@@ -681,7 +681,7 @@ Architecture and feature choices above are proposed QB Flex requirements. They a
 
 **Configuration/limits/failure/compatibility:** daily snapshots, seven daily/four weekly checkpoints; reference targets RPO24h/RTO60m require measured installation evidence. Configure S3 endpoint/region/bucket/prefix and encrypted credential references separately from normal object storage. Never upload master keys with archives. Bound streams and scratch disk/concurrency; keep legacy restore. Corruption, insufficient disk, missing key/object/destination produce separate actionable report findings; deletion never removes the last required checkpoint accidentally.
 
-**Acceptance:** encrypted remote round-trip; corruption/missing-key/missing-object failures; stale alerts; retention correctness; restart cleanup; unchanged primary; legacy archive fixtures; measured drill report includes all three recovery dimensions.
+**Acceptance:** encrypted remote round-trip; corruption/missing-key/missing-object failures; stale alerts; retention correctness; restart cleanup; unchanged primary; legacy archive fixtures; measured drill report includes all three recovery dimensions. Experimental Studio/API coverage exists; full provider certification and alert delivery remain open.
 
 ### SEC-01 Security Advisor and Policy Simulator
 

@@ -36,19 +36,24 @@ Archive hides a workspace from normal selection while retaining its projects and
 | Workspace | `/workspace` | Workspace profile, avatar, projects, archive and delete. |
 | Database | `/database` | Table creation, schema/data, policies, privileged SQL and migrations. |
 | Schema | `/schema` | [Workflow-canvas visualization](/docs/studio/schema-visualizer) and detail sheet. |
-| Authentication | `/auth` | Branch users, session administration and provider configuration. |
+| Schema Reviews | `/reviews` | [Draft, rehearse and approve SQL](/docs/studio/reviews) before live apply. |
+| Previews | `/previews` | [Disposable schema forks](/docs/studio/previews) with a TTL. |
+| Authentication | `/auth` | Branch users, roles, providers, application magic links and passkeys. |
 | API | `/api` | Endpoint/keys/type information. |
-| Realtime | `/realtime` | Current subscription semantics/capabilities, not full trace debugger. |
-| Storage | `/storage` | Logical buckets and authenticated upload/download/delete. |
+| Realtime | `/realtime` | Subscription guide plus a [metadata debug session](/docs/realtime/row-events). |
+| Storage | `/storage` | Buckets, uploads, resumable sessions and bounded transforms. CDN is unconfigured. |
+| Query Inspector | `/inspector` | [Slow SELECT fingerprints and EXPLAIN plans](/docs/studio/inspector). |
+| Data Lab | `/lab` | [Browser-local CSV/JSON table](/docs/studio/lab). Full WASM workers are separate. |
+| Assistant | `/ai` | [Proposals only](/docs/studio/assistant). Vector search stays planned. |
 | Backups | `/backups` | Snapshot and isolated restore with explicit cutover workflow. |
 | Activity | `/logs` | Audited actions; the route remains backward compatible. |
 | Job Inbox | `/jobs` | Experimental [job metadata/history/cancel/replay](/docs/studio/job-inbox). |
 | Webhooks | `/webhooks` | Experimental [scoped signed database deliveries](/docs/studio/webhooks). |
 | Security | `/security` | Experimental [Advisor findings and acknowledgments](/docs/studio/security-advisor). |
 | Settings | `/settings` | Account/security, organization membership, and **Project** settings (identity, quotas, delete). |
-| Functions; AI & Vectors | `/functions`; `/ai` | Planned-state screens, not executable services. |
+| Functions | `/functions` | Planned-state screen, not an executable service. |
 
-Setup and sign-in are outside the authenticated shell (`/setup`, `/sign-in`). The development port remains 7610. No `/notifications` or Data Lab workspace is available yet.
+Setup and sign-in are outside the authenticated shell (`/setup`, `/sign-in`). The development port remains 7610. No `/notifications` workspace is available yet. Data Lab is a bounded in-browser table, not a DuckDB or SQLite WASM worker. Permission-aware [search collections](/docs/studio/search) are registered through the management client; Studio does not add a separate search page.
 
 ## Database workflow
 

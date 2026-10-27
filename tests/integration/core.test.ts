@@ -166,15 +166,12 @@ test('real API: first owner, provisioning, realm isolation, SDK CRUD, backup and
     );
     await service.tick();
     const b = `/management/v1/projects/${project.data.id}/branches/${project.data.branchId}`;
-    await call(
-      b + '/migrations',
-      'POST',
-      {
-        id: '001',
-        sql: 'CREATE TABLE tasks(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,title TEXT NOT NULL);',
-      },
-      token,
-    );
+    const sql =
+      'CREATE TABLE tasks(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,title TEXT NOT NULL);';
+    const review = await call(b + '/reviews', 'POST', { migrationId: '001', sql }, token);
+    await call(b + '/reviews/' + review.data.id + '/rehearse', 'POST', {}, token);
+    await call(b + '/reviews/' + review.data.id + '/approve', 'POST', {}, token);
+    await call(b + '/migrations', 'POST', { reviewId: review.data.id }, token);
     await call(
       b + '/exposure/tasks',
       'PUT',

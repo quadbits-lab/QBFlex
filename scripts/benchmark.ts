@@ -55,15 +55,16 @@ try {
     f.token,
   );
   const seed = performance.now();
-  await f.call(
-    project.base + '/migrations',
+  const seedSql = `CREATE INDEX tasks_owner_id ON tasks(owner_id,id); WITH RECURSIVE rows(n) AS (VALUES(1) UNION ALL SELECT n+1 FROM rows WHERE n<${dataset}) INSERT INTO tasks(id,owner_id,title) SELECT lpad(n::text,10,'0'),'${session!.user.id}','Task '||n FROM rows;`;
+  const seedReview = await f.call(
+    project.base + '/reviews',
     'POST',
-    {
-      id: 'benchmark-seed',
-      sql: `CREATE INDEX tasks_owner_id ON tasks(owner_id,id); WITH RECURSIVE rows(n) AS (VALUES(1) UNION ALL SELECT n+1 FROM rows WHERE n<${dataset}) INSERT INTO tasks(id,owner_id,title) SELECT lpad(n::text,10,'0'),'${session!.user.id}','Task '||n FROM rows;`,
-    },
+    { migrationId: 'benchmark-seed', sql: seedSql },
     f.token,
   );
+  await f.call(project.base + '/reviews/' + seedReview.data.id + '/rehearse', 'POST', {}, f.token);
+  await f.call(project.base + '/reviews/' + seedReview.data.id + '/approve', 'POST', {}, f.token);
+  await f.call(project.base + '/migrations', 'POST', { reviewId: seedReview.data.id }, f.token);
   const seedMs = performance.now() - seed;
   await f.call(
     project.base + '/exposure/tasks',

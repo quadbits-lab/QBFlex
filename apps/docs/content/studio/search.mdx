@@ -1,0 +1,22 @@
+export const frontmatter = {"title":"Search collections","description":"Register permission-aware full-text collections over exposed text columns.","section":"Studio","slug":"studio/search","order":12.5};
+
+# Search collections
+
+## Management registration
+
+Search collections are available through the management API for the selected branch. Studio does not add a separate search page. Register a collection only for an exposed table and its allowed text columns. Application reads still pass the current SELECT policy before hits, counts and snippets are returned.
+
+States are `building`, `ready`, `invalidated`, `rebuilding`, `unsupported` and `failed`. Schema or exposure changes invalidate a ready collection. Rebuild does not bypass row policies. There is no vector fallback.
+
+## Management contract
+
+Prefix with `/management/v1/projects/{projectId}/branches/{branchId}`:
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET | `/search/collections` | List collections. |
+| POST | `/search/collections` | Register `{ name, table, columns }`. |
+| POST | `/search/collections/{id}/rebuild` | Rebuild a private index. |
+| DELETE | `/search/collections/{id}` | Remove the collection and its index. |
+
+The management client exposes `searchCollections(projectId, branchId).list/create/rebuild/remove`. Queries stay bounded. A collection name is not authorization to read hidden rows.

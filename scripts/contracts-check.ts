@@ -12,7 +12,7 @@ function visit(node: ts.Node) {
     const method = node.expression.name.text,
       arg = node.arguments[0];
     if (
-      ['get', 'post', 'put', 'patch', 'delete', 'all'].includes(method) &&
+      ['get', 'post', 'put', 'patch', 'delete', 'head', 'all'].includes(method) &&
       arg &&
       ts.isStringLiteral(arg) &&
       arg.text.startsWith('/') &&

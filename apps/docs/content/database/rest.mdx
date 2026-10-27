@@ -24,6 +24,35 @@ POST this body to `/data/tasks/query`. The default page is 50 rows; maximum is 5
 
 Follow the response's `meta.cursor` with the same projection, filters, ordering, identity and schema version. Cursors are signed and bind that query scope. Changing scope rejects the cursor. Pagination does not provide a database snapshot spanning multiple requests.
 
+## Aggregate queries
+
+Group and summarize authorized rows with `groupBy`, `aggregates` and `having`. Aggregates are a deliberately degraded query mode: cursor pagination and relations are disabled, and `meta.count` returns the number of groups rather than rows.
+
+```json
+{
+  "groupBy": ["owner_id"],
+  "aggregates": [
+    { "fn": "count", "alias": "task_count" },
+    { "fn": "sum", "column": "completed", "alias": "completed_sum" }
+  ],
+  "having": [{ "alias": "task_count", "op": "gt", "value": 2 }],
+  "limit": 50
+}
+```
+
+Supported aggregate functions are `count`, `countDistinct`, `sum`, `avg`, `min` and `max`. `sum` and `avg` require a numeric column. Aliases must be unique and identifier-safe. Up to five group-by columns, eight aggregates and ten having clauses are allowed; the page limit is 1–500 rows (groups).
+
+```ts
+await client
+  .from('tasks')
+  .groupBy(['owner_id'])
+  .aggregate('sum', 'completed', 'completed_sum')
+  .having('completed_sum', 'gte', 1)
+  .execute();
+```
+
+Policy filters are applied before grouping, so a row invisible to the caller never contributes to a sum or count.
+
 ## Writes
 
 POST inserts one row or an atomic batch of up to 100 rows. PATCH updates a row by key; DELETE removes it. Supply `Idempotency-Key` to safely reconcile a retried mutation. Reusing the same key with different content returns a conflict.

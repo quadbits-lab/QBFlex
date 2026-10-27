@@ -25,6 +25,7 @@ Commands:
   types
   backup
   branches
+  previews
   storage
   secrets
   help [command]    display help for command
@@ -338,6 +339,95 @@ Commands:
 
 ```text
 Usage: qb branches list [options]
+
+Options:
+  --project <id>  Project ID
+  --branch <id>   Branch ID or alias
+  --url <url>     API URL
+  -h, --help      display help for command
+```
+
+## qb previews
+
+```text
+Usage: qb previews [options] [command]
+
+Options:
+  -h, --help             display help for command
+
+Commands:
+  create [options]
+  list [options]
+  status [options] <id>
+  extend [options] <id>
+  delete [options] <id>
+  help [command]         display help for command
+```
+
+## qb previews create
+
+```text
+Usage: qb previews create [options]
+
+Options:
+  --name <name>   Preview name
+  --ttl <hours>   TTL hours (1–168) (default: "72")
+  --project <id>  Project ID
+  --branch <id>   Branch ID or alias
+  --url <url>     API URL
+  -h, --help      display help for command
+```
+
+## qb previews list
+
+```text
+Usage: qb previews list [options]
+
+Options:
+  --project <id>  Project ID
+  --branch <id>   Branch ID or alias
+  --url <url>     API URL
+  -h, --help      display help for command
+```
+
+## qb previews status
+
+```text
+Usage: qb previews status [options] <id>
+
+Arguments:
+  id              Preview id
+
+Options:
+  --project <id>  Project ID
+  --branch <id>   Branch ID or alias
+  --url <url>     API URL
+  -h, --help      display help for command
+```
+
+## qb previews extend
+
+```text
+Usage: qb previews extend [options] <id>
+
+Arguments:
+  id              Preview id
+
+Options:
+  --ttl <hours>   TTL hours (1–168) (default: "72")
+  --project <id>  Project ID
+  --branch <id>   Branch ID or alias
+  --url <url>     API URL
+  -h, --help      display help for command
+```
+
+## qb previews delete
+
+```text
+Usage: qb previews delete [options] <id>
+
+Arguments:
+  id              Preview id
 
 Options:
   --project <id>  Project ID

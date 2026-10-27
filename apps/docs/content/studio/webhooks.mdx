@@ -84,5 +84,9 @@ Prefix with `/management/v1/projects/{projectId}/branches/{branchId}`:
 | POST | `/webhooks` | Create using name/url/serviceKeyId/table/events/columns; secret returned once. |
 | POST | `/webhooks/{id}/state` | `{ state: "active" }`, `paused` or `revoked`; revocation is permanent. |
 | POST | `/webhooks/{id}/rotate` | Return one new signing secret with bounded overlap. |
+| POST | `/webhooks/{id}/sample` | Build a signed synthetic event. It is not a production row. |
+| POST | `/webhooks/{id}/deliver-sample` | Deliver that signed sample to the configured HTTPS receiver. |
 
-The repository management client provides `webhooks(projectId, branchId).list/create/state/rotate`, retaining `{ data, meta }`. Do not embed a management token or signing secret in browser application bundles. Creating a subscription is not an idempotent API: reconcile uncertain creation by listing its metadata before retrying.
+Studio shows **Sample** and **Deliver sample** on an active or paused subscription. Sample returns the signed body and headers for inspection. Deliver sample performs the receiver request and reports delivery metadata; HTTP success is handoff, not proof of downstream work. Both are administrator-authorized writes.
+
+The repository management client provides `webhooks(projectId, branchId).list/create/state/rotate/sample/deliverSample`, retaining `{ data, meta }`. Do not embed a management token or signing secret in browser application bundles. Creating a subscription is not an idempotent API: reconcile uncertain creation by listing its metadata before retrying.

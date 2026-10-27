@@ -19,6 +19,21 @@ export function useWrite() {
   });
 }
 
+/** Create → rehearse → approve → apply a migration through the schema review gate. */
+export async function applyReviewedMigration(
+  base: string,
+  migrationId: string,
+  sql: string,
+) {
+  const created = await management.request<{ id: string }>(base + '/reviews', 'POST', {
+    migrationId,
+    sql,
+  });
+  await management.request(base + `/reviews/${created.data.id}/rehearse`, 'POST');
+  await management.request(base + `/reviews/${created.data.id}/approve`, 'POST');
+  return management.request(base + '/migrations', 'POST', { reviewId: created.data.id });
+}
+
 /** Surface query/mutation failures once via the global Sonner toaster. */
 export function ErrorMessage({ error }: { error: Error | null | undefined }) {
   const last = useRef<string | null>(null);

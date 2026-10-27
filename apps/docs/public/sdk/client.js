@@ -14,13 +14,13 @@ class QBError extends Error {
   }
 }
 
-// node_modules/.bun/better-auth@1.7.7+09127ace6b642557/node_modules/better-auth/dist/package.mjs
-var version = "1.7.7";
+// node_modules/.bun/better-auth@1.7.13+b320db59adc491bc/node_modules/better-auth/dist/package.mjs
+var version = "1.7.13";
 
-// node_modules/.bun/better-auth@1.7.7+09127ace6b642557/node_modules/better-auth/dist/version.mjs
+// node_modules/.bun/better-auth@1.7.13+b320db59adc491bc/node_modules/better-auth/dist/version.mjs
 var PACKAGE_VERSION = version;
 
-// node_modules/.bun/better-auth@1.7.7+09127ace6b642557/node_modules/better-auth/dist/client/broadcast-channel.mjs
+// node_modules/.bun/better-auth@1.7.13+b320db59adc491bc/node_modules/better-auth/dist/client/broadcast-channel.mjs
 var kBroadcastChannel = Symbol.for("better-auth:broadcast-channel");
 var now = () => Math.floor(Date.now() / 1000);
 var WindowBroadcastChannel = class {
@@ -68,10 +68,10 @@ function getGlobalBroadcastChannel(name = "better-auth.message") {
   return globalThis[kBroadcastChannel];
 }
 
-// node_modules/.bun/nanostores@1.5.4/node_modules/nanostores/clean-stores/index.js
+// node_modules/.bun/nanostores@1.5.5/node_modules/nanostores/clean-stores/index.js
 var clean = Symbol("clean");
 
-// node_modules/.bun/nanostores@1.5.4/node_modules/nanostores/atom/index.js
+// node_modules/.bun/nanostores@1.5.5/node_modules/nanostores/atom/index.js
 var listenerQueue = [];
 var lqIndex = 0;
 var batchSeen = null;
@@ -136,8 +136,9 @@ var atom = (initialValue) => {
       for (let listener of listeners) {
         if (batchSeen) {
           let pendingStores = batchSeen.get(listener);
-          if (!pendingStores)
+          if (!pendingStores) {
             batchSeen.set(listener, pendingStores = new Set);
+          }
           if (pendingStores.has($atom))
             continue;
           pendingStores.add($atom);
@@ -172,7 +173,7 @@ var atom = (initialValue) => {
   }
   return $atom;
 };
-// node_modules/.bun/nanostores@1.5.4/node_modules/nanostores/lifecycle/index.js
+// node_modules/.bun/nanostores@1.5.5/node_modules/nanostores/lifecycle/index.js
 var SET = 2;
 var MOUNT = 5;
 var UNMOUNT = 6;
@@ -278,7 +279,7 @@ var onMount = ($store, initialize) => {
     };
   });
 };
-// node_modules/.bun/better-auth@1.7.7+09127ace6b642557/node_modules/better-auth/dist/client/equality.mjs
+// node_modules/.bun/better-auth@1.7.13+b320db59adc491bc/node_modules/better-auth/dist/client/equality.mjs
 function isPlainObject(value) {
   if (typeof value !== "object" || value === null)
     return false;
@@ -315,7 +316,7 @@ function withEquality(store, isEqual) {
   });
 }
 
-// node_modules/.bun/better-auth@1.7.7+09127ace6b642557/node_modules/better-auth/dist/client/focus-manager.mjs
+// node_modules/.bun/better-auth@1.7.13+b320db59adc491bc/node_modules/better-auth/dist/client/focus-manager.mjs
 var kFocusManager = Symbol.for("better-auth:focus-manager");
 var WindowFocusManager = class {
   listeners = /* @__PURE__ */ new Set;
@@ -347,7 +348,7 @@ function getGlobalFocusManager() {
   return globalThis[kFocusManager];
 }
 
-// node_modules/.bun/better-auth@1.7.7+09127ace6b642557/node_modules/better-auth/dist/client/online-manager.mjs
+// node_modules/.bun/better-auth@1.7.13+b320db59adc491bc/node_modules/better-auth/dist/client/online-manager.mjs
 var kOnlineManager = Symbol.for("better-auth:online-manager");
 var WindowOnlineManager = class {
   listeners = /* @__PURE__ */ new Set;
@@ -381,7 +382,7 @@ function getGlobalOnlineManager() {
   return globalThis[kOnlineManager];
 }
 
-// node_modules/.bun/better-auth@1.7.7+09127ace6b642557/node_modules/better-auth/dist/client/parser.mjs
+// node_modules/.bun/better-auth@1.7.13+b320db59adc491bc/node_modules/better-auth/dist/client/parser.mjs
 var PROTO_POLLUTION_PATTERNS = {
   proto: /"(?:_|\\u0{2}5[Ff]){2}(?:p|\\u0{2}70)(?:r|\\u0{2}72)(?:o|\\u0{2}6[Ff])(?:t|\\u0{2}74)(?:o|\\u0{2}6[Ff])(?:_|\\u0{2}5[Ff]){2}"\s*:/,
   constructor: /"(?:c|\\u0063)(?:o|\\u006[Ff])(?:n|\\u006[Ee])(?:s|\\u0073)(?:t|\\u0074)(?:r|\\u0072)(?:u|\\u0075)(?:c|\\u0063)(?:t|\\u0074)(?:o|\\u006[Ff])(?:r|\\u0072)"\s*:/,
@@ -459,7 +460,7 @@ function parseJSON(value, options = { strict: true }) {
   return betterJSONParse(value, options);
 }
 
-// node_modules/.bun/better-auth@1.7.7+09127ace6b642557/node_modules/better-auth/dist/client/query-atom.mjs
+// node_modules/.bun/better-auth@1.7.13+b320db59adc491bc/node_modules/better-auth/dist/client/query-atom.mjs
 var kAuthQuery = Symbol.for("better-auth:auth-query");
 function createAuthQueryAtom(initialValue) {
   const queryAtom = atom(initialValue);
@@ -467,7 +468,7 @@ function createAuthQueryAtom(initialValue) {
   return queryAtom;
 }
 
-// node_modules/.bun/better-auth@1.7.7+09127ace6b642557/node_modules/better-auth/dist/client/query.mjs
+// node_modules/.bun/better-auth@1.7.13+b320db59adc491bc/node_modules/better-auth/dist/client/query.mjs
 var isServer = () => typeof window === "undefined";
 function isAuthQueryStateEqual(a, b) {
   return isJsonEqual(a.data, b.data) && a.error === b.error && a.isPending === b.isPending && a.isRefetching === b.isRefetching && a.refetch === b.refetch;
@@ -603,7 +604,7 @@ var useAuthQuery = (initializedAtom, path, $fetch, options) => {
   return value;
 };
 
-// node_modules/.bun/better-auth@1.7.7+09127ace6b642557/node_modules/better-auth/dist/client/session-refresh.mjs
+// node_modules/.bun/better-auth@1.7.13+b320db59adc491bc/node_modules/better-auth/dist/client/session-refresh.mjs
 var now2 = () => Math.floor(Date.now() / 1000);
 var FOCUS_REFETCH_RATE_LIMIT_SECONDS = 5;
 function createSessionRefreshManager(opts) {
@@ -735,7 +736,7 @@ function createSessionRefreshManager(opts) {
   };
 }
 
-// node_modules/.bun/@better-auth+core@1.7.7+d17658d11a503265/node_modules/@better-auth/core/dist/env/env-impl.mjs
+// node_modules/.bun/@better-auth+core@1.7.13+3fbaf270a4e3f945/node_modules/@better-auth/core/dist/env/env-impl.mjs
 var _envShim = Object.create(null);
 var _getEnv = (useShim) => globalThis.process?.env || globalThis.Deno?.env.toObject() || globalThis.__env__ || (useShim ? _envShim : globalThis);
 var env = new Proxy(_envShim, {
@@ -795,7 +796,7 @@ var ENV = Object.freeze({
     return getEnvVar("BETTER_AUTH_TELEMETRY_ENDPOINT", "");
   }
 });
-// node_modules/.bun/@better-auth+core@1.7.7+d17658d11a503265/node_modules/@better-auth/core/dist/utils/error-codes.mjs
+// node_modules/.bun/@better-auth+core@1.7.13+3fbaf270a4e3f945/node_modules/@better-auth/core/dist/utils/error-codes.mjs
 function defineErrorCodes(codes) {
   return Object.fromEntries(Object.entries(codes).map(([key, value]) => [key, {
     code: key,
@@ -804,7 +805,7 @@ function defineErrorCodes(codes) {
   }]));
 }
 
-// node_modules/.bun/better-call@1.4.0+fff7ddf946fac095/node_modules/better-call/dist/error.mjs
+// node_modules/.bun/better-call@1.4.4+969a6d035afea0f4/node_modules/better-call/dist/error.mjs
 function isErrorStackTraceLimitWritable() {
   const desc = Object.getOwnPropertyDescriptor(Error, "stackTraceLimit");
   if (desc === undefined)
@@ -907,7 +908,7 @@ var InternalAPIError = class extends Error {
   headers;
   statusCode;
   constructor(status = "INTERNAL_SERVER_ERROR", body = undefined, headers = {}, statusCode = typeof status === "number" ? status : statusCodes[status]) {
-    super(body?.message, body?.cause ? { cause: body.cause } : undefined);
+    super(body?.message, body && "cause" in body ? { cause: body.cause } : undefined);
     this.status = status;
     this.body = body;
     this.headers = headers;
@@ -916,13 +917,22 @@ var InternalAPIError = class extends Error {
     this.status = status;
     this.headers = headers;
     this.statusCode = statusCode;
+    if (body && "cause" in body) {
+      const { cause, ...publicBody } = body;
+      this.body = Object.defineProperty(publicBody, "cause", {
+        value: cause,
+        writable: true,
+        configurable: true
+      });
+      return;
+    }
     this.body = body;
   }
 };
 var kAPIErrorHeaderSymbol = Symbol.for("better-call:api-error-headers");
 var APIError = makeErrorForHideStackFrame(InternalAPIError, Error);
 
-// node_modules/.bun/@better-auth+core@1.7.7+d17658d11a503265/node_modules/@better-auth/core/dist/error/index.mjs
+// node_modules/.bun/@better-auth+core@1.7.13+3fbaf270a4e3f945/node_modules/@better-auth/core/dist/error/index.mjs
 var BetterAuthError = class extends Error {
   constructor(message, options) {
     super(message, options);
@@ -932,7 +942,7 @@ var BetterAuthError = class extends Error {
   }
 };
 
-// node_modules/.bun/better-auth@1.7.7+09127ace6b642557/node_modules/better-auth/dist/utils/url.mjs
+// node_modules/.bun/better-auth@1.7.13+b320db59adc491bc/node_modules/better-auth/dist/utils/url.mjs
 var SLASH_CHAR_CODE = 47;
 function trimTrailingSlashes(value) {
   let end = value.length;
@@ -1023,7 +1033,7 @@ function getOrigin(url) {
   }
 }
 
-// node_modules/.bun/@better-auth+core@1.7.7+d17658d11a503265/node_modules/@better-auth/core/dist/utils/url.mjs
+// node_modules/.bun/@better-auth+core@1.7.13+3fbaf270a4e3f945/node_modules/@better-auth/core/dist/utils/url.mjs
 var DANGEROUS_URL_SCHEMES = [
   "javascript:",
   "data:",
@@ -1039,7 +1049,7 @@ function isSafeUrlScheme(value) {
   return !DANGEROUS_URL_SCHEMES.includes(parsed.protocol);
 }
 
-// node_modules/.bun/better-auth@1.7.7+09127ace6b642557/node_modules/better-auth/dist/client/fetch-plugins.mjs
+// node_modules/.bun/better-auth@1.7.13+b320db59adc491bc/node_modules/better-auth/dist/client/fetch-plugins.mjs
 var redirectPlugin = {
   id: "redirect",
   name: "Redirect",
@@ -1055,7 +1065,7 @@ var redirectPlugin = {
   } }
 };
 
-// node_modules/.bun/better-auth@1.7.7+09127ace6b642557/node_modules/better-auth/dist/client/session-atom.mjs
+// node_modules/.bun/better-auth@1.7.13+b320db59adc491bc/node_modules/better-auth/dist/client/session-atom.mjs
 var isServer2 = () => typeof window === "undefined";
 var SESSION_MOUNT_DEDUPE_INTERVAL = STORE_UNMOUNT_DELAY;
 function hydrateSessionAtom(sessionAtom, session) {
@@ -1307,7 +1317,7 @@ var defuArrayFn = createDefu((object, key, currentValue) => {
   }
 });
 
-// node_modules/.bun/@better-fetch+fetch@1.3.2/node_modules/@better-fetch/fetch/dist/index.js
+// node_modules/.bun/@better-fetch+fetch@1.3.3/node_modules/@better-fetch/fetch/dist/index.js
 var BetterFetchError = class extends Error {
   constructor(status, statusText, error) {
     super(statusText || status.toString(), { cause: error });
@@ -1419,6 +1429,20 @@ function parseMethodModifier(path) {
     path: separator === -1 ? path : path.slice(separator + 1)
   };
 }
+var ORIGIN_RE = /^[a-z][a-z\d+.-]*:\/\/[^/?#]+/i;
+var LEADING_SLASHES_RE = /^\/+/;
+function withoutTrailingSlashes(value) {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === "/")
+    end--;
+  return value.slice(0, end);
+}
+function splitOnce(value, separator) {
+  const index = value.indexOf(separator);
+  if (index === -1)
+    return [value, undefined];
+  return [value.slice(0, index), value.slice(index + 1)];
+}
 var isReservedPathSegment = (value) => value === "." || value === "..";
 var encodeLiteralPathSegment = (segment) => segment.split(":").map((part) => encodeURIComponent(part)).join(":");
 function resolvePathSegment(segment, pathParams) {
@@ -1429,19 +1453,25 @@ function resolvePathSegment(segment, pathParams) {
     throw new TypeError("Path parameters cannot be reserved path segments");
   return encodeURIComponent(pathParam);
 }
-function getURL$1(url, option) {
-  const { baseURL, params, query } = option || {
-    query: {},
-    params: {},
-    baseURL: ""
-  };
-  let basePath = url.startsWith("http") ? url.split("/").slice(0, 3).join("/") : baseURL || "";
-  const { path: requestPath } = parseMethodModifier(url);
-  if (requestPath !== url)
-    url = `/${requestPath}`;
-  if (!basePath.endsWith("/"))
-    basePath += "/";
-  let [path, urlQuery] = url.replace(basePath, "").split("?");
+function getPathParams(path, params) {
+  const pathParams = /* @__PURE__ */ new Map;
+  if (params)
+    if (Array.isArray(params)) {
+      const paramPaths = path.split("/").filter((p) => p.startsWith(":"));
+      for (const [index, key] of paramPaths.entries()) {
+        const value = params[index];
+        pathParams.set(key, String(value));
+      }
+    } else
+      for (const [key, value] of Object.entries(params))
+        pathParams.set(`:${key}`, String(value));
+  return pathParams;
+}
+function fillPath(path, params) {
+  const pathParams = getPathParams(path, params);
+  return path.split("/").map((segment) => resolvePathSegment(segment, pathParams)).join("/");
+}
+function serializeQuery(urlQuery, query) {
   const queryParams = new URLSearchParams(urlQuery);
   for (const [key, value] of Object.entries(query || {})) {
     if (value == null)
@@ -1457,24 +1487,36 @@ function getURL$1(url, option) {
       serializedValue = JSON.stringify(value);
     queryParams.set(key, serializedValue);
   }
-  const pathParams = /* @__PURE__ */ new Map;
-  if (params)
-    if (Array.isArray(params)) {
-      const paramPaths = path.split("/").filter((p) => p.startsWith(":"));
-      for (const [index, key] of paramPaths.entries()) {
-        const value = params[index];
-        pathParams.set(key, String(value));
-      }
-    } else
-      for (const [key, value] of Object.entries(params))
-        pathParams.set(`:${key}`, String(value));
-  path = path.split("/").map((segment) => resolvePathSegment(segment, pathParams)).join("/");
-  path = path.replace(/^\/+/, "");
-  let queryParamString = queryParams.toString();
-  queryParamString = queryParamString.length > 0 ? `?${queryParamString}`.replace(/\+/g, "%20") : "";
-  if (!basePath.startsWith("http"))
-    return `${basePath}${path}${queryParamString}`;
-  return new URL(`${path}${queryParamString}`, basePath);
+  const queryParamString = queryParams.toString();
+  return queryParamString.length > 0 ? `?${queryParamString}`.replace(/\+/g, "%20") : "";
+}
+function withoutBase(input, baseURL) {
+  if (!baseURL)
+    return input;
+  const basePath = `${withoutTrailingSlashes(baseURL)}/`;
+  return input.startsWith(basePath) ? input.slice(basePath.length) : input;
+}
+function joinURL(base, path, urlQuery, query) {
+  const [baseWithoutHash] = splitOnce(base, "#");
+  const [basePath, baseQuery = ""] = splitOnce(baseWithoutHash, "?");
+  const relativePath = path.replace(LEADING_SLASHES_RE, "");
+  const search = serializeQuery(`${baseQuery}&${urlQuery !== null && urlQuery !== undefined ? urlQuery : ""}`, query);
+  const href = `${withoutTrailingSlashes(basePath)}/${relativePath}${search}`;
+  return ORIGIN_RE.test(href) ? new URL(href) : href;
+}
+function getURL$1(url, option) {
+  var _input$match, _ref;
+  const { baseURL, params, query } = option || {
+    query: {},
+    params: {},
+    baseURL: ""
+  };
+  const { path: requestPath } = parseMethodModifier(url);
+  const input = requestPath === url ? url : `/${requestPath}`;
+  const origin = (_input$match = input.match(ORIGIN_RE)) === null || _input$match === undefined ? undefined : _input$match[0];
+  const [path, urlQuery] = splitOnce(origin ? input.slice(origin.length) : withoutBase(input, baseURL), "?");
+  const filledPath = fillPath(path, params);
+  return joinURL((_ref = origin !== null && origin !== undefined ? origin : baseURL) !== null && _ref !== undefined ? _ref : "", filledPath, urlQuery, query);
 }
 var getAuthHeader = async (options) => {
   const headers = {};
@@ -1919,7 +1961,7 @@ var createFetch = (config) => {
   return $fetch;
 };
 
-// node_modules/.bun/better-auth@1.7.7+09127ace6b642557/node_modules/better-auth/dist/client/config.mjs
+// node_modules/.bun/better-auth@1.7.13+b320db59adc491bc/node_modules/better-auth/dist/client/config.mjs
 var resolvePublicAuthUrl = (basePath) => {
   if (typeof process === "undefined")
     return;
@@ -2037,12 +2079,12 @@ var getClientConfig = (options, loadEnv) => {
   };
 };
 
-// node_modules/.bun/better-auth@1.7.7+09127ace6b642557/node_modules/better-auth/dist/utils/is-atom.mjs
+// node_modules/.bun/better-auth@1.7.13+b320db59adc491bc/node_modules/better-auth/dist/utils/is-atom.mjs
 function isAtom(value) {
   return typeof value === "object" && value !== null && "get" in value && typeof value.get === "function" && "lc" in value && typeof value.lc === "number";
 }
 
-// node_modules/.bun/@better-auth+core@1.7.7+d17658d11a503265/node_modules/@better-auth/core/dist/utils/string.mjs
+// node_modules/.bun/@better-auth+core@1.7.13+3fbaf270a4e3f945/node_modules/@better-auth/core/dist/utils/string.mjs
 function capitalizeFirstLetter(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
@@ -2055,7 +2097,7 @@ function toKebabCase(input) {
   return splitWords(input).map((word) => word.toLowerCase()).join("-");
 }
 
-// node_modules/.bun/better-auth@1.7.7+09127ace6b642557/node_modules/better-auth/dist/client/proxy.mjs
+// node_modules/.bun/better-auth@1.7.13+b320db59adc491bc/node_modules/better-auth/dist/client/proxy.mjs
 function getMethod2(path, knownPathMethods, args) {
   const method = knownPathMethods[path];
   const { fetchOptions, query: _query, ...body } = args || {};
@@ -2137,21 +2179,30 @@ function createDynamicPathProxy(routes, client, knownPathMethods, atoms, atomLis
   return createProxy();
 }
 
-// node_modules/.bun/better-auth@1.7.7+09127ace6b642557/node_modules/better-auth/dist/client/vanilla.mjs
+// node_modules/.bun/better-auth@1.7.13+b320db59adc491bc/node_modules/better-auth/dist/client/vanilla.mjs
 function createAuthClient(options) {
   const { pluginPathMethods, pluginsActions, pluginsAtoms, hydrateSession, $fetch, atomListeners, $store } = getClientConfig(options);
   const resolvedHooks = {};
   for (const [key, value] of Object.entries(pluginsAtoms))
     resolvedHooks[`use${capitalizeFirstLetter(key)}`] = value;
-  return createDynamicPathProxy({
+  const routes = {
     ...pluginsActions,
     ...resolvedHooks,
     hydrateSession,
     $fetch,
     $store
-  }, $fetch, pluginPathMethods, pluginsAtoms, atomListeners);
+  };
+  return createDynamicPathProxy(routes, $fetch, pluginPathMethods, pluginsAtoms, atomListeners);
 }
-// node_modules/.bun/better-auth@1.7.7+09127ace6b642557/node_modules/better-auth/dist/plugins/two-factor/error-code.mjs
+// node_modules/.bun/better-auth@1.7.13+b320db59adc491bc/node_modules/better-auth/dist/plugins/magic-link/client.mjs
+var magicLinkClient = () => {
+  return {
+    id: "magic-link",
+    version: PACKAGE_VERSION,
+    $InferServerPlugin: {}
+  };
+};
+// node_modules/.bun/better-auth@1.7.13+b320db59adc491bc/node_modules/better-auth/dist/plugins/two-factor/error-code.mjs
 var TWO_FACTOR_ERROR_CODES = defineErrorCodes({
   OTP_NOT_ENABLED: "OTP not enabled",
   OTP_NOT_CONFIGURED: "OTP is not available",
@@ -2168,7 +2219,7 @@ var TWO_FACTOR_ERROR_CODES = defineErrorCodes({
   INVALID_TWO_FACTOR_COOKIE: "Invalid two factor cookie"
 });
 
-// node_modules/.bun/better-auth@1.7.7+09127ace6b642557/node_modules/better-auth/dist/plugins/two-factor/client.mjs
+// node_modules/.bun/better-auth@1.7.13+b320db59adc491bc/node_modules/better-auth/dist/plugins/two-factor/client.mjs
 var twoFactorClient = (options) => {
   return {
     id: "two-factor",
@@ -2205,7 +2256,7 @@ var twoFactorClient = (options) => {
     $ERROR_CODES: TWO_FACTOR_ERROR_CODES
   };
 };
-// node_modules/.bun/@better-auth+passkey@1.7.7+cfe04f1a34cfd083/node_modules/@better-auth/passkey/dist/version-Bx477_EO.mjs
+// node_modules/.bun/@better-auth+passkey@1.7.13+d9b9f4d13b183552/node_modules/@better-auth/passkey/dist/version-D57zofoH.mjs
 var PASSKEY_ERROR_CODES = defineErrorCodes({
   CHALLENGE_NOT_FOUND: "Challenge not found",
   YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY: "You are not allowed to register this passkey",
@@ -2223,7 +2274,7 @@ var PASSKEY_ERROR_CODES = defineErrorCodes({
   RESOLVE_USER_REQUIRED: "Passkey registration requires either an authenticated session or a resolveUser callback when requireSession is false",
   RESOLVED_USER_INVALID: "Resolved user is invalid"
 });
-var PACKAGE_VERSION2 = "1.7.7";
+var PACKAGE_VERSION2 = "1.7.13";
 
 // node_modules/.bun/@simplewebauthn+browser@13.3.0/node_modules/@simplewebauthn/browser/esm/helpers/bufferToBase64URLString.js
 function bufferToBase64URLString(buffer) {
@@ -2631,7 +2682,7 @@ async function startAuthentication(options) {
     authenticatorAttachment: toAuthenticatorAttachment(credential.authenticatorAttachment)
   };
 }
-// node_modules/.bun/@better-auth+passkey@1.7.7+cfe04f1a34cfd083/node_modules/@better-auth/passkey/dist/client.mjs
+// node_modules/.bun/@better-auth+passkey@1.7.13+d9b9f4d13b183552/node_modules/@better-auth/passkey/dist/client.mjs
 var getPasskeyActions = ($fetch, { $listPasskeys, $store }) => {
   const signInPasskey = async (opts, options) => {
     const response = await $fetch("/passkey/generate-authenticate-options", {
@@ -2872,7 +2923,7 @@ class QBClient {
       const client = this;
       this.betterAuthClient = createAuthClient({
         baseURL: this.baseURL + "/auth",
-        plugins: [passkeyClient(), twoFactorClient()],
+        plugins: [passkeyClient(), twoFactorClient(), magicLinkClient()],
         fetchOptions: {
           customFetchImpl: async (input, init) => {
             const headers = new Headers(init?.headers);
@@ -3028,6 +3079,10 @@ class QBClient {
       this.setSession(session, result.token ?? this.token);
       return session;
     },
+    signInWithMagicLink: async (email, options) => {
+      const callbackURL = options?.callbackURL ?? options?.redirectTo;
+      return this.request("/auth/sign-in/magic-link", "POST", callbackURL ? { email, callbackURL } : { email }, { auth: true });
+    },
     signOut: async () => {
       await this.request("/auth/sign-out", "POST", {}, { auth: true });
       this.setSession(null, null);
@@ -3103,7 +3158,7 @@ class QBClient {
           this.setSession(session, this.token ?? result.session.token);
           return session;
         } catch (error) {
-          if (error instanceof QBError && error.status === 401) {
+          if (error instanceof QBError && (error.status === 401 || error.code === "ABORTED" || error.code === "IDENTITY_CHANGED" || error.code === "DISPOSED")) {
             this.setSession(null, null);
             return null;
           }
@@ -3121,6 +3176,9 @@ class QBClient {
   };
   rpc(operation, args, options = {}) {
     return this.request(`/rpc/${encodeURIComponent(operation)}`, "POST", args, options);
+  }
+  search(input, options = {}) {
+    return this.request("/search", "POST", input, options);
   }
   channel(options) {
     const channel = new QBChannel(this, options, () => this.channels.delete(channel));
@@ -3195,6 +3253,23 @@ class QueryBuilder {
   }
   count() {
     return this.next({ count: true });
+  }
+  groupBy(columns) {
+    return this.next({ groupBy: columns });
+  }
+  aggregate(fn, column, alias) {
+    const generatedAlias = alias ?? `${fn}_${String(column ?? "star")}`;
+    return this.next({
+      aggregates: [
+        ...this.query.aggregates ?? [],
+        { fn, column, alias: generatedAlias }
+      ]
+    });
+  }
+  having(alias, op, value) {
+    return this.next({
+      having: [...this.query.having ?? [], { alias, op, value }]
+    });
   }
   abortSignal(signal) {
     return new QueryBuilder(this.client, this.table, this.query, {
@@ -3357,4 +3432,4 @@ export {
   createClient
 };
 
-//# debugId=4DA00627A4DF861B64756E2164756E21
+//# debugId=5FE73F68DDE2EA3164756E2164756E21

@@ -6,7 +6,7 @@ export const frontmatter = {"title": "Backups and restore", "description": "Crea
 
 Snapshots are created through the database owner using PGlite `dumpDataDir()`, then encrypted using AES-256-GCM and recorded with a checksum and schema version. Use the owner snapshot workflow; copying a live database directory is not a consistent backup.
 
-Manual snapshots are available in Studio and the CLI. The maintenance worker requests scheduled backups. Retention is configurable; the default is seven days.
+Manual snapshots are available in Studio and the CLI. The maintenance worker requests scheduled backups. Project admins configure automatic schedule and retention on Studio `/backups`; deployment environment variables remain the operator ceiling and kill switch (`QB_SCHEDULED_BACKUPS`, `QB_BACKUP_RETENTION_DAYS`, `QB_BACKUP_RETENTION_WEEKS`). Defaults stay daily snapshots with seven daily days and four weekly copies.
 
 ## Isolated restore
 
@@ -33,13 +33,19 @@ bun run qb backup control-restore --data-dir .data --file CONTROL_ARCHIVE --conf
 
 Inject the original `QB_MASTER_KEY` for production recovery. A catalog archive does not include project databases or object bytes; coordinate their recovery to a compatible checkpoint.
 
-## Recovery drill
+## Recovery Center (experimental)
 
-Create representative data, take a snapshot, alter the data, restore into another branch and compare results. Repeat after a process restart and verify secrets/session behavior. Publish measured RPO/RTO only after a reference-dataset drill passes.
+Studio `/backups` exposes the experimental Recovery Center: per-project schedule and retention, encrypted off-node S3-compatible destinations, inventory with freshness warnings, and isolated restore drills. Destinations use separate sealed credentials and never receive the master key. Archives progress `staging → encrypted → uploading → verified | failed`. Drills progress `queued → restoring → validating → complete | partial | failed | cancelled` and never change the primary alias.
+
+A drill is `complete` only when database validation, application-object backup verification (versioning plus bounded object heads) and master-key authentication all pass. Database-only success is `partial`. QB Flex verifies operator-provided object-store backups; it does not copy object bytes. Findings use stable codes such as `BACKUP_STALE`, `DESTINATION_UNAVAILABLE`, `BACKUP_CORRUPT`, `OBJECT_BACKUP_MISSING` and `KEY_UNAVAILABLE`. Outbound mail or webhook alerts are not part of this surface.
+
+Retention keeps the configured daily window, weekly copies and always the newest checkpoint per branch. Control-catalog snapshots under `backups/control` continue to follow deployment environment retention.
+
+Manual recovery drills remain useful: create representative data, take a snapshot, restore into another branch and compare results. Publish measured RPO/RTO only after a reference-dataset drill passes. The daily/seven-daily/four-weekly defaults and reference RPO 24 hours/RTO 60 minutes are planning defaults, not certified guarantees.
 
 ## Retention and cancellation
 
-Maintenance keeps the daily window (`QB_BACKUP_RETENTION_DAYS`, default 7) and one newest checkpoint per week (`QB_BACKUP_RETENTION_WEEKS`, default 4). Preserve encrypted snapshots and the master key on separate storage for disaster recovery. A local backup volume is not off-site redundancy.
+Project retention cannot exceed `QB_BACKUP_RETENTION_DAYS` (default 7) and `QB_BACKUP_RETENTION_WEEKS` (default 4). Preserve encrypted snapshots and the master key on separate storage for disaster recovery. A local backup volume is not off-site redundancy.
 
 Project provisioning can be cancelled through `POST /management/v1/operations/{id}/cancel` while its status is `requested`. Running or completed operations return `OPERATION_NOT_CANCELLABLE`; cancellation never rolls back a committed database operation.
 
@@ -52,10 +58,6 @@ Legacy branch archives remain readable, including their original checksum semant
 Backup/restore shares a two-operation concurrency bound and a 120-second stream deadline. Archive validation has a size bound of at least 1 GiB or the configured database-write quota, whichever is larger. This is a bound, not a certified restore-time target. Snapshot schema version comes from the captured database, not a concurrently changed live branch.
 
 Restores remove durable jobs as well as sessions/challenges/provider tokens. Neither old pending deliveries nor push registrations/campaigns should be revived. Object bytes and master-key custody remain separate responsibilities. Restart cleanup removes recognized abandoned temporary artifacts only under exclusive data-volume ownership; never manually sweep arbitrary live database files.
-
-## Recovery Center status
-
-Automated encrypted off-node destinations, freshness alerts, scheduled isolated restore drills and separate database/object/key reports remain required by specification 1.1. Today's manual restore is not the complete Recovery Center. The daily snapshot/seven-daily/four-weekly defaults and reference RPO 24 hours/RTO 60 minutes are planning defaults/measurement targets, not universal guarantees. See [expanded release status](/docs/roadmap/expanded-release).
 
 ## Streamed offline control recovery
 
