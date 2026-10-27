@@ -18,6 +18,8 @@ x-environment: &environment
   QB_ALLOWED_ORIGINS: ${QB_ALLOWED_ORIGINS:-http://localhost:7610,http://127.0.0.1:7610,http://localhost:7617,http://127.0.0.1:7617,http://localhost:7618,http://127.0.0.1:7618}
   QB_MASTER_KEY: ${QB_MASTER_KEY:-}
   QB_BOOTSTRAP_TOKEN: ${QB_BOOTSTRAP_TOKEN:-}
+  # Optional path to a mounted secret file when the platform injects secrets as files.
+  QB_BOOTSTRAP_TOKEN_FILE: ${QB_BOOTSTRAP_TOKEN_FILE:-}
   QB_WORKER_TOKEN: ${QB_WORKER_TOKEN:-}
   QB_REQUIRE_ADMIN_MFA: ${QB_REQUIRE_ADMIN_MFA:-false}
   # Loopback-only escape hatch for production-like staging without TLS.

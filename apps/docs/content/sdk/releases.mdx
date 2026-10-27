@@ -20,7 +20,7 @@ Package manifests explicitly use the public npm registry and public access. An u
 
 ## Version both packages
 
-Use a patch for compatible fixes, a minor for compatible features, and a major for breaking APIs after `1.0.0`. Below `1.0.0`, the React peer range intentionally keeps consumers on the same minor SDK line.
+Use a patch for compatible fixes, a minor for compatible features, and a major for breaking APIs after `1.0.0`. While the SDK is below `1.0.0`, breaking APIs must at least bump the minor version and be called out in the release notes. Consumers must not assume that `0.2.x` is compatible with `0.1.x`; the React peer range intentionally keeps them on the same minor SDK line.
 
 ```sh
 bun run sdk:version 0.1.1

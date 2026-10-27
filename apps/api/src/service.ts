@@ -46,6 +46,7 @@ import { encryptArchive, decryptArchive } from '../../../packages/database/src/a
 import { Database, restoreDatabase } from '@qb-flex/database';
 import { databaseBytes } from '../../../packages/database/src/connection';
 import { log, Metrics } from '@qb-flex/observability';
+import { resolveBootstrapToken, bootstrapTokenMatches } from './bootstrap';
 import {
   webhookURL,
   publicAddress,
@@ -174,14 +175,13 @@ export async function createService(override?: Partial<ReturnType<typeof configu
     >();
     const deadLetterDepths = new Map<string, number>();
     const bootstrapFile = join(config.dataDir, 'bootstrap.token');
-    let bootstrap = process.env.QB_BOOTSTRAP_TOKEN;
-    if (!bootstrap && !(await db.query('SELECT id FROM _qb_auth_users LIMIT 1').get())) {
-      if (process.env.NODE_ENV === 'production')
-        throw new Error('QB_BOOTSTRAP_TOKEN is required for first-owner setup');
-      if (!existsSync(bootstrapFile))
-        writeFileSync(bootstrapFile, randomBytes(32).toString('hex'), { mode: 0o600 });
-      bootstrap = readFileSync(bootstrapFile, 'utf8').trim();
-    }
+    const bootstrapState = resolveBootstrapToken({
+      dataDir: config.dataDir,
+      hasOwner: Boolean(await db.query('SELECT id FROM _qb_auth_users LIMIT 1').get()),
+    });
+    let bootstrap = bootstrapState.token;
+    // Safe to log: the source name only, never the token value.
+    log({ action: 'bootstrap.token_source', code: bootstrapState.source });
     const success = (data: unknown, request: Request, meta: object = {}) => ({
       data: normalize(data),
       meta: { requestId: request.headers.get('x-request-id') ?? crypto.randomUUID(), ...meta },
@@ -1476,21 +1476,19 @@ export async function createService(override?: Partial<ReturnType<typeof configu
           { headers: { 'content-type': 'text/plain; version=0.0.4' } },
         );
       })
-      .get('/setup', async ({ request }) =>
-        success(
-          { required: !(await db.query('SELECT id FROM _qb_auth_users LIMIT 1').get()) },
-          request,
-        ),
-      )
+      .get('/setup', async ({ request }) => {
+        const required = !(await db.query('SELECT id FROM _qb_auth_users LIMIT 1').get());
+        // tokenSource names where the credential came from; it never exposes the value.
+        return success({ required, tokenSource: required ? bootstrapState.source : 'none' }, request);
+      })
       .post('/setup', async ({ body, request }) => {
         const input = body as any;
-        const supplied = String(input.bootstrapToken ?? '');
-        if (
-          !bootstrap ||
-          supplied.length !== bootstrap.length ||
-          !timingSafeEqual(Buffer.from(supplied), Buffer.from(bootstrap))
-        )
-          throw new QBError('DENIED', 'Valid bootstrap token required', 403);
+        if (!bootstrapTokenMatches(input.bootstrapToken, bootstrap))
+          throw new QBError(
+            'DENIED',
+            'Valid bootstrap token required. Use QB_BOOTSTRAP_TOKEN from the API environment, or the generated token at /var/lib/qb-flex/bootstrap.token inside the API container (`docker compose exec api cat /var/lib/qb-flex/bootstrap.token`).',
+            403,
+          );
         if (setupBusy || (await db.query('SELECT id FROM _qb_auth_users LIMIT 1').get()))
           throw new QBError('SETUP_COMPLETE', 'First owner is already configured', 409);
         setupBusy = true;

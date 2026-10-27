@@ -100,7 +100,7 @@
     },
     {
       "path": "package.json",
-      "sha256": "d020272e22ce303f8c5b780088ba73adef270d373009608de40d14ac4f35a236"
+      "sha256": "74ea36573ebe42d6d681d8a51d14039fd68ee34047d7f904f6ba1c831acc627a"
     },
     {
       "path": "packages/auth/package.json",
@@ -316,15 +316,15 @@
     },
     {
       "path": "packages/sdk-js/package.json",
-      "sha256": "f214a419b4766e13e23fa893eaf71a91c924c042f9cb4ee96a2aacd7e6dd704e"
+      "sha256": "e66725d4550447d8b2a30e86891000db57489c5bcbf0db883508b78fce4fb3f4"
     },
     {
       "path": "packages/sdk-js/src/index.ts",
-      "sha256": "d3e85aa97068d0e890abd14417ab33b4f64def531e3540f2b8b6075908dca821"
+      "sha256": "390edade2929376ee09c6fb055fb64e22e0c2c65410006645ace61bec810e035"
     },
     {
       "path": "packages/sdk-react/package.json",
-      "sha256": "41d613f659a9d08c4ead294ded299b5788252598491fe3bad49916f848b0481e"
+      "sha256": "7fdd9dd37e2e99827016517c168d6f1a5094829262cf139f0cd2deb680523723"
     },
     {
       "path": "packages/sdk-react/src/index.tsx",
@@ -844,11 +844,11 @@
     },
     {
       "path": "scripts/sdk-build.ts",
-      "sha256": "dac5900841a87e6442db672319f0dfaedfbc093ca6cc29f180e5a512269e7219"
+      "sha256": "62d8cb5c94af164714d4a324143eb24408d07b3c91bb45141a3a06c5f5c0a3a4"
     },
     {
       "path": "scripts/skill-test.ts",
-      "sha256": "9016d1b8a05d8bb98cf455fb1971678a98b5fd428f3b831b8cd472d18c8a69a5"
+      "sha256": "4632955fdffefc32f7b7f397a7c74ef05dc17607cf33fc19e8c0eedc4c6965a7"
     },
     {
       "path": "scripts/skill-typecheck.ts",
@@ -1036,7 +1036,11 @@
     },
     {
       "path": "tests/sdk-react.test.tsx",
-      "sha256": "153fde89680b7aaab85b66a1bbf4682428e8f2bce1b4472ae559b12810c214ba"
+      "sha256": "cac7f9401ab3c7b31133b0d82efd7b8a01fb1a9e35c4973740013da1a38a8e78"
+    },
+    {
+      "path": "tests/sdk-release.test.ts",
+      "sha256": "57a449156ee9c6c91bab5f6cd5825aef129e1cbf275aeaaa181f75267a005b4a"
     },
     {
       "path": "tests/search-collections.test.ts",
@@ -1116,14 +1120,14 @@
     "assets/examples/vanilla/src/styles.css": "7f4f69acb45c72956b5982b8824f7882eb79ef36468ee95b3939a8f8a4977bc8",
     "assets/examples/vanilla/src/typecheck.ts": "79322d414e5584fd157b0f4d61b0ea72280771e15a6df07d132391d912fe8a36",
     "assets/examples/vanilla/tsconfig.json": "56e4f7acc2c1da79871b7cb3903f8887e89782d301b6352071d37c79abbb34fb",
-    "assets/examples/vanilla/vendor/client.js": "c7a0d9525602fbcc6367d2a9d4de7d9a69921cf37694c198e44b2d4429da0b23",
+    "assets/examples/vanilla/vendor/client.js": "7c0dd93a3edad136841502fc6a968ca99cd68cb81673b02e4f1252fb185dbfae",
     "assets/examples/vanilla/vite.config.ts": "634a4294b85c5585547a6ce6fc60a7b30eb76841042d032dbacdf170a4437780",
     "references/application.md": "f1966aaaba9fd2303e61b19e752be7e9b59534b7e974d66602ab226f5716ca65",
     "references/architecture.md": "ce989ff6fea11146eb07fa00040b7eb6b79f8a6d45aeaf5af0e31b80affe7199",
     "references/generated/api.md": "dd591a07ad47ec56792ef91be7dd0e1dfacdd2606ac05f5946dcd5758e288964",
     "references/generated/cli.md": "c16d4a8b6b2640d2e2ad305d61b66da7b0a25bb699da428809ac6bac889647b5",
-    "references/generated/sdk.md": "081809e7c0b5ada4f3a01b6ef6c3b256e8e9eeb59ed7a5e11b933b8b87e96874",
-    "references/generated/tests.md": "bb301539e5877a4759ff07de9f92a0830d644f66bd40424e65dbd4c2dbc86a21",
+    "references/generated/sdk.md": "05f7c834bcfa8baddef85fa38679ed0215894bce5947387acc55f27413f79c77",
+    "references/generated/tests.md": "bbf11a2cf00fdc33050de50eec530783fdbf6b94e07d861308445d5e69ea2a9d",
     "references/operations.md": "9c1dc6a69256eb6bd287f7d022c90c6d48813d4354f54be147e9852c1bbb3f2a",
     "references/platform.md": "7441170dfe8cd682a9e3a0788dbe5a916bcbba34e9c85413eb8b4588d7deab2e",
     "references/react.md": "f47239565782aacebfe4b37509c5a0a36cadf048715166cb29efeafe4243dd33",

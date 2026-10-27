@@ -51,7 +51,7 @@ const setupOptions = (request: Request = raw) =>
       });
       if (typeof value?.data?.required !== 'boolean')
         throw new Error('The API returned an invalid setup state.');
-      return value as { data: { required: boolean } };
+      return value as { data: { required: boolean; tokenSource?: string } };
     },
     retry: false,
     staleTime: 0,

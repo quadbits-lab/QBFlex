@@ -29,6 +29,8 @@ Both public packages use the same exact version. Follow semantic versioning:
 - minor: backward-compatible features (`0.1.1` → `0.2.0`);
 - major: breaking public API changes once the SDK reaches `1.x`.
 
+While the SDK is below `1.0.0`, any breaking API change must at least bump the minor version and be called out prominently in the release notes. Consumers must not assume that `0.2.x` is compatible with `0.1.x`; the generated React peer range deliberately stays within one `0.x` minor line.
+
 While the packages are below `1.0.0`, the React peer range `^0.1.0` intentionally accepts patch updates in the same `0.1` line, not `0.2.0`. Prereleases such as `0.2.0-rc.1` publish to `next` by default; stable versions publish to `latest`.
 
 Set a version with:
@@ -50,7 +52,7 @@ bun run sdk:publish
 
 `sdk:publish` is dry-run by default. It rebuilds the tarballs, installs them with npm in an isolated application, typechecks declarations without `skipLibCheck`, runs React SSR plus the client workflow under Node, and asks npm to inspect both tarballs without changing registry state.
 
-After the dry run and the relevant repository gates pass, commit the version/release notes and create a reviewed release tag. Then publish the already validated package pair:
+After the dry run and the relevant repository gates pass, commit the version and release notes from a reviewed branch. Then publish the already validated package pair from that clean commit:
 
 ```sh
 bun run sdk:publish -- --execute
@@ -75,6 +77,6 @@ npm view @qb-flex/react@0.1.1 version peerDependencies dist-tags --json
 npm install @qb-flex/client@0.1.1 @qb-flex/react@0.1.1
 ```
 
-Tag the repository only for the version actually published, preserve the generated tarball checksums in release records, and keep the previous supported line available. Security fixes should state affected versions and upgrade guidance. Do not move `latest` to a prerelease; use `next`, `beta`, or another explicit channel.
+After both registry checks succeed, create and push the matching repository tag. Tag only a version that was actually published, preserve the generated tarball checksums in release records, and keep the previous supported line available. Security fixes should state affected versions and upgrade guidance. Do not move `latest` to a prerelease; use `next`, `beta`, or another explicit channel.
 
 Useful npm references: [publishing scoped packages](https://docs.npmjs.com/cli/v11/using-npm/scope/), [semantic versioning](https://docs.npmjs.com/about-semantic-versioning/), [two-factor publishing](https://docs.npmjs.com/requiring-2fa-for-package-publishing-and-settings-modification/), and [trusted publishing](https://docs.npmjs.com/trusted-publishers/).

@@ -5,9 +5,9 @@ Generated from the actual 0.1.0 SDK declaration artifacts. Integer types preserv
 ## @qb-flex/client
 
 ```ts
-import { type DatabaseShape, type RowOf, type InsertOf, type UpdateOf, type Query, type Result, type Session, type Filter, type AggregateExpr, type HavingClause, type RelationsOf } from './contracts';
-export { QBError } from './contracts';
-export type { Result, Session, Query } from './contracts';
+import { type DatabaseShape, type RowOf, type InsertOf, type UpdateOf, type Query, type Result, type Session, type Filter, type AggregateExpr, type HavingClause, type RelationsOf } from './contracts/index';
+export { QBError } from './contracts/index';
+export type { Result, Session, Query } from './contracts/index';
 export interface ClientOptions {
     url: string;
     projectId: string;
@@ -295,7 +295,7 @@ export declare function useQBSearch(options: {
     limit?: number;
     cursor?: string;
     enabled?: boolean;
-}): import("@tanstack/react-query").UseQueryResult<import("@qb-flex/contracts").Result<{
+}): import("@tanstack/react-query").UseQueryResult<import("./contracts/index").Result<{
     hits: {
         id: string;
         table: string;
@@ -321,15 +321,15 @@ export declare function useQBStorage(): {
     error: Error | null;
     upload: (bucket: string, key: string, file: Blob, options?: (import("@qb-flex/client").RequestOptions & {
         checksum?: string;
-    }) | undefined) => Promise<import("@qb-flex/contracts").Result<{
+    }) | undefined) => Promise<import("./contracts/index").Result<{
         id: string;
         state: string;
     }>>;
     download: (id: string, options?: import("@qb-flex/client").RequestOptions | undefined) => Promise<Blob>;
-    remove: (id: string, options?: import("@qb-flex/client").RequestOptions | undefined) => Promise<import("@qb-flex/contracts").Result<{
+    remove: (id: string, options?: import("@qb-flex/client").RequestOptions | undefined) => Promise<import("./contracts/index").Result<{
         deleted: boolean;
     }>>;
-    list: (bucket: string) => Promise<import("@qb-flex/contracts").Result<any[]>>;
+    list: (bucket: string) => Promise<import("./contracts/index").Result<any[]>>;
 };
 
 ```

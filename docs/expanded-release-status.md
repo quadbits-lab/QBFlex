@@ -93,7 +93,7 @@ No external deployment, npm publication, production receiver/push certification,
 
 The browser SDK packaging path now derives artifact and React peer versions from package manifests, checks self-contained declarations without `skipLibCheck`, and runs the packed ESM/SSR/auth/CRUD/realtime consumer under Node. A dry-run-by-default npm release command and versioning runbook cover the public client/React pair. No package was published; `@qb-flex/react-native`, offline/background behavior and push SDKs remain unimplemented expanded-release requirements. The npm scope owner and package license must be decided before a first registry release.
 
-Skill references were freshly regenerated and checked (214 source inputs, 46 packaged files). `skill:test` passed detached archive integrity/redacted diagnostics, packed SDK declaration consumers, portable React/Vanilla builds and auth/CRUD/RPC/realtime workflows, and platform security/durability/restore/lifecycle regressions. Its private-transfer workflow was explicitly skipped; the independently passing real S3 browser workflows are separate evidence. No package was published.
+Skill references were freshly regenerated and checked (272 source inputs, 46 packaged files). `skill:test` passed detached archive integrity/redacted diagnostics, packed SDK declaration consumers, portable React/Vanilla builds and auth/CRUD/RPC/realtime workflows, and platform security/durability/restore/lifecycle regressions. Its private-transfer workflow was explicitly skipped; the independently passing real S3 browser workflows are separate evidence. No package was published.
 
 ## Studio submission-refresh fix (6 October 2026)
 

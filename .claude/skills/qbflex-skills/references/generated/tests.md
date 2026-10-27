@@ -351,12 +351,21 @@ SHA-256: `7da76cd234cb8f80bb8e1bd61640b5f874ec8f60f2f6dd23f11ed2bbf9cb6cbc`
 
 ## tests/sdk-react.test.tsx
 
-SHA-256: `153fde89680b7aaab85b66a1bbf4682428e8f2bce1b4472ae559b12810c214ba`
+SHA-256: `cac7f9401ab3c7b31133b0d82efd7b8a01fb1a9e35c4973740013da1a38a8e78`
 
 - provider boundary is actionable and SSR uses request-local anonymous state without browser globals
 - shared auth updates, single-flight refresh, explicit identity cache keys and cache cancellation
 - Strict Mode and unmount dispose subscriptions without duplicate sockets
 - client cancellation, timeouts and disposal produce normalized errors
+- passkey transport honors the configured fetch, credentials and rotated bearer token
+
+## tests/sdk-release.test.ts
+
+SHA-256: `57a449156ee9c6c91bab5f6cd5825aef129e1cbf275aeaaa181f75267a005b4a`
+
+- SDK release metadata stays synchronized and explicitly public
+- SDK release helpers handle stable and prerelease versions without fixed artifact names
+- emitted React declarations are self-contained apart from declared peers
 
 ## tests/search-collections.test.ts
 

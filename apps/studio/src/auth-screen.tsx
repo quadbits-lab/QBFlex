@@ -294,7 +294,13 @@ export function SetupScreen() {
                       />
                       {name === 'bootstrapToken' && (
                         <FieldDescription>
-                          Read .data/bootstrap.token on the API host.
+                          Use QB_BOOTSTRAP_TOKEN from the API environment. Without it, read the
+                          generated token with{' '}
+                          <code className="text-[11px]">
+                            docker compose exec api cat /var/lib/qb-flex/bootstrap.token
+                          </code>{' '}
+                          (native installs: <code className="text-[11px]">.data/bootstrap.token</code>
+                          ).
                         </FieldDescription>
                       )}
                     </Field>
