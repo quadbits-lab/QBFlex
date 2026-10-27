@@ -111,7 +111,8 @@ export type StartupInfo = {
   dataDir: string;
   maxOwners: number;
   services: { studio?: string; docs?: string; api: string };
-  bootstrapTokenFile?: string;
+  /** Env file holding QB_BOOTSTRAP_TOKEN for first-owner setup. */
+  bootstrapTokenEnv?: string;
 };
 function publicAddress(value: string) {
   try {
@@ -160,10 +161,10 @@ export function formatStartupPanel(
     line('Data       ' + clean(info.dataDir), 90),
     line(`Owners     Up to ${info.maxOwners} active branches · one database owner each`, 90),
   );
-  if (info.bootstrapTokenFile)
+  if (info.bootstrapTokenEnv)
     lines.push(
-      line('Setup      ' + clean(info.bootstrapTokenFile), 33),
-      line('           First-owner token file · keep its contents private', 33),
+      line('Setup      ' + clean(info.bootstrapTokenEnv), 33),
+      line('           QB_BOOTSTRAP_TOKEN · keep this file private', 33),
     );
   lines.push(
     line(''),
@@ -192,7 +193,7 @@ export function printStartup(info: StartupInfo) {
         ),
         dataDir: clean(info.dataDir),
         maxOwners: info.maxOwners,
-        ...(info.bootstrapTokenFile ? { bootstrapTokenFile: clean(info.bootstrapTokenFile) } : {}),
+        ...(info.bootstrapTokenEnv ? { bootstrapTokenEnv: clean(info.bootstrapTokenEnv) } : {}),
       }),
     );
 }

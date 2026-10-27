@@ -33,16 +33,17 @@ example 7618. Object storage is any S3-compatible provider you configure
 (`QB_S3_ENDPOINT`, e.g. RustFS on 127.0.0.1:9000); the public self-hosting
 gateway uses HTTPS on 443.
 
-Create your own first owner in Studio using the token in `.data/bootstrap.token`. It is removed after setup. Application users are separate from Studio accounts. No default administrator is seeded. Local master/bootstrap/worker secrets are generated with restricted file permissions. Production requires operator-provided secrets and HTTPS.
+Create your own first owner in Studio using `QB_BOOTSTRAP_TOKEN` from your `.env`. Native development generates one into `.env` on first start. Application users are separate from Studio accounts. No default administrator is seeded. Local master/worker secrets are generated with restricted file permissions. Production requires operator-provided secrets and HTTPS.
 
-For an entirely containerized local deployment:
+For an entirely containerized local deployment, set the first-owner token in `.env` first (native `bun run dev` generates one automatically):
 
 ```sh
+printf 'QB_BOOTSTRAP_TOKEN=%s\n' "$(openssl rand -hex 32)" >> .env
 docker compose up -d --build
-docker compose exec api cat /var/lib/qb-flex/bootstrap.token
+docker compose exec api printenv QB_BOOTSTRAP_TOKEN
 ```
 
-The second command deliberately displays your one-time local setup token. Keep it private. Container databases use the `database` named volume; native development uses `.data`. They are separate installations. Stop containers with `docker compose stop`; preserve the volumes for subsequent runs.
+The last command prints the one-time first-owner token from the container environment. Keep it private. Container databases use the `database` named volume; native development uses `.data`. They are separate installations. Stop containers with `docker compose stop`; preserve the volumes for subsequent runs.
 
 ## Build the same task application in React and JavaScript
 

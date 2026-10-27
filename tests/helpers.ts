@@ -10,11 +10,14 @@ export const ownership = {
 } as const;
 export async function fixture(override?: Parameters<typeof startService>[0]) {
   const directory = mkdtempSync(join(tmpdir(), 'qb-network-'));
+  // First-owner setup reads QB_BOOTSTRAP_TOKEN; inject one so fixtures never write a token file.
+  const bootstrap = crypto.randomUUID() + crypto.randomUUID();
   const service = await startService({
     dataDir: directory,
     port: 0,
     master: 'test-master-encryption-key-32-characters',
     publicURL: 'http://localhost:7612',
+    bootstrapToken: bootstrap,
     ...override,
   });
   const url = `http://localhost:${service.server.port}`;
@@ -47,7 +50,6 @@ export async function fixture(override?: Parameters<typeof startService>[0]) {
     if (!r.ok) throw new Error(JSON.stringify(value));
     return value;
   }
-  const bootstrap = (await Bun.file(join(directory, 'bootstrap.token')).text()).trim();
   await call('/setup', 'POST', {
     bootstrapToken: bootstrap,
     email: 'owner@example.com',

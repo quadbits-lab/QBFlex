@@ -1,6 +1,7 @@
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
-import { existsSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { log, printStartup } from '@qb-flex/observability';
 import { dependencies } from '../package.json';
 const engineVersion = dependencies['@electric-sql/pglite'];
@@ -11,6 +12,35 @@ type Ports = {
   docs: number;
   api: number;
 };
+
+/** Read QB_BOOTSTRAP_TOKEN from an env file without executing or interpolating it. */
+export function readEnvFileToken(path: string): string | undefined {
+  if (!existsSync(path)) return undefined;
+  for (const line of readFileSync(path, 'utf8').split('\n')) {
+    const match = /^\s*QB_BOOTSTRAP_TOKEN\s*=\s*(.*)$/.exec(line);
+    if (!match) continue;
+    return match[1]!.trim().replace(/^(['"])(.*)\1$/, '$2').trim() || undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Native development stores the first-owner token in .env, matching deployments.
+ * A missing token is generated once and appended, so setup never depends on a
+ * separate data-directory file.
+ */
+export function ensureBootstrapToken(envFile: string, configured?: string) {
+  const existing = configured?.trim() || readEnvFileToken(envFile);
+  if (existing) return { token: existing, envFile, generated: false };
+  const token = randomBytes(32).toString('hex');
+  const prefix = existsSync(envFile) && !readFileSync(envFile, 'utf8').endsWith('\n') ? '\n' : '';
+  appendFileSync(
+    envFile,
+    `${prefix}QB_BOOTSTRAP_TOKEN=${token}\n`,
+    existsSync(envFile) ? {} : { mode: 0o600 },
+  );
+  return { token, envFile, generated: true };
+}
 export async function assertDevPortsAvailable(ports: Ports) {
   const probes: ReturnType<typeof createServer>[] = [];
   try {
@@ -68,10 +98,13 @@ export async function runDevelopment(
   const apiURL = `http://localhost:${ports.api}`;
   const studioURL = `http://localhost:${ports.studio}`;
   const docsURL = `http://localhost:${ports.docs}`;
+  const envFile = resolve(input.QB_ENV_FILE ?? resolve(root, '.env'));
+  const bootstrap = ensureBootstrapToken(envFile, input.QB_BOOTSTRAP_TOKEN);
   const environment = {
     ...input,
     QB_DEV_LAUNCHER: '1',
     QB_DATA_DIR: resolve(root, input.QB_DATA_DIR ?? '.data'),
+    QB_BOOTSTRAP_TOKEN: bootstrap.token,
     PORT: String(ports.api),
     QB_INTERNAL_API_URL: apiURL,
     QB_PUBLIC_URL: input.QB_PUBLIC_URL ?? apiURL,
@@ -175,7 +208,11 @@ export async function runDevelopment(
       }),
     );
     if (stopped) return;
-    const bootstrapTokenFile = resolve(environment.QB_DATA_DIR, 'bootstrap.token');
+    if (bootstrap.generated)
+      log({
+        action: 'bootstrap.token_generated',
+        code: 'Set QB_BOOTSTRAP_TOKEN from this env file for first-owner setup: ' + envFile,
+      });
     printStartup({
       mode: 'development',
       elapsedMs: performance.now() - began,
@@ -188,7 +225,7 @@ export async function runDevelopment(
         docs: docsURL,
         api: apiURL,
       },
-      ...(existsSync(bootstrapTokenFile) ? { bootstrapTokenFile } : {}),
+      bootstrapTokenEnv: envFile,
     });
     const result = await Promise.race(
       children.map(async (child) => ({ name: child.name, code: await child.process.exited })),

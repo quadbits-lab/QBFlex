@@ -1,38 +1,21 @@
-export type TokenSource = 'environment' | 'environment-file' | 'file' | 'none';
+export type TokenSource = 'environment' | 'none';
 
 export type BootstrapHint = { message: string; commands: string[] };
 
-export const generatedTokenPath = '/var/lib/qb-flex/bootstrap.token';
-export const nativeTokenPath = '.data/bootstrap.token';
+export const envVariable = 'QB_BOOTSTRAP_TOKEN';
 
 /**
- * Explain where the API reads the first-owner token. The API reports the source but
- * never the value, so the screen must point at a concrete command or location.
+ * Explain where the API reads the first-owner token. The token is env-only, so the
+ * guidance is the same for every deployment: use the configured value.
  */
 export function bootstrapHint(source?: TokenSource): BootstrapHint {
-  if (source === 'environment')
+  if (source === 'none')
     return {
-      message:
-        'The API is reading QB_BOOTSTRAP_TOKEN from its environment. Use the exact value from your platform environment settings (for example Dokploy → Environment), or print it from the running container.',
-      commands: [
-        'docker exec $(docker ps -q -f name=api) printenv QB_BOOTSTRAP_TOKEN',
-      ],
-    };
-  if (source === 'environment-file')
-    return {
-      message:
-        'The API reads the token from the file named by QB_BOOTSTRAP_TOKEN_FILE. Open that mounted secret on the deployment host and use its contents.',
+      message: `First-owner setup is already complete; ${envVariable} is not needed.`,
       commands: [],
     };
-  if (source === 'file')
-    return {
-      message:
-        'The API generated a one-time token in its data volume. Read it from the API container. Native installs keep it in the data directory instead.',
-      commands: [`docker compose exec api cat ${generatedTokenPath}`, `cat ${nativeTokenPath}`],
-    };
   return {
-    message:
-      'Use QB_BOOTSTRAP_TOKEN from the API environment. Without it, read the generated token from the API container (native installs keep it in the data directory).',
-    commands: [`docker compose exec api cat ${generatedTokenPath}`, `cat ${nativeTokenPath}`],
+    message: `Use the exact ${envVariable} value configured for the API — the same value in its environment or .env file. Generate one with: openssl rand -hex 32`,
+    commands: [`docker compose exec api printenv ${envVariable}`],
   };
 }

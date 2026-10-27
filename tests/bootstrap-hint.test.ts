@@ -1,32 +1,31 @@
 import { expect, test } from 'bun:test';
-import { bootstrapHint, generatedTokenPath, nativeTokenPath } from '../apps/studio/src/bootstrap-hint';
+import { bootstrapHint, envVariable } from '../apps/studio/src/bootstrap-hint';
 
-test('each token source points at the place the API actually reads', () => {
-  const environment = bootstrapHint('environment');
-  expect(environment.message).toContain('QB_BOOTSTRAP_TOKEN');
-  expect(environment.commands[0]).toContain('printenv QB_BOOTSTRAP_TOKEN');
-  // The environment must be the recommendation; the file path would be wrong here.
-  expect(environment.message).not.toContain(generatedTokenPath);
-
-  const secretFile = bootstrapHint('environment-file');
-  expect(secretFile.message).toContain('QB_BOOTSTRAP_TOKEN_FILE');
-  expect(secretFile.commands).toHaveLength(0);
-
-  const file = bootstrapHint('file');
-  expect(file.commands[0]).toContain(generatedTokenPath);
-  expect(file.commands[1]).toContain(nativeTokenPath);
-});
-
-test('an older API without tokenSource still gets usable guidance', () => {
-  for (const source of [undefined, 'none'] as const) {
+test('the hint always names the environment variable that holds the token', () => {
+  for (const source of ['environment', undefined] as const) {
     const hint = bootstrapHint(source);
-    expect(hint.message).toContain('QB_BOOTSTRAP_TOKEN');
-    expect(hint.commands).toHaveLength(2);
+    expect(hint.message).toContain(envVariable);
+    expect(hint.commands[0]).toContain(envVariable);
   }
 });
 
-test('hints never include a token value placeholder that could be mistaken for a real secret', () => {
-  for (const source of ['environment', 'environment-file', 'file', 'none', undefined] as const) {
+test('a completed installation says the token is no longer needed', () => {
+  const hint = bootstrapHint('none');
+  expect(hint.message).toContain('already complete');
+  expect(hint.commands).toHaveLength(0);
+});
+
+test('no hint mentions a token file path, because the token lives only in the environment', () => {
+  for (const source of ['environment', 'none', undefined] as const) {
+    const hint = bootstrapHint(source);
+    const text = hint.message + ' ' + hint.commands.join(' ');
+    expect(text).not.toContain('bootstrap.token');
+    expect(text).not.toContain('QB_BOOTSTRAP_TOKEN_FILE');
+  }
+});
+
+test('hints never contain a value that could be mistaken for the real secret', () => {
+  for (const source of ['environment', 'none', undefined] as const) {
     const hint = bootstrapHint(source);
     expect(hint.message).not.toMatch(/[0-9a-f]{32}/);
     expect(hint.commands.join(' ')).not.toMatch(/[0-9a-f]{32}/);

@@ -66,6 +66,8 @@ export function configuration() {
     dataDir,
     master,
     publicURL,
+    // The only source of the first-owner token; deployments set it in the environment/.env.
+    bootstrapToken: process.env.QB_BOOTSTRAP_TOKEN,
     studioURL: process.env.QB_STUDIO_URL ?? 'http://localhost:7610',
     origins: normalizeOrigins(
       (

@@ -125,17 +125,18 @@ window. If certificates fail, re-check DNS and that 80/443 are open, then
 
 ## 5. First-owner setup
 
-The API refuses to start in production without owner credentials. Once `/ready` responds:
+The API requires `QB_BOOTSTRAP_TOKEN` until an owner exists; once the first owner is
+created it starts without the variable. Once `/ready` responds:
 
-1. From `.env`, take the `QB_BOOTSTRAP_TOKEN` value (the API trims surrounding
-   whitespace). If the deployment does not set it, the API uses
-   `QB_BOOTSTRAP_TOKEN_FILE` or the generated `/var/lib/qb-flex/bootstrap.token` inside
-   the API container; `GET /setup` reports which source (`tokenSource`) is active.
+1. From `.env` (or the platform environment UI), take the `QB_BOOTSTRAP_TOKEN` value. It is
+   the only source: the API trims surrounding whitespace and quotes, and there is no
+   generated token file or fallback. `GET /setup` reports `tokenSource` for confirmation.
 2. Create the first owner: `POST https://api.example.com/setup` with
    `{"bootstrapToken":"<token>","email":"owner@example.com","name":"Owner","password":"<strong password>"}`,
    or use the onboarding flow in Studio.
 3. Enable MFA for the admin account (production requires it) and record recovery codes.
-4. After first setup, remove the plaintext bootstrap token from the host and re-chmod `.env`.
+4. After first setup you may remove the token from `.env` and restart; do not leave it in a
+   world-readable file.
 
 Keep the bootstrap token private to the single operator creating the owner account. The owner
 session then issues management tokens and project keys from Studio; never place service or

@@ -15,7 +15,6 @@ services:
       QB_MASTER_KEY: ${QB_MASTER_KEY:?set a protected master encryption key}
       # Required only until the first owner exists; remove it afterwards and restarts stay valid.
       QB_BOOTSTRAP_TOKEN: ${QB_BOOTSTRAP_TOKEN:-}
-      QB_BOOTSTRAP_TOKEN_FILE: ${QB_BOOTSTRAP_TOKEN_FILE:-}
       QB_WORKER_TOKEN: ${QB_WORKER_TOKEN:?set a private worker token}
       QB_REQUIRE_ADMIN_MFA: 'true'
       QB_S3_ENDPOINT: ${QB_S3_ENDPOINT:?point at an S3-compatible backend (e.g. RustFS)}

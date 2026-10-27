@@ -1,62 +1,41 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual } from 'node:crypto';
 
-export type BootstrapSource = 'environment' | 'environment-file' | 'file' | 'none';
+export type BootstrapSource = 'environment' | 'none';
 
 /** Example values shipped in .env templates; accepting them silently hides a real misconfiguration. */
 const placeholders = new Set(['replace_with_openssl_rand_hex_32', 'replace-with-openssl-rand-hex-32']);
 
-function readSecret(path: string): string {
-  try {
-    return readFileSync(path, 'utf8').trim();
-  } catch {
-    return '';
-  }
-}
-
 /**
  * Resolve the one-time first-owner token.
  *
- * Precedence is explicit so a deployment never silently falls back to a generated
- * file token while the operator holds a different value from the environment.
- * Values are trimmed because platform secret inputs commonly add a trailing newline.
+ * The token comes from `QB_BOOTSTRAP_TOKEN` only — the environment or `.env` file the
+ * deployment already loads. There is no generated token file, so the value the operator
+ * holds is always the value the API compares against. The variable is required until an
+ * owner exists; afterwards it is optional, so restarts keep working if it was removed.
  */
 export function resolveBootstrapToken(options: {
-  dataDir: string;
   hasOwner: boolean;
+  configured?: string;
   env?: NodeJS.ProcessEnv;
 }): { token?: string; source: BootstrapSource } {
   const env = options.env ?? process.env;
-  const production = env.NODE_ENV === 'production';
-
-  const environmentToken = env.QB_BOOTSTRAP_TOKEN?.trim();
-  if (environmentToken) {
-    if (production && placeholders.has(environmentToken))
-      throw new Error(
-        'QB_BOOTSTRAP_TOKEN still contains the example placeholder. Generate a real token with `openssl rand -hex 32`.',
-      );
-    return { token: environmentToken, source: 'environment' };
-  }
-
-  const secretFile = env.QB_BOOTSTRAP_TOKEN_FILE?.trim();
-  if (secretFile) {
-    const token = readSecret(secretFile);
-    if (!token) throw new Error(`QB_BOOTSTRAP_TOKEN_FILE does not contain a token: ${secretFile}`);
-    return { token, source: 'environment-file' };
-  }
-
   if (options.hasOwner) return { source: 'none' };
-  if (production)
-    throw new Error(
-      'QB_BOOTSTRAP_TOKEN is required for first-owner setup in production. Set it on the API service, or point QB_BOOTSTRAP_TOKEN_FILE at a mounted secret.',
-    );
 
-  const file = join(options.dataDir, 'bootstrap.token');
-  if (!existsSync(file)) writeFileSync(file, randomBytes(32).toString('hex'), { mode: 0o600 });
-  const token = readSecret(file);
-  if (!token) throw new Error(`Generated bootstrap token file is empty: ${file}`);
-  return { token, source: 'file' };
+  // Trailing newlines and surrounding quotes are common when pasting into platform UIs.
+  const token = normalize((options.configured ?? env.QB_BOOTSTRAP_TOKEN) as string | undefined);
+  if (!token)
+    throw new Error(
+      'QB_BOOTSTRAP_TOKEN is required for first-owner setup. Set it in the API environment or .env file, for example: openssl rand -hex 32',
+    );
+  if (placeholders.has(token))
+    throw new Error(
+      'QB_BOOTSTRAP_TOKEN still contains the example placeholder. Generate a real token with `openssl rand -hex 32`.',
+    );
+  return { token, source: 'environment' };
+}
+
+export function normalize(value: string | undefined): string {
+  return (value ?? '').trim().replace(/^(['"])(.*)\1$/, '$2').trim();
 }
 
 /** Constant-time comparison after normalizing whitespace from form submission. */

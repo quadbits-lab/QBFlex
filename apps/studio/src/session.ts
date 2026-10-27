@@ -42,7 +42,7 @@ export const platformSessionOptions = (request: Request = raw) =>
   });
 
 export type SetupState = {
-  data: { required: boolean; tokenSource?: 'environment' | 'environment-file' | 'file' | 'none' };
+  data: { required: boolean; tokenSource?: 'environment' | 'none' };
 };
 
 export const setupOptions = (request: Request = raw) =>

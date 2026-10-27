@@ -18,12 +18,14 @@ function allocate() {
   return { ports, servers };
 }
 function launch(directory: string, ports: Ports, override: NodeJS.ProcessEnv = {}) {
+  const envFile = join(directory, '.env');
   const child = Bun.spawn(['bun', 'tests/fixtures-dev.ts'], {
     env: {
       ...process.env,
       NODE_ENV: 'development',
       QB_TEST_DEV_PORTS: JSON.stringify(ports),
       QB_DATA_DIR: directory,
+      QB_ENV_FILE: envFile,
       QB_MASTER_KEY: '',
       QB_BOOTSTRAP_TOKEN: '',
       QB_WORKER_TOKEN: '',
@@ -197,6 +199,13 @@ test('clean native startup creates private API credentials, runs maintenance and
       await metrics.body?.cancel();
       const setup = await fetch(`http://localhost:${ports.api}/setup`);
       expect((await setup.json()).data.required).toBe(true);
+      // The first-owner token lives in the env file, not a data-directory token file.
+      const envFile = join(directory, '.env');
+      const bootstrap = /^QB_BOOTSTRAP_TOKEN=(.+)$/m.exec(readFileSync(envFile, 'utf8'))?.[1];
+      expect(bootstrap?.trim()).toHaveLength(64);
+      expect(existsSync(join(directory, 'bootstrap.token'))).toBe(false);
+      expect(run.output).toContain(envFile);
+      expect(run.output).not.toContain(bootstrap!);
       expect(run.output).not.toContain(token);
       if (attempt) {
         expect(run.output).toContain('PGlite 0.5.');

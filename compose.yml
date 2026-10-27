@@ -19,7 +19,6 @@ x-environment: &environment
   QB_MASTER_KEY: ${QB_MASTER_KEY:-}
   QB_BOOTSTRAP_TOKEN: ${QB_BOOTSTRAP_TOKEN:-}
   # Optional path to a mounted secret file when the platform injects secrets as files.
-  QB_BOOTSTRAP_TOKEN_FILE: ${QB_BOOTSTRAP_TOKEN_FILE:-}
   QB_WORKER_TOKEN: ${QB_WORKER_TOKEN:-}
   QB_REQUIRE_ADMIN_MFA: ${QB_REQUIRE_ADMIN_MFA:-false}
   # Loopback-only escape hatch for production-like staging without TLS.

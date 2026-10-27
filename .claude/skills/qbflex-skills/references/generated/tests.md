@@ -57,22 +57,26 @@ SHA-256: `ceded08ba176b50143934055c2bfaf8683c4066c28d97fcdce6b2b5092730e51`
 
 ## tests/bootstrap-hint.test.ts
 
-SHA-256: `c861e426ad6253ac9e6f9cc4a3f93fb65b7503f4dc8928ba86937caa48147de8`
+SHA-256: `a1f6c95dd5511c40d2f1a54dc1973899a7758b069da4c34fd4f9540ff235bf72`
 
-- each token source points at the place the API actually reads
-- an older API without tokenSource still gets usable guidance
-- hints never include a token value placeholder that could be mistaken for a real secret
+- the hint always names the environment variable that holds the token
+- a completed installation says the token is no longer needed
+- no hint mentions a token file path, because the token lives only in the environment
+- hints never contain a value that could be mistaken for the real secret
 
 ## tests/bootstrap-token.test.ts
 
-SHA-256: `2b49f38e0060caddb1d0064229bec0f46626ab87a6438c5e9034328123b6ffeb`
+SHA-256: `bebba0b800a819d108707ce9d9afb6569b00505f1736ac04620280753c519198`
 
-- environment token wins and is trimmed
-- production rejects the example placeholder instead of accepting it
-- production without a token fails only while first-owner setup is pending
-- mounted secret file is used when the platform injects secrets as files
-- development generates a stable file token that repeated starts reuse
+- the token comes from QB_BOOTSTRAP_TOKEN and is trimmed
+- quotes from pasted values are stripped
+- an explicitly configured token wins over the environment
+- a missing token fails with actionable guidance instead of generating a file
+- the example placeholder is rejected rather than accepted
+- restarting an installation that already has an owner needs no token
 - token comparison ignores surrounding whitespace and rejects mismatches
+- normalize keeps inner characters intact
+- an env file supplies the token through the normal process environment
 
 ## tests/client-disconnect.test.ts
 
@@ -118,7 +122,7 @@ SHA-256: `b4c135c14f7730c7a42a69cb5c844b738db6a222962b52ccb43be03354615ca7`
 
 ## tests/dev-startup.test.ts
 
-SHA-256: `2a1c391fb32170f48547af6de695d00930fd84698c72f99f2c4c4b5ba13267fa`
+SHA-256: `8e74313b70c82869a73bd7e31ad089f8786d0e0ce7a2c69c66168312ce77e4db`
 
 - worker credentials belong to the API; missing configuration fails without minting a token
 - a foreign ready API or occupied app port cannot bootstrap the native worker or local data
@@ -181,7 +185,7 @@ Shared test fixture; scenario names are in its consuming test files.
 
 ## tests/helpers.ts
 
-SHA-256: `c98d40f6f408d545f4898b29816aab1291da892605b3478e394e84cc316861b9`
+SHA-256: `3734139cc04766c8ab9b14287c2f5285415e264873785f4bb66e1151e8b81306`
 
 Shared test fixture; scenario names are in its consuming test files.
 
@@ -437,7 +441,7 @@ SHA-256: `a25caa91e870d7a083eefa71dc84d07fb6d5bb68417e34f9295ebca99ca555eb`
 
 ## tests/terminal-logging.test.ts
 
-SHA-256: `dc3acad650bef16151ad2c0d09be8ec38538687ab40ad7a54b76c30392d6e01c`
+SHA-256: `860983a070d6326046757ca407821f0257d21666e99210d14389d64ab12935e6`
 
 - terminal auto mode keeps production and pipelines JSON; explicit mode and color controls are honored
 - pretty and JSON logs use the same allowlist and strip credentials, query strings and terminal controls

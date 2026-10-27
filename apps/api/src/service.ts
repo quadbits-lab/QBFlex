@@ -174,10 +174,9 @@ export async function createService(override?: Partial<ReturnType<typeof configu
       { count: number; errors: number; total: number; max: number; buckets: number[] }
     >();
     const deadLetterDepths = new Map<string, number>();
-    const bootstrapFile = join(config.dataDir, 'bootstrap.token');
     const bootstrapState = resolveBootstrapToken({
-      dataDir: config.dataDir,
       hasOwner: Boolean(await db.query('SELECT id FROM _qb_auth_users LIMIT 1').get()),
+      configured: config.bootstrapToken,
     });
     let bootstrap = bootstrapState.token;
     // Safe to log: the source name only, never the token value.
@@ -1486,7 +1485,7 @@ export async function createService(override?: Partial<ReturnType<typeof configu
         if (!bootstrapTokenMatches(input.bootstrapToken, bootstrap))
           throw new QBError(
             'DENIED',
-            'Valid bootstrap token required. Use QB_BOOTSTRAP_TOKEN from the API environment, or the generated token at /var/lib/qb-flex/bootstrap.token inside the API container (`docker compose exec api cat /var/lib/qb-flex/bootstrap.token`).',
+            'Valid bootstrap token required. Use the exact QB_BOOTSTRAP_TOKEN value configured for this API (set in its environment or .env file).',
             403,
           );
         if (setupBusy || (await db.query('SELECT id FROM _qb_auth_users LIMIT 1').get()))
@@ -1507,8 +1506,8 @@ export async function createService(override?: Partial<ReturnType<typeof configu
               .query('INSERT INTO memberships VALUES(?,?,?)')
               .run(id, result.user.id, 'owner');
           })();
+          // The env value stays in the deployment config; clearing it here only stops this process.
           bootstrap = undefined;
-          if (existsSync(bootstrapFile)) unlinkSync(bootstrapFile);
           return success({ organizationId: id }, request);
         } finally {
           setupBusy = false;

@@ -108,8 +108,8 @@ test('startup panel shows ready services and engine information without secrets 
   );
   for (const line of narrow.trim().split('\n')) expect(line.length).toBe(52);
   expect(
-    formatStartupPanel({ ...startup, bootstrapTokenFile: '/isolated/bootstrap.token' }),
-  ).toContain('token file');
+    formatStartupPanel({ ...startup, bootstrapTokenEnv: '/isolated/.env' }),
+  ).toContain('QB_BOOTSTRAP_TOKEN');
 });
 
 test('Elysia request logs and metrics use the actual Better Auth response status', async () => {

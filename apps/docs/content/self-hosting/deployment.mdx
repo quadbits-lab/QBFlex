@@ -51,30 +51,22 @@ curl -fsS https://api.example.com/ready
 docker compose -f compose.yml -f compose.selfhost.yml --profile selfhost logs --tail 100 storage-init
 ```
 
-Production startup requires injected configuration, not an already-created owner. Open Studio to create the first owner using the bootstrap token, enroll/verify TOTP and securely save recovery codes. Remove the plaintext bootstrap token after setup; the API does not require it again once an owner exists. Platform credentials must never become browser application credentials.
+Production startup requires injected configuration, not an already-created owner. Open Studio to create the first owner using the `QB_BOOTSTRAP_TOKEN` value, enroll/verify TOTP and securely save recovery codes. Once an owner exists you may remove the variable from the deployment; the API does not require it again. Platform credentials must never become browser application credentials.
 
-The API resolves the first-owner token in this order and logs only which source it used (`bootstrap.token_source`):
-
-1. `QB_BOOTSTRAP_TOKEN` from the API environment, trimmed of surrounding whitespace. An example placeholder value such as `replace_with_openssl_rand_hex_32` is rejected instead of accepted.
-2. `QB_BOOTSTRAP_TOKEN_FILE`, when your platform mounts secrets as files rather than variables.
-3. `/var/lib/qb-flex/bootstrap.token` inside the API container — generated only outside production, or when no owner exists and the environment supplies no token.
-
-`GET /setup` reports `tokenSource` so you can tell which credential the API expects. If you see `Valid bootstrap token required`, compare against the source named there rather than guessing:
+The API reads the first-owner token from `QB_BOOTSTRAP_TOKEN` only — the value in the API environment or `.env` file. There is no generated token file and no fallback source, so the value you configured is always the value the API compares against. The API trims surrounding whitespace and quotes, and rejects the example placeholder at startup rather than accepting it. Log in as an operator, then use the same value in Studio's setup form; `POST /setup` returns `403` if it differs.
 
 ```sh
-# environment or staging: copy the value from QB_BOOTSTRAP_TOKEN in .env / platform UI
+# print the configured value from the running container
 docker compose exec -T api printenv QB_BOOTSTRAP_TOKEN
-# generated file fallback (API container): cat the file inside the volume
-docker compose exec -T api cat /var/lib/qb-flex/bootstrap.token
 ```
 
-Studio's setup form also states these locations. A token pasted with a trailing newline or surrounding quotes is still trimmed by the API.
+Once an owner exists the variable is no longer required, so you may remove it. Removing it does not break restarts.
 
 ## Local staging before public domains
 
 Use the staging overlay to validate production-like secrets, S3 and mail configuration on `localhost` before pointing real DNS at the TLS gateway. Staging runs with `NODE_ENV=production`, resource limits and security hardening, but exposes the services directly on `127.0.0.1` with no Caddy gateway or TLS.
 
-Copy `.env.staging.example` to `.env`, generate local secrets and fill the same required values as production (master key, bootstrap token, worker token, S3 credentials and Resend or SMTP). Then validate, build and start:
+Copy `.env.staging.example` to `.env`, generate local secrets and fill the same required values as production (master key, `QB_BOOTSTRAP_TOKEN`, worker token, S3 credentials and Resend or SMTP). Then validate, build and start:
 
 ```sh
 docker compose -f compose.yml -f compose.staging.yml config --quiet
@@ -91,7 +83,7 @@ curl -fsS http://localhost:7612/ready
 docker compose -f compose.yml -f compose.staging.yml logs --tail 100 storage-init
 ```
 
-Use the bootstrap token to create the first owner at `http://localhost:7610`, then remove the token from the host. Staging is not a public deployment target; switch to `compose.selfhost.yml` with real domains and TLS once validation passes.
+Use the bootstrap token from `.env` to create the first owner at `http://localhost:7610`, then remove the token from the host. Staging is not a public deployment target; switch to `compose.selfhost.yml` with real domains and TLS once validation passes.
 
 ## Platform deploys without the bundled gateway
 

@@ -40,8 +40,9 @@ Use Bun (not npm/pnpm) from the workspace root:
   Mailpit UI 7616, examples 7617–7618.
 - Native `.data` and the Docker Compose `database` volume are separate installations; never
   copy or invent `worker.token` to connect one installation's worker to another API.
-- The first Studio owner is created with the one-time token in `.data/bootstrap.token`;
-  no default administrator is seeded. Production requires operator secrets and HTTPS.
+- The first Studio owner is created with `QB_BOOTSTRAP_TOKEN` from the API environment or
+  `.env` (there is no generated token file); no default administrator is seeded. Production
+  requires operator secrets and HTTPS.
 
 ## QB Flex development
 

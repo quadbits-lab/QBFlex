@@ -50,7 +50,7 @@ The service needs your configured bucket/credentials; provider provisioning fail
 
 ## First owner
 
-Open Studio's setup flow. A clean local installation stores the one-time token at `.data/bootstrap.token`; never commit it. Enter it with your name, email, password and organization. After setup the file is removed, Studio opens sign-in, and setup cannot create another owner. Passwords require at least 12 characters. Production requires injected master/bootstrap/worker secrets and administrator MFA.
+Open Studio's setup flow. The one-time token is `QB_BOOTSTRAP_TOKEN` in your `.env`; `bun run dev` generates one there on first start if the key is missing, and Docker deployments take it from the Compose environment. Never commit it. Enter it with your name, email, password and organization. After setup the token is no longer required and Studio opens sign-in; setup cannot create another owner. Passwords require at least 12 characters. Production requires injected master/bootstrap/worker secrets and administrator MFA.
 
 ## Verify your installation
 
